@@ -4,7 +4,7 @@
 
 确定性报告可完全离线运行。可选语义流程会按 `--analysis-privacy` 清洗并限制证据范围；当你让当前 DSH 模型分析批次时，这些内容会交给 DSH 中配置的模型提供方。本项目不会另建上传通道。
 
-> 兼容目标：DeepSeek Harness `0.1.0-rc.8`、Python 3.11+。原生验收按平台分别记录，详见[候选版本验收记录](docs/acceptance/v0.1.0-candidate.md)。CI 不能证明 Windows 或 Linux 已完成 DSH 原生验收。
+> 兼容目标：DeepSeek Harness `0.1.0-rc.8`、Python 3.11+。macOS 与 Windows 11 已分别完成原生验收，Linux 仍只有 CI 证据。详见[候选版本验收记录](docs/acceptance/v0.1.0-candidate.md)；CI 本身不能替代原生平台验收。
 
 [English](README.md)
 

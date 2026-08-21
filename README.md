@@ -4,7 +4,7 @@ Local-first, evidence-driven retrospectives for DeepSeek Harness sessions. It he
 
 The deterministic report runs offline. The optional semantic workflow prepares bounded evidence cleaned according to `--analysis-privacy`; when you ask the current DSH model to analyze those batches, that content is sent to the model provider configured in DSH. This project does not add another upload path.
 
-> Compatibility target: DeepSeek Harness `0.1.0-rc.8`, Python 3.11+. Native acceptance is platform-specific; see [the candidate acceptance record](docs/acceptance/v0.1.0-candidate.md). CI is not evidence of native DSH acceptance on Windows or Linux.
+> Compatibility target: DeepSeek Harness `0.1.0-rc.8`, Python 3.11+. Native acceptance has been completed separately on macOS and Windows 11; Linux remains CI-only. See [the candidate acceptance record](docs/acceptance/v0.1.0-candidate.md). CI alone is not native-platform evidence.
 
 [简体中文](README.zh-CN.md)
 
