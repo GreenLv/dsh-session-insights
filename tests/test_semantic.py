@@ -137,7 +137,8 @@ class SemanticTests(unittest.TestCase):
             out.parent.mkdir(parents=True)
             out.write_text(json.dumps({"facets": [facet]}), encoding="utf-8")
             result = self.run_cli("validate-batch", "--workdir", str(work), "--batch", batch_id, expected=2)
-            self.assertIn("不得声明", result.stderr)
+            self.assertIn("evidence_refs", result.stderr)
+            self.assertIn("accepted", result.stderr)
 
     def test_complete_finalize_fallback_and_cleanup(self):
         with tempfile.TemporaryDirectory() as temp:
