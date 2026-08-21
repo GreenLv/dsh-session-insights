@@ -26,7 +26,7 @@ CONTENT_RULES = {
     "private-key": re.compile(r"BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY"),
 }
 NEGATIVE_CONTRACT_ALLOWLIST = {
-    "tests/test_cli_install.py": {"legacy-home-field", "legacy-product"},
+    "tests/test_cli_install.py": {"credential-assignment", "legacy-home-field", "legacy-product"},
     "tests/helpers.py": {"credential-assignment"},
     "tests/test_public_tree_audit.py": {"private-user-path"},
     "scripts/build_fixture.py": {"private-key"},

@@ -18,6 +18,10 @@ BOOTSTRAP_SPEC = importlib.util.spec_from_file_location("bootstrap", ROOT / "scr
 BOOTSTRAP = importlib.util.module_from_spec(BOOTSTRAP_SPEC)
 assert BOOTSTRAP_SPEC and BOOTSTRAP_SPEC.loader
 BOOTSTRAP_SPEC.loader.exec_module(BOOTSTRAP)
+VERIFY_SPEC = importlib.util.spec_from_file_location("verify_native_acceptance", ROOT / "scripts" / "verify_native_acceptance.py")
+VERIFY = importlib.util.module_from_spec(VERIFY_SPEC)
+assert VERIFY_SPEC and VERIFY_SPEC.loader
+VERIFY_SPEC.loader.exec_module(VERIFY)
 
 
 class CliAndInstallerTests(unittest.TestCase):
@@ -99,6 +103,51 @@ class CliAndInstallerTests(unittest.TestCase):
             tools = home / "tools"
             residues = list(tools.glob(".dsh-session-insights.*")) if tools.exists() else []
             self.assertEqual(residues, [])
+
+    def test_failed_bootstrap_restores_previous_runtime(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp) / "home"
+            previous = self.fake_runtime(home)
+            sentinel = previous / "previous-runtime.txt"
+            sentinel.write_text("preserve", encoding="utf-8")
+            failure = subprocess.CalledProcessError(1, ["python", "-m", "venv"])
+
+            with mock.patch.object(BOOTSTRAP.subprocess, "run", side_effect=failure):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    BOOTSTRAP.install(home)
+
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve")
+            self.assertTrue(BOOTSTRAP.marker_ok(previous))
+            residues = list((home / "tools").glob(".dsh-session-insights.*"))
+            self.assertEqual(residues, [])
+
+    def test_bootstrap_builds_venv_only_after_final_path_is_installed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp) / "home"
+            calls: list[list[str]] = []
+
+            def record(command, **kwargs):
+                calls.append([str(item) for item in command])
+                return subprocess.CompletedProcess(command, 0)
+
+            with mock.patch.object(BOOTSTRAP.subprocess, "run", side_effect=record):
+                BOOTSTRAP.install(home)
+
+            tool = home / "tools" / cli.PRODUCT
+            self.assertEqual(calls[0][-1], str(tool / "venv"))
+            self.assertTrue(all(".stage." not in item for command in calls for item in command))
+            self.assertFalse((tool / "source").exists())
+            self.assertEqual(json.loads((tool / cli.MARKER).read_text(encoding="utf-8"))["managed_root"], "runtime")
+
+    def test_native_privacy_sentinels_allow_only_complete_redacted_placeholders(self):
+        safe = '"api_key=<redacted> Bearer <redacted>"'
+        self.assertEqual(VERIFY.privacy_sentinel_hits(safe), [])
+        unsafe = '"api_key=sk-live-value Bearer live-token /sensitive-home sk-test-value"'
+        self.assertEqual(
+            set(VERIFY.privacy_sentinel_hits(unsafe)),
+            {"api-key", "bearer-token", "sensitive-path", "synthetic-key"},
+        )
+        self.assertEqual(VERIFY.privacy_sentinel_hits('api_key=<redacted>suffix'), ["api-key"])
 
 
 if __name__ == "__main__":

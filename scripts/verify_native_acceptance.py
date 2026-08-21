@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -15,11 +16,20 @@ REQUIRED_CHECKS = {
     "skill-discovery", "doctor", "deterministic-cache", "redacted-privacy",
     "semantic-complete", "metrics-skip", "fallback", "output-boundary", "process-cleanup",
 }
-SENTINELS = ("/sensitive-home", "sk-test-", "api_key=", "Bearer ")
+PRIVACY_SENTINELS = {
+    "sensitive-path": re.compile(re.escape("/sensitive-home"), re.IGNORECASE),
+    "synthetic-key": re.compile(re.escape("sk-test-"), re.IGNORECASE),
+    "api-key": re.compile(r"api_key=(?!<redacted>(?=$|[\s\"'`,;:)}\]]))", re.IGNORECASE),
+    "bearer-token": re.compile(r"Bearer (?!<redacted>(?=$|[\s\"'`,;:)}\]]))", re.IGNORECASE),
+}
 
 
 def read_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def privacy_sentinel_hits(text: str) -> list[str]:
+    return [name for name, pattern in PRIVACY_SENTINELS.items() if pattern.search(text)]
 
 
 def skill_calls(session_root: Path) -> set[str]:
@@ -67,8 +77,9 @@ def verify(root: Path) -> dict[str, object]:
         if key not in artifacts:
             continue
         text = artifacts[key].read_text(encoding="utf-8")
-        if any(item in text for item in SENTINELS):
-            errors.append(f"privacy sentinel in {key}")
+        hits = privacy_sentinel_hits(text)
+        if hits:
+            errors.append(f"privacy sentinel in {key}: {', '.join(hits)}")
         if read_json(artifacts[key]).get("schema") != "dsh-session-insights/1":
             errors.append(f"report schema mismatch: {key}")
     if "first_report" in artifacts and read_json(artifacts["first_report"])["coverage"]["deterministic_cache"]["misses"] < 1:

@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 
 
@@ -50,8 +51,7 @@ def install(home: Path) -> None:
     home.mkdir(parents=True, exist_ok=True)
     tool.parent.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix=f".{tool.name}.stage.", dir=tool.parent))
-    backup = Path(tempfile.mkdtemp(prefix=f".{tool.name}.backup.", dir=tool.parent))
-    backup.rmdir()
+    backup = tool.parent / f".{tool.name}.backup.{uuid.uuid4().hex}"
     replaced = False
     had_previous = tool.exists()
     try:
@@ -59,36 +59,26 @@ def install(home: Path) -> None:
             json.dumps({"product": PRODUCT, "version": "0.1.0", "managed_root": "runtime", "state": "staging"}, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        subprocess.run([sys.executable, "-m", "venv", str(stage / "venv")], check=True)
         source_copy = stage / "source"
         shutil.copytree(
             REPO_ROOT,
             source_copy,
             ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc", "*.egg-info", "build", "dist", ".venv"),
         )
-        python = stage / "venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-        subprocess.run([str(python), "-m", "pip", "install", "--disable-pip-version-check", str(source_copy)], check=True)
-        shutil.rmtree(source_copy)
-        scripts = stage / "venv" / ("Scripts" if os.name == "nt" else "bin")
-        old = str(stage).encode()
-        new = str(tool).encode()
-        for entry in scripts.iterdir():
-            if not entry.is_file():
-                continue
-            try:
-                data = entry.read_bytes()
-            except OSError:
-                continue
-            if old in data and b"\x00" not in data:
-                entry.write_bytes(data.replace(old, new))
-        (stage / MARKER).write_text(
-            json.dumps({"product": PRODUCT, "version": "0.1.0", "managed_root": "runtime"}, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
         if had_previous:
             tool.replace(backup)
         stage.replace(tool)
         replaced = True
+        source_copy = tool / "source"
+        venv = tool / "venv"
+        subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True)
+        python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        subprocess.run([str(python), "-m", "pip", "install", "--disable-pip-version-check", str(source_copy)], check=True)
+        shutil.rmtree(source_copy)
+        (tool / MARKER).write_text(
+            json.dumps({"product": PRODUCT, "version": "0.1.0", "managed_root": "runtime"}, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         managed_python = tool / "venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         subprocess.run(
             [str(managed_python), "-m", "dsh_session_insights.cli", "install", "--dsh-home", str(home)],
