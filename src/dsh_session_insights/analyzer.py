@@ -2681,7 +2681,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines = [
         f"# {runtime_name} 使用洞察", "", f"分析时段：{coverage['since']} 至 {coverage['until']}",
         f"内容模式：{privacy_labels.get(report['scope']['privacy_mode'], report['scope']['privacy_mode'])}",
-        f"分析器：{report['analyzer_version']}；Schema：v{report['schema_version']}（schema 4 会话字段保留为兼容视图）",
+        f"分析器：{report['analyzer_version']}；Schema：v{report['schema_version']}",
         token_note,
         "", "## 一眼看懂", "",
     ]

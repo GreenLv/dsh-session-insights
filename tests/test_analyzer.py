@@ -34,6 +34,9 @@ class AnalyzerTests(unittest.TestCase):
             serialized = json.dumps(report, ensure_ascii=False)
             self.assertNotIn("/sensitive-home", serialized)
             self.assertNotIn("sk-test-", serialized)
+            markdown = analyzer.render_markdown(report)
+            self.assertIn("Schema：v1", markdown)
+            self.assertNotIn("schema 4", markdown.casefold())
 
     def test_project_and_window_filter(self):
         with tempfile.TemporaryDirectory() as temp:

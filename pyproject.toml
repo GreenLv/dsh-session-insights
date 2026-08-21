@@ -32,6 +32,3 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 dsh_session_insights = ["assets/*.html", "skill/SKILL.md", "skill/scripts/*.py"]
-
-[tool.unittest]
-start-directory = "tests"

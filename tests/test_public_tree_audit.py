@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,6 +30,29 @@ class PublicTreeAuditTests(unittest.TestCase):
             rules = {item["rule"] for item in result["findings"]}
             self.assertIn("private-user-path", rules)
             self.assertIn("generated-name", rules)
+
+    def test_gitignored_generated_files_are_outside_public_tree(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            subprocess.run(["git", "init", "--quiet"], cwd=root, check=True)
+            (root / ".gitignore").write_text(
+                ".DS_Store\n__pycache__/\n*.py[cod]\n*.egg-info/\nbuild/\ndist/\n",
+                encoding="utf-8",
+            )
+            (root / "safe.txt").write_text("synthetic public content", encoding="utf-8")
+            for generated in (
+                root / "__pycache__" / "module.pyc",
+                root / "src" / "demo.egg-info" / "PKG-INFO",
+                root / "build" / "artifact.txt",
+            ):
+                generated.parent.mkdir(parents=True, exist_ok=True)
+                generated.write_bytes(b"ignored")
+            (root / ".DS_Store").write_bytes(b"ignored")
+
+            result = AUDIT.audit(root)
+
+            self.assertEqual(result["status"], "pass", result["findings"])
+            self.assertEqual(result["files_scanned"], 2)
 
 
 if __name__ == "__main__":

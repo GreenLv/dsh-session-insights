@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -42,20 +43,29 @@ def scan_text(path: str, text: str) -> list[dict[str, str]]:
     return findings
 
 
+def auditable_paths(root: Path) -> list[Path]:
+    """Return paths that could enter a public commit when Git metadata is available."""
+    if (root / ".git").exists():
+        result = subprocess.run(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+            cwd=root,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode == 0:
+            relative_paths = result.stdout.decode("utf-8", errors="surrogateescape").split("\0")
+            return sorted(root / relative for relative in relative_paths if relative)
+    return sorted(root.rglob("*"))
+
+
 def audit(root: Path) -> dict[str, object]:
     root = root.resolve()
     findings: list[dict[str, str]] = []
     files = 0
-    ignored_macos_metadata = (
-        (root / ".git").is_dir()
-        and (root / ".gitignore").is_file()
-        and ".DS_Store" in (root / ".gitignore").read_text(encoding="utf-8").splitlines()
-    )
-    for path in sorted(root.rglob("*")):
+    for path in auditable_paths(root):
         relative = path.relative_to(root).as_posix()
         if ".git" in path.relative_to(root).parts:
-            continue
-        if path.name == ".DS_Store" and ignored_macos_metadata:
             continue
         if path.name in FORBIDDEN_DIR_NAMES or path.name.endswith(".egg-info"):
             findings.append({"path": relative, "rule": "generated-name"})
