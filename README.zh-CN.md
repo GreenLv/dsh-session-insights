@@ -4,9 +4,9 @@
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-把 DeepSeek Harness 的会话历史变成一份只保存在本地的工作流复盘报告。
+用 `/session-insights` 把 DeepSeek Harness 的会话历史变成一份只保存在本地的工作流复盘报告。
 
-`dsh-session-insights` 读取电脑上已有的 DSH 会话日志，生成一个可直接打开的 HTML Dashboard 和配套 JSON。它主要帮你回答：
+`dsh-session-insights` 是原生 DSH Bundle，底层复用现有 Python 分析核心。插件模式通过 DSH `sessionQuery` 服务读取已完成回放校验的会话快照，生成一个可直接打开的 HTML Dashboard 和配套 JSON。它主要帮你回答：
 
 - 我最近主要让 DSH 做了哪些类型的工作？
 - 哪些项目和工作流投入最多？
@@ -30,47 +30,30 @@ Dashboard 把同一批证据组织成几个容易浏览的视角：
 
 HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继续处理或审计。
 
-## 三步开始
+## 从当前源码安装
 
-需要 DeepSeek Harness `0.1.0-rc.8` 和 Python 3.11 或更高版本。
-
-### macOS 或 Linux shell
+需要 DeepSeek Harness 和 Python 3.11 或更高版本。当前 Bundle 候选已在 macOS + DSH `0.1.1-rc.1` 上完成本机启动验证。
 
 ```bash
-git clone --branch v0.1.0 --depth 1 https://github.com/GreenLv/dsh-session-insights.git
+git clone https://github.com/GreenLv/dsh-session-insights.git
 cd dsh-session-insights
-
-DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-python3 scripts/bootstrap.py install --dsh-home "$DSH_HOME"
-
-CLI="$DSH_HOME/tools/dsh-session-insights/venv/bin/dsh-session-insights"
-"$CLI" doctor --dsh-home "$DSH_HOME"
-"$CLI" report --dsh-home "$DSH_HOME" --days 30 \
-  --format html --output ./dsh-insights.html --open
+dsh plugin --profile web add .
+dsh web
 ```
 
-### Windows PowerShell
+随后在 DSH 输入框中运行：
 
-```powershell
-git clone --branch v0.1.0 --depth 1 https://github.com/GreenLv/dsh-session-insights.git
-Set-Location dsh-session-insights
-
-$dshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME ".dsh" }
-py -3 scripts\bootstrap.py install --dsh-home $dshHome
-
-$cli = Join-Path $dshHome "tools\dsh-session-insights\venv\Scripts\dsh-session-insights.exe"
-& $cli doctor --dsh-home $dshHome
-& $cli report --dsh-home $dshHome --days 30 `
-  --format html --output .\dsh-insights.html --open
+```text
+/session-insights --days 30 --locale zh-CN
 ```
 
-最后一条命令会在当前目录生成 `dsh-insights.html` 和 `dsh-insights.json`。工具只读取 DSH 日志，不会修改原始会话。
+该命令会准备有界语义批次，让当前 DSH agent 串行分析，并把最终 HTML/JSON 写入 `$DSH_HOME/insights/runs/<run-id>`。添加 `--deterministic` 可跳过模型语义阶段。主命令刻意不占用 `/insights`，因此可以与已发布的 `dsh-insights` 共存。
 
-安装过程还会把 `dsh-session-insights` Skill 放入 `$DSH_HOME/skills`，DSH 可直接发现它。你可以在 DSH 中说“复盘我最近的会话并打开本地 HTML 报告”，也可以直接使用上面的 CLI。
+npm 包不含 install/build 生命周期脚本。只有在 `0.2.0` 确实发布后，README 才会把 npm registry 命令写成可用安装入口；上面的命令安装的是当前本地源码。
 
 ## 三档隐私模式
 
-确定性报告完全离线运行。你可以决定报告中允许保留多少会话内容：
+确定性报告完全离线运行。原生插件把 `sessionQuery` 返回的完整快照经 stdin 流式交给 Python，不会在运行目录复制原始 transcript。你可以决定报告和可选模型阶段允许保留多少会话内容：
 
 | 模式 | 报告内容 | 语义分析 |
 |---|---|---|
@@ -82,13 +65,27 @@ $cli = Join-Path $dshHome "tools\dsh-session-insights\venv\Scripts\dsh-session-i
 
 工具拒绝把报告写入 `$DSH_HOME/sessions`，避免生成文件混入原始日志目录。
 
-## 常用命令
+## 原生命令
 
-下列示例中的 `dsh-session-insights` 代表“三步开始”中得到的已安装可执行文件。
+```text
+/session-insights [--days N] [--project PATH] [--privacy MODE]
+  [--analysis-privacy MODE] [--analysis-depth LEVEL]
+  [--locale zh-CN|en] [--deterministic] [--resume] [--no-open]
+```
+
+语义复盘是默认流程，通过六个有界 DSH tools 完成 prepare、批次读取/提交、汇总读取/提交和 finalize。模型输出无效时，编排提示要求每阶段最多修复一次，仍失败则显式降级并保留确定性报告。当前 insights 会话计入覆盖范围，但会标记为 meta-analysis，不进入建议生成。
+
+## 兼容 CLI 与 Skill 流程
+
+v0.1 的文件日志 CLI 与 Skill 继续保留，适合自动化或未挂载 Bundle 的环境：
 
 ```bash
-# 复盘最近 30 天并打开 Dashboard
-dsh-session-insights report --dsh-home "$DSH_HOME" --days 30 \
+DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
+python3 scripts/bootstrap.py install --dsh-home "$DSH_HOME"
+CLI="$DSH_HOME/tools/dsh-session-insights/venv/bin/dsh-session-insights"
+
+# 复盘最近 30 天并打开中文 Dashboard
+"$CLI" report --dsh-home "$DSH_HOME" --days 30 --locale zh-CN \
   --format html --output ./dsh-insights.html --open
 
 # 只看一个项目
@@ -116,9 +113,9 @@ python3 scripts/bootstrap.py uninstall --dsh-home "$DSH_HOME"
 
 它会拒绝符号链接目标、相互重叠的根目录，以及已有但不带本项目标记的目录，不会覆盖其他 Skill。
 
-## 可选语义复盘
+## 手动语义复盘
 
-不调用模型也能生成完整的确定性 Dashboard。语义复盘是第二阶段，用于把有界证据归纳成工作流描述和建议。
+原生命令默认编排语义复盘。CLI 也暴露了每个阶段，便于调试或自动化：
 
 通过已安装的 DSH Skill 使用时，当前 DSH 模型可以编排这套流程。若需手动执行：
 
@@ -134,22 +131,22 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 ## 当前范围与限制
 
-- 输入是 `$DSH_HOME/sessions` 下基于文件的 DSH `session.jsonl.zstd`。
+- 原生输入来自可信 DSH `sessionQuery` 服务；兼容 CLI 仍读取 `$DSH_HOME/sessions` 下的 `session.jsonl.zstd`。
 - 输出遵循 [`dsh-session-insights/1`](docs/schema/report-v1.schema.json)。
 - token 以 `(turn, step)` 去重；这是使用量口径，不是账单或配额口径。
-- v0.1 不使用 DSH `sessionQuery` API，也不是原生 plugin 或 Bundle。
+- Dashboard 与语义提示契约基于同一报告 schema 支持 `zh-CN` 和 `en`。
 - 报告只能根据现有证据推断模式，不能证明意图、质量、任务验收或安全性。
 
-v0.1.0 的兼容性证据：
+未发布 v0.2.0 Bundle 候选的兼容性证据：
 
 | 环境 | 证据范围 |
 |---|---|
-| macOS + DSH `0.1.0-rc.8` | 已完成原生生命周期验收 |
-| Windows 11 + DSH `0.1.0-rc.8` | 已独立完成原生生命周期验收 |
-| Ubuntu | 只有 CI；尚未完成原生 DSH 验收 |
-| Python 3.11–3.13 | Ubuntu、macOS、Windows CI 矩阵 |
+| macOS + DSH `0.1.1-rc.1` | 本地源码安装、合成配置回读和真实 Web profile 启动通过 |
+| Windows | v0.2 Bundle 原生验收待完成；不能从 v0.1 CLI/Skill 验收外推 |
+| Ubuntu | 仅有既有 CI 范围；v0.2 远程 CI 尚未运行 |
+| Python | 本地 Python 3.12 回归与流式适配器测试通过；发布 CI 待完成 |
 
-精确的验证范围和已知限制见 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。
+当前证据见 [v0.2.0 候选验收记录](docs/acceptance/v0.2.0-candidate.md)；已发布 CLI/Skill 的历史证据见 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。
 
 ## 开发与项目文档
 

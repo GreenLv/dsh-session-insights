@@ -1,0 +1,4 @@
+- insert:
+    - id: session-insights
+      name: 'dsh-session-insights'
+      config: {}

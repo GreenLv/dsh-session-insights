@@ -2,11 +2,11 @@
 
 Distribution is intentionally separate from local implementation and requires explicit publication authorization.
 
-1. GitHub repository and Release: use topics `deepseek-harness`, `agent-skills`, `session-analysis`, and `local-first`; publish the Skill bundle, source archive, and SHA-256 checksums. Do not use the `dsh-plugin` topic for v0.1.
-2. DeepSeek Harness GitHub Discussions, Show and tell: bilingual overview, installation command, privacy boundary, telemetry distinction, and exact native DSH evidence.
-3. `Whning0513/awesome-deepseek-skills`: submit a fixed commit, license path, DSH trigger, risk note, and reproducible report steps.
-4. `dshworks/awesome-dsh-plugins`, Skills category: link the real `SKILL.md`, installation method, and exact verified DSH version; do not describe it as a Bundle or plugin.
-5. DeepSeek Discord: share a short synthetic demo and feedback link after the Release or at least one directory listing exists.
-6. `VoltAgent/awesome-agent-skills`: wait for real users, issues, or citations before proposing inclusion.
+1. Finish v0.2 release gates: native Windows Bundle acceptance, remote CI, exact package readback, and a clean release commit.
+2. Publish `dsh-session-insights@0.2.0` to npm and create a matching GitHub tag/Release only with separate authorization. Read back both identities independently.
+3. Submit the Bundle to the DSH plugin marketplace and `dshworks/awesome-dsh-plugins` under observability/evidence or developer-tools categories. Use `/session-insights` in demos and state clearly that it coexists with `dsh-insights`.
+4. Publish one bilingual launch article after the registry install path is reproducible. Lead with a real command-to-report flow, then explain the stdin/no-raw-copy privacy boundary, deterministic fallback, and comparison with adjacent DSH usage/insights tools.
+5. Distribute the Chinese article to the user's established Chinese developer channels, then adapt the English edition for Reddit, Hacker News, Medium, and relevant DSH discussions. Verify every destination independently.
+6. Track install-to-first-report failures and semantic fallback reasons before a second outreach wave.
 
-PyPI, skills.sh, CSDN, Juejin, Medium, and a personal-site article are not launch gates. v0.1 does not ship an npm plugin or product code to the DSH repository. A native Bundle is a v0.2 design question only if users need `dsh plugin add`.
+PyPI and generic Skill catalogs are not v0.2 launch gates. The npm package, GitHub Release, marketplace submissions, articles, and external posts are all still unpublished local candidates; implementation approval does not authorize any of those actions.

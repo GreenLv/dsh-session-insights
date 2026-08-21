@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -11,27 +12,27 @@ from pathlib import Path
 from helpers import NOW, write_session
 
 
-def valid_facet(task: dict) -> dict:
+def valid_facet(task: dict, *, english: bool = False) -> dict:
     return {
         "task_family_id": task["task_family_id"],
-        "goal": "完成一个范围明确且经过验证的实现任务",
+        "goal": "Complete a bounded, verified implementation task" if english else "完成一个范围明确且经过验证的实现任务",
         "task_type": "implementation",
-        "interaction_style": "用户先给目标，随后明确范围。",
+        "interaction_style": "The user supplied the goal and then clarified scope." if english else "用户先给目标，随后明确范围。",
         "instruction_handling": "followed",
         "tool_execution": "adequate",
         "verification_quality": "strong",
         "handoff_quality": "clear",
-        "frictions": ["范围需要明确"],
-        "strengths": ["保留验证证据"],
+        "frictions": ["Scope needed clarification" if english else "范围需要明确"],
+        "strengths": ["Validation evidence was preserved" if english else "保留验证证据"],
         "outcome_inference": "mostly_achieved",
         "evidence_refs": [task["evidence"][0]["id"]],
     }
 
 
-def aggregate_item(title: str, tasks: list[dict]) -> dict:
+def aggregate_item(title: str, tasks: list[dict], *, english: bool = False) -> dict:
     return {
         "title": title,
-        "text": "合成任务显示用户重视范围控制与验证证据。",
+        "text": "Synthetic tasks show an emphasis on scope control and validation evidence." if english else "合成任务显示用户重视范围控制与验证证据。",
         "supporting_task_family_ids": [item["task_family_id"] for item in tasks],
         "evidence_refs": [item["evidence"][0]["id"] for item in tasks],
         "confidence": "high",
@@ -54,7 +55,7 @@ class SemanticTests(unittest.TestCase):
                               "--workdir", str(workdir), "--now", NOW, *extra)
         return json.loads(result.stdout)
 
-    def write_valid_batches(self, workdir: Path) -> list[dict]:
+    def write_valid_batches(self, workdir: Path, *, english: bool = False) -> list[dict]:
         manifest = json.loads((workdir / "manifest.json").read_text(encoding="utf-8"))
         tasks: list[dict] = []
         for batch_id in manifest["batch_ids"]:
@@ -62,7 +63,7 @@ class SemanticTests(unittest.TestCase):
             tasks.extend(batch["tasks"])
             output = workdir / "facet-outputs" / f"{batch_id}.json"
             output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(json.dumps({"facets": [valid_facet(item) for item in batch["tasks"]]}, ensure_ascii=False), encoding="utf-8")
+            output.write_text(json.dumps({"facets": [valid_facet(item, english=english) for item in batch["tasks"]]}, ensure_ascii=False), encoding="utf-8")
             self.run_cli("validate-batch", "--workdir", str(workdir), "--batch", batch_id)
         return tasks
 
@@ -171,6 +172,39 @@ class SemanticTests(unittest.TestCase):
             auto_output = Path(temp) / "auto.json"
             self.run_cli("finalize", "--workdir", str(auto_work), "--format", "json", "--output", str(auto_output))
             self.assertFalse(auto_work.exists())
+
+    def test_english_finalize_localizes_framework_owned_semantic_strings(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home, work = Path(temp) / "home", Path(temp) / "work"
+            write_session(home)
+            self.prepare(home, work, "--locale", "en", "--no-semantic-cache")
+            tasks = self.write_valid_batches(work, english=True)
+            self.run_cli("prepare-aggregate", "--workdir", str(work))
+            sections = {
+                name: [aggregate_item(name.title(), tasks, english=True)]
+                for name in ("glance", "workflows", "operating_style", "strengths", "frictions", "horizon")
+            }
+            recommendation = aggregate_item("Preserve validation evidence", tasks, english=True)
+            recommendation.update({
+                "recommendation_key": "verification_evidence",
+                "action": "Keep a short validation summary.",
+                "copy_prompt": "Run validation and report a concise summary.",
+                "singleton_observation": True,
+            })
+            sections["recommendations"] = [recommendation]
+            (work / "semantic-report.json").write_text(json.dumps(sections), encoding="utf-8")
+            self.run_cli("validate-aggregate", "--workdir", str(work))
+            output = Path(temp) / "complete-en.html"
+            self.run_cli("finalize", "--workdir", str(work), "--output", str(output))
+            report = json.loads(output.with_suffix(".json").read_text(encoding="utf-8"))
+            framework_strings = [
+                *(item["evidence"] for item in report["narrative"]["wins"]),
+                *(item["starting_point"] for item in report["narrative"]["horizon"]),
+                *(item["evidence"] for item in report["recommendations"]),
+            ]
+            self.assertFalse(any(re.search(r"[\u3400-\u9fff]", value) for value in framework_strings), framework_strings)
+            self.assertIn("semantic evidence item", framework_strings[0])
+            self.assertIn("supporting task family", framework_strings[-1])
 
 
 if __name__ == "__main__":

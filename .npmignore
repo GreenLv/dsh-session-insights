@@ -1,0 +1,8 @@
+**/__pycache__/
+**/*.py[cod]
+tests/
+tests-js/
+docs/
+scripts/
+IMPLEMENTATION_PLAN.md
+pyproject.toml

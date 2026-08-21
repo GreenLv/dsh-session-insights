@@ -24,7 +24,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.1.0"
+ANALYZER_VERSION = "0.2.0"
 FAILURE_RULE_VERSION = "5.0.0"
 DETERMINISTIC_CACHE_VERSION = 1
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
@@ -197,6 +197,7 @@ class AnalysisConfig:
     analysis_depth: str = "evidence"
     deterministic_cache: bool = True
     refresh_deterministic_cache: bool = False
+    locale: str = "zh-CN"
 
 
 def parse_datetime(value: str, *, end_of_day: bool = False) -> datetime:
@@ -310,6 +311,10 @@ def percentile(values: list[float], fraction: float) -> float:
 
 def safe_round(value: float, digits: int = 2) -> float:
     return round(value, digits)
+
+
+def english_count(value: int | float, singular: str, plural: str | None = None) -> str:
+    return f"{value} {singular if value == 1 else (plural or singular + 's')}"
 
 
 def strip_url_queries(text: str) -> str:
@@ -524,6 +529,8 @@ def classify_session(session: dict[str, Any]) -> str:
 
 
 def is_insights_meta_analysis(session: dict[str, Any]) -> bool:
+    if session.get("insights_command_seen"):
+        return True
     mentions = {str(item).casefold() for item in session.get("skill_mentions", {})}
     if "dsh-session-insights" in mentions:
         return True
@@ -819,6 +826,7 @@ def new_session(meta: dict[str, Any], timestamp: datetime, path: Path, config: A
         "classification_basis": classification_basis,
         "rollout_file": rollout_file,
         "session_header_records": 1,
+        "insights_command_seen": False,
         "timestamp": timestamp,
         "observed_start": timestamp,
         "observed_end": timestamp,
@@ -1487,6 +1495,10 @@ def process_dsh_record(
                 "chunk",
             )
         return
+    if record_type == "command/run":
+        if str(data.get("name") or "").casefold() == "session-insights":
+            session["insights_command_seen"] = True
+        return
     if record_type == "tool/call":
         name = str(data.get("name") or "unknown")
         call_id = str(data.get("callId") or "")
@@ -1618,17 +1630,35 @@ def parse_dsh_session_file(
     if lines is None:
         coverage["unreadable_files"] += 1
         return None
-    session: dict[str, Any] | None = None
-    buffered: list[tuple[dict[str, Any], datetime | None]] = []
-    workspace_key = path.parent.parent.name
+    records: list[Any] = []
     for line in lines:
         if not line.strip():
             continue
         try:
-            record = json.loads(line)
+            records.append(json.loads(line))
         except json.JSONDecodeError:
             coverage["malformed_lines"] += 1
-            continue
+    return parse_dsh_session_records(
+        records,
+        config,
+        coverage,
+        source_path=path,
+        workspace_key=path.parent.parent.name,
+    )
+
+
+def parse_dsh_session_records(
+    records: Iterable[Any],
+    config: AnalysisConfig,
+    coverage: dict[str, Any],
+    *,
+    source_path: Path,
+    workspace_key: str,
+) -> dict[str, Any] | None:
+    """Parse one replay-validated DSH record stream without writing it to disk."""
+    session: dict[str, Any] | None = None
+    buffered: list[tuple[dict[str, Any], datetime | None]] = []
+    for record in records:
         if not isinstance(record, dict):
             coverage["malformed_lines"] += 1
             continue
@@ -1659,7 +1689,7 @@ def parse_dsh_session_file(
             if not matches_dsh_project(cwd or None, workspace_key, config.project):
                 coverage["skipped_project"] += 1
                 return None
-            session = new_dsh_session(header, workspace_key, timestamp, path, config)
+            session = new_dsh_session(header, workspace_key, timestamp, source_path, config)
             for pending, pending_time in buffered:
                 if pending_time is not None:
                     session["observed_start"] = min(session["observed_start"], pending_time)
@@ -1731,7 +1761,7 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
     status = session_status(session)
     title_source = "prompt"
     if config.metrics_only or config.privacy_mode == "metrics":
-        title = "内容已省略"
+        title = "Content omitted" if config.locale == "en" else "内容已省略"
         title_source = "omitted"
     else:
         if session.get("provider_title"):
@@ -1742,7 +1772,7 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
             title_source = "fallback"
         else:
             raw_title = session.get("first_prompt", "")
-        title = excerpt_text(raw_title, config, 140) if raw_title else "未提供可用标题"
+        title = excerpt_text(raw_title, config, 140) if raw_title else ("No usable title" if config.locale == "en" else "未提供可用标题")
     provider, model = (None, None)
     if session.get("provider_models"):
         provider, model = session["provider_models"].most_common(1)[0][0]
@@ -2028,7 +2058,10 @@ def build_recommendations(
     interaction_metrics: dict[str, Any],
     coverage: dict[str, Any],
     projects: list[dict[str, Any]],
+    locale: str = "zh-CN",
 ) -> list[dict[str, Any]]:
+    if locale == "en":
+        return build_recommendations_en(totals, interaction_metrics, coverage, projects)
     recommendations: list[dict[str, Any]] = []
 
     def add(feature: str, title: str, why: str, evidence: str, action: str, prompt: str, priority: str) -> None:
@@ -2113,6 +2146,74 @@ def build_recommendations(
     return recommendations[:6]
 
 
+def build_recommendations_en(
+    totals: dict[str, Any],
+    interaction_metrics: dict[str, Any],
+    coverage: dict[str, Any],
+    projects: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    recommendations: list[dict[str, Any]] = []
+
+    def add(feature: str, title: str, why: str, evidence: str, action: str, prompt: str, priority: str) -> None:
+        recommendation_id = "rec-" + hashlib.sha256(f"{feature}\0{title}".encode()).hexdigest()[:12]
+        recommendations.append({
+            "id": recommendation_id, "feature": feature, "title": title, "why": why,
+            "evidence": evidence, "action": action, "copy_prompt": prompt, "priority": priority,
+        })
+
+    if totals["tool_failures"] or totals["unchanged_retries"]:
+        add(
+            "Verification checkpoints", "Put failure recovery in the task contract",
+            "Tool failures are recoverable, but unchanged retries amplify time cost and make long tasks harder to resume.",
+            f"Observed {totals['tool_failures']} structured tool failures and {totals['unchanged_retries']} unchanged retries; retries after state changes and explicit polling are counted separately.",
+            "Require diagnosis and a saved checkpoint before retrying.",
+            "At the end of each phase, record completed work, artifacts, and validation. Diagnose a tool failure before retrying and resume from the latest verified checkpoint.", "high",
+        )
+    if totals["permission_blocks"]:
+        add(
+            "Permission planning", "State authorization boundaries at the start",
+            "Late permission blocks interrupt execution and add avoidable user round trips.",
+            f"Observed {totals['permission_blocks']} permission blocks in the analysis window.",
+            "State readable, writable, runnable, and approval-required actions in the initial task contract.",
+            "Before starting, list the reads, writes, commands, and possible permission escalations. Batch only closely related safe approvals and do not broaden scope without authorization.", "high",
+        )
+    if interaction_metrics["correction_rate_per_user_message"] >= 0.12:
+        add(
+            "AGENTS.md / task contract", "Fix scope, evidence, and completion criteria",
+            "Frequent correction-like messages suggest repeated recalibration; this is a heuristic signal, not an error rate.",
+            f"Observed {interaction_metrics['correction_like_messages']} correction-like messages, about {interaction_metrics['correction_rate_per_user_message']:.0%} of user messages.",
+            "Keep durable preferences in AGENTS.md and state this task's scope, prohibitions, and completion criteria in the first prompt.",
+            "Restate the task contract first: objective, editable scope, prohibited changes, required evidence, validation, and completion criteria. Preserve state and explain assumptions when scope is ambiguous.", "high",
+        )
+    unfinished = coverage["partial_sessions"] + totals["aborted_turns"]
+    if unfinished or interaction_metrics["long_running_sessions"]:
+        add(
+            "Long-task orchestration", "Give long tasks recoverable phase deliverables",
+            "When a long task produces only a final result, interruption or context switching makes completed work hard to reuse.",
+            f"Observed {interaction_metrics['long_running_sessions']} long sessions, {coverage['partial_sessions']} partial sessions, and {totals['aborted_turns']} aborted turns.",
+            "Split work into audit, implementation, validation, and delivery phases with a small state handoff after each.",
+            "Split this task into four recoverable phases: audit, implementation, validation, and delivery. End each phase with a state summary and exact resume point.", "medium",
+        )
+    if totals["patches"] >= 20 and interaction_metrics["multi_agent_sessions"] <= max(2, totals["sessions"] // 20):
+        add(
+            "Independent validation", "Reserve parallel reviewers for complex changes",
+            "A single execution chain may reuse the same assumptions when checking a high-density change.",
+            f"Observed {totals['patches']} patches and {interaction_metrics['multi_agent_sessions']} multi-agent sessions.",
+            "For large cross-file changes, independently check tests, references, and authorization scope; do not delegate small tasks by default.",
+            "After the main change, independently verify: tests and runtime evidence; cross-file consistency; and whether the result stayed inside the authorized scope. Report only evidence-backed findings.", "medium",
+        )
+    if projects and projects[0]["sessions"] >= 5:
+        dominant = projects[0]
+        add(
+            "Reusable Skill", "Turn a frequent project workflow into a repeatable entry point",
+            "Repeated project work is a good candidate for stable inputs, steps, boundaries, and verification rules.",
+            f"Project {dominant['project']} has {dominant['sessions']} sessions and {dominant['tool_calls']} tool calls.",
+            "Choose one frequent, stable, verifiable workflow and extract it into a Skill or project script while preserving human judgment.",
+            f"Analyze recurring workflows in project {dominant['project']}. Extract stable inputs, steps, prohibitions, validation commands, and recovery behavior, then identify what belongs in a reusable Skill.", "medium",
+        )
+    return recommendations[:6]
+
+
 def build_insight_narrative(
     sessions: list[dict[str, Any]],
     session_summaries: list[dict[str, Any]],
@@ -2121,7 +2222,12 @@ def build_insight_narrative(
     projects: list[dict[str, Any]],
     interaction_metrics: dict[str, Any],
     recommendations: list[dict[str, Any]],
+    locale: str = "zh-CN",
 ) -> dict[str, Any]:
+    if locale == "en":
+        return build_insight_narrative_en(
+            sessions, session_summaries, totals, coverage, projects, interaction_metrics, recommendations
+        )
     completed = [row for row in session_summaries if row["status"] == "completed"]
     completed_complex = [row for row in completed if row["complexity_score"] >= 40]
     dominant = projects[0] if projects else None
@@ -2193,6 +2299,64 @@ def build_insight_narrative(
             {"label": "主要阻碍", "text": blocker},
             {"label": "快速见效", "text": quick_win},
             {"label": "值得推进的工作流", "text": ambition},
+        ],
+        "wins": wins,
+        "horizon": horizon,
+    }
+
+
+def build_insight_narrative_en(
+    sessions: list[dict[str, Any]],
+    session_summaries: list[dict[str, Any]],
+    totals: dict[str, Any],
+    coverage: dict[str, Any],
+    projects: list[dict[str, Any]],
+    interaction_metrics: dict[str, Any],
+    recommendations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    completed = [row for row in session_summaries if row["status"] == "completed"]
+    completed_complex = [row for row in completed if row["complexity_score"] >= 40]
+    dominant = projects[0] if projects else None
+    completion_rate = len(completed) / max(1, len(session_summaries))
+    quick_win = recommendations[0]["title"] if recommendations else "Keep the current verification rhythm"
+    strength = (
+        f"Work is concentrated in {dominant['project']}: {english_count(dominant['sessions'], 'session')}, "
+        f"{english_count(dominant['active_hours'], 'active hour')}, and {english_count(dominant['tool_calls'], 'tool call')}."
+        if dominant else "There is not enough project data in this range to identify a stable center of work."
+    )
+    blocker = (
+        f"The main measurable friction is {english_count(totals['tool_failures'], 'structured tool failure')}, "
+        f"{english_count(totals['unchanged_retries'], 'unchanged retry', 'unchanged retries')}, and "
+        f"{english_count(totals['permission_blocks'], 'permission block')}; inspect individual sessions before drawing causal conclusions."
+    )
+    ambition = (
+        f"{english_count(len(completed_complex), 'high-complexity session')} reached a completed log state, and "
+        f"{english_count(interaction_metrics['long_running_sessions'], 'session')} lasted more than 30 minutes. "
+        "The next step is to make frequent long workflows checkpointed, independently verified, and recoverable."
+    )
+    wins = []
+    if dominant:
+        wins.append({"title": "A stable core work area is emerging", "description": strength, "evidence": f"This project accounts for {dominant['sessions'] / max(1, totals['sessions']):.0%} of sessions."})
+    wins.append({
+        "title": "Complex tasks sustain execution",
+        "description": f"{english_count(len(completed_complex), 'session')} with complexity at least 40 reached completed log state; the overall completed-log share is about {completion_rate:.0%}.",
+        "evidence": "Completed log state means no unfinished or aborted marker was detected; it is not human acceptance or a quality judgment.",
+    })
+    if totals["patches"]:
+        wins.append({
+            "title": "Work moved from discussion into concrete changes",
+            "description": f"The range contains {english_count(totals['patches'], 'patch', 'patches')} and {english_count(totals['git_commits'], 'commit')}.",
+            "evidence": f"There were {english_count(totals['failed_patches'], 'patch-failure signal')}; tests and artifact inspection still determine change quality.",
+        })
+    horizon = [
+        {"title": "Recoverable end-to-end workflows", "possible": "Connect audit, implementation, validation, and delivery with checkpoints and small state summaries.", "starting_point": "Define inputs, completion criteria, and resume points for each phase of the most common workflow."},
+        {"title": "Evidence-driven proactive quality checks", "possible": "Check tests, references, artifact structure, and authorization scope before delivery.", "starting_point": "Add an independent validation checklist to high-risk tasks and require each conclusion to cite logs, tests, or artifacts."},
+        {"title": "Self-updating Skills from frequent sessions", "possible": "Turn repeated prompts and corrections into stable workflow contracts while leaving project-specific details parameterized.", "starting_point": "Review frequent corrections and recovery patterns monthly, and update Skill rules only when evidence repeats."},
+    ]
+    return {
+        "glance": [
+            {"label": "What is working", "text": strength}, {"label": "Main blocker", "text": blocker},
+            {"label": "Quick win", "text": quick_win}, {"label": "Workflow worth advancing", "text": ambition},
         ],
         "wins": wins,
         "horizon": horizon,
@@ -2318,13 +2482,16 @@ def build_report(
     config: AnalysisConfig,
     *,
     include_internal_sessions: bool = False,
+    session_snapshots: Iterable[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | tuple[dict[str, Any], list[dict[str, Any]]]:
-    get_zstandard()
+    snapshots = list(session_snapshots) if session_snapshots is not None else None
+    if snapshots is None:
+        get_zstandard()
     sessions_root = session_source_root(config) / "sessions"
-    paths = sorted(sessions_root.rglob("session.jsonl.zstd")) if sessions_root.is_dir() else []
+    paths = sorted(sessions_root.rglob("session.jsonl.zstd")) if snapshots is None and sessions_root.is_dir() else []
     parse_file = parse_dsh_session_file
     coverage: dict[str, Any] = {
-        "files_scanned": len(paths),
+        "files_scanned": len(paths) if snapshots is None else len(snapshots),
         "sessions_analyzed": 0,
         "skipped_outside_window": 0,
         "skipped_project": 0,
@@ -2338,10 +2505,36 @@ def build_report(
         "until": config.until.isoformat().replace("+00:00", "Z"),
     }
     sessions: list[dict[str, Any]] = []
-    for path in paths:
-        parsed = parse_with_deterministic_cache(path, config, coverage, parse_file)
-        if parsed is not None:
-            sessions.append(parsed)
+    if snapshots is None:
+        for path in paths:
+            parsed = parse_with_deterministic_cache(path, config, coverage, parse_file)
+            if parsed is not None:
+                sessions.append(parsed)
+    else:
+        coverage["deterministic_cache"]["enabled"] = False
+        for index, snapshot in enumerate(snapshots):
+            if not isinstance(snapshot, dict):
+                coverage["malformed_lines"] += 1
+                continue
+            header = snapshot.get("session")
+            events = snapshot.get("events")
+            if not isinstance(header, dict) or not isinstance(events, list):
+                coverage["malformed_lines"] += 1
+                continue
+            session_id = str(header.get("id") or f"stream-{index:06d}")
+            synthetic_path = sessions_root / "session-query" / session_id / "session.jsonl"
+            records = [{"type": "session", **header}]
+            records.extend(events)
+            parsed = parse_dsh_session_records(
+                records,
+                config,
+                coverage,
+                source_path=synthetic_path,
+                workspace_key="session-query",
+            )
+            coverage["deterministic_cache"]["disabled"] += 1
+            if parsed is not None:
+                sessions.append(parsed)
     coverage["sessions_analyzed"] = len(sessions)
     coverage["unknown_record_types"] = dict(sorted(coverage["unknown_record_types"].items()))
 
@@ -2567,7 +2760,7 @@ def build_report(
         "hours_local": [{"hour": hour, "count": hour_counter.get(hour, 0)} for hour in range(24)],
         "weekdays": [{"weekday": day, "count": weekday_counter.get(day, 0)} for day in range(7)],
     }
-    recommendations = build_recommendations(totals, interaction_metrics, coverage, projects)
+    recommendations = build_recommendations(totals, interaction_metrics, coverage, projects, config.locale)
     narrative = build_insight_narrative(
         sessions,
         session_summaries,
@@ -2576,20 +2769,23 @@ def build_report(
         projects,
         interaction_metrics,
         recommendations,
+        config.locale,
     )
     warnings = []
-    if not paths:
-        warnings.append("在解析后的 DSH_HOME 下未找到 DSH 会话文件（session.jsonl.zstd）。")
+    def warning(zh: str, en: str) -> None:
+        warnings.append(en if config.locale == "en" else zh)
+    if not paths and snapshots is None:
+        warning("在解析后的 DSH_HOME 下未找到 DSH 会话文件（session.jsonl.zstd）。", "No DSH session files (session.jsonl.zstd) were found under the resolved DSH_HOME.")
     if 0 < len(sessions) < 5:
-        warnings.append("有效会话少于 5 个；请将行为结论视为小样本快照。")
+        warning("有效会话少于 5 个；请将行为结论视为小样本快照。", "Fewer than five sessions are in scope; treat behavioral conclusions as a small-sample snapshot.")
     if coverage["malformed_lines"] or coverage["unknown_record_types"] or coverage["unreadable_files"]:
-        warnings.append("存在损坏行、未知记录类型或不可读文件；形成明确结论前请先检查覆盖情况。")
+        warning("存在损坏行、未知记录类型或不可读文件；形成明确结论前请先检查覆盖情况。", "Malformed lines, unknown record types, or unreadable files were observed; inspect coverage before drawing firm conclusions.")
     if coverage["partial_sessions"]:
-        warnings.append(f"有 {coverage['partial_sessions']} 个 rollout 含未结束任务标记；这不自动等于整个任务族失败。")
+        warning(f"有 {coverage['partial_sessions']} 个 rollout 含未结束任务标记；这不自动等于整个任务族失败。", f"{coverage['partial_sessions']} rollouts contain unfinished-task markers; this does not automatically mean their task families failed.")
     if coverage["heuristic_role_rollouts"] or coverage["unknown_system_rollouts"]:
-        warnings.append("部分 rollout 使用启发式角色分类或未映射到已知角色；已保守降级并记录 classification_basis。")
+        warning("部分 rollout 使用启发式角色分类或未映射到已知角色；已保守降级并记录 classification_basis。", "Some rollouts use heuristic role classification or do not map to a known role; they were conservatively downgraded with classification_basis recorded.")
     if coverage["deterministic_cache"].get("write_errors"):
-        warnings.append("确定性解析缓存不可写；本次分析已完成，但后续运行可能无法复用这些解析结果。")
+        warning("确定性解析缓存不可写；本次分析已完成，但后续运行可能无法复用这些解析结果。", "The deterministic parse cache was not writable; this run completed, but later runs may not reuse its parsed results.")
 
     report = {
         "schema": SCHEMA_ID,
@@ -2604,6 +2800,7 @@ def build_report(
             "privacy_mode": "metrics_only" if config.metrics_only or config.privacy_mode == "metrics" else ("redacted_sample" if config.privacy_mode == "redacted" else "local_content"),
             "analysis_privacy_mode": analysis_privacy(config),
             "analysis_depth": config.analysis_depth,
+            "locale": config.locale,
             "max_excerpts": 0 if config.metrics_only or config.privacy_mode == "metrics" else config.max_excerpts,
         },
         "coverage": coverage,
@@ -2783,6 +2980,8 @@ def render_markdown(report: dict[str, Any]) -> str:
 
 def render_html(report: dict[str, Any]) -> str:
     template = importlib.resources.files("dsh_session_insights.assets").joinpath("dashboard.html").read_text(encoding="utf-8")
+    locale = str(report.get("scope", {}).get("locale", "zh-CN"))
+    template = template.replace('<html lang="zh-CN">', f'<html lang="{locale}">')
     safe_json = json.dumps(report, ensure_ascii=False, separators=(",", ":"))
     safe_json = safe_json.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
     return template.replace("__DSH_SESSION_INSIGHTS_DATA__", safe_json)
@@ -2824,6 +3023,7 @@ def resolve_config(args: argparse.Namespace) -> AnalysisConfig:
         analysis_depth=args.analysis_depth,
         deterministic_cache=not args.no_deterministic_cache,
         refresh_deterministic_cache=args.refresh_deterministic_cache,
+        locale=args.locale,
     )
 
 
@@ -2854,6 +3054,7 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--refresh-deterministic-cache", action="store_true", help="reparse every source file and replace deterministic cache entries")
     parser.add_argument("--no-deterministic-cache", action="store_true", help="disable deterministic per-source-file parse cache")
     parser.add_argument("--max-excerpts", type=int, default=80, help="maximum local or redacted excerpts (default: 80)")
+    parser.add_argument("--locale", choices=("zh-CN", "en"), default="zh-CN", help="report language")
     parser.add_argument("--format", choices=("json", "markdown", "html"), default="json")
     parser.add_argument("--output", type=Path, help="write output to a file instead of stdout")
     parser.add_argument("--open", action="store_true", help="open an HTML report in the default browser")

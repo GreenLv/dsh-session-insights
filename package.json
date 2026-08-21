@@ -1,0 +1,63 @@
+{
+  "name": "dsh-session-insights",
+  "version": "0.2.0",
+  "description": "Local-first, evidence-backed session retrospectives for DeepSeek Harness",
+  "type": "module",
+  "main": "plugin/lib/index.js",
+  "exports": {
+    ".": "./plugin/lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "plugin/lib/index.js",
+    "src/dsh_session_insights/__init__.py",
+    "src/dsh_session_insights/__main__.py",
+    "src/dsh_session_insights/analyzer.py",
+    "src/dsh_session_insights/cli.py",
+    "src/dsh_session_insights/plugin_bridge.py",
+    "src/dsh_session_insights/semantic.py",
+    "src/dsh_session_insights/assets/__init__.py",
+    "src/dsh_session_insights/assets/dashboard.html",
+    "src/dsh_session_insights/skill/__init__.py",
+    "src/dsh_session_insights/skill/SKILL.md",
+    "src/dsh_session_insights/skill/scripts/run.py",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": ">=0.1.0-rc.8",
+    "@deepseek-ai/dsh-commands": ">=0.1.0-rc.8",
+    "@deepseek-ai/dsh-session-query": ">=0.1.0-rc.8",
+    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.8"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "test": "node --test tests-js/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GreenLv/dsh-session-insights"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "session-insights",
+    "developer-tools"
+  ],
+  "license": "MIT"
+}

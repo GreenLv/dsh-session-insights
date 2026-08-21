@@ -4,9 +4,9 @@
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Turn your DeepSeek Harness session history into a private, local workflow retrospective.
+Turn your DeepSeek Harness session history into a private, local workflow retrospective, directly from `/session-insights`.
 
-`dsh-session-insights` reads the session logs already on your machine and produces a self-contained HTML dashboard plus companion JSON. It helps answer questions such as:
+`dsh-session-insights` is a native DSH Bundle backed by a mature Python analysis core. In plugin mode it reads replay-validated snapshots through DSH's `sessionQuery` service and produces a self-contained HTML dashboard plus companion JSON. It helps answer questions such as:
 
 - What kinds of work am I doing with DSH?
 - Which projects and workflows take the most effort?
@@ -30,47 +30,30 @@ The dashboard brings several views of the same evidence together:
 
 The HTML file contains its own styles and data, so you can keep it locally and open it without a server. A machine-readable JSON report is written beside it.
 
-## Quick start
+## Quick start from this checkout
 
-Requirements: DeepSeek Harness `0.1.0-rc.8` and Python 3.11 or newer.
-
-### macOS or Linux shell
+Requirements: DeepSeek Harness and Python 3.11 or newer. The current Bundle candidate has been started natively on macOS with DSH `0.1.1-rc.1`.
 
 ```bash
-git clone --branch v0.1.0 --depth 1 https://github.com/GreenLv/dsh-session-insights.git
+git clone https://github.com/GreenLv/dsh-session-insights.git
 cd dsh-session-insights
-
-DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-python3 scripts/bootstrap.py install --dsh-home "$DSH_HOME"
-
-CLI="$DSH_HOME/tools/dsh-session-insights/venv/bin/dsh-session-insights"
-"$CLI" doctor --dsh-home "$DSH_HOME"
-"$CLI" report --dsh-home "$DSH_HOME" --days 30 \
-  --format html --output ./dsh-insights.html --open
+dsh plugin --profile web add .
+dsh web
 ```
 
-### Windows PowerShell
+Then run this in the DSH composer:
 
-```powershell
-git clone --branch v0.1.0 --depth 1 https://github.com/GreenLv/dsh-session-insights.git
-Set-Location dsh-session-insights
-
-$dshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME ".dsh" }
-py -3 scripts\bootstrap.py install --dsh-home $dshHome
-
-$cli = Join-Path $dshHome "tools\dsh-session-insights\venv\Scripts\dsh-session-insights.exe"
-& $cli doctor --dsh-home $dshHome
-& $cli report --dsh-home $dshHome --days 30 `
-  --format html --output .\dsh-insights.html --open
+```text
+/session-insights --days 30 --locale en
 ```
 
-The last command creates `dsh-insights.html` and `dsh-insights.json` in the current directory. It reads DSH logs but does not modify them.
+The command prepares bounded semantic batches, queues the current DSH agent to analyze them serially, and writes the final HTML/JSON under `$DSH_HOME/insights/runs/<run-id>`. Add `--deterministic` to skip the model-assisted stage. The command name intentionally differs from `/insights`, so this Bundle can coexist with `dsh-insights`.
 
-Installation also places the `dsh-session-insights` Skill under `$DSH_HOME/skills`, where DSH can discover it. You can ask DSH to “review my recent session history and open a local HTML dashboard,” or run the CLI directly as shown above.
+The npm package has no install or build lifecycle script. A registry install command will be documented only after `0.2.0` is actually published; the command above installs the local checkout.
 
 ## Privacy modes
 
-Deterministic reports run offline. Choose how much session content the report may retain:
+Deterministic reports run offline. In native plugin mode, complete raw snapshots are streamed from `sessionQuery` to Python over stdin and are not copied into the run directory. Choose how much session content the report and optional model stage may retain:
 
 | Mode | Report content | Semantic analysis |
 |---|---|---|
@@ -82,13 +65,27 @@ The tool itself does not add an upload channel. If you use the optional semantic
 
 Reports are refused inside `$DSH_HOME/sessions`, so generated files cannot be mixed into the source log tree.
 
-## Common commands
+## Native command
 
-Use the installed executable shown in the quick start as `dsh-session-insights` below.
+```text
+/session-insights [--days N] [--project PATH] [--privacy MODE]
+  [--analysis-privacy MODE] [--analysis-depth LEVEL]
+  [--locale zh-CN|en] [--deterministic] [--resume] [--no-open]
+```
+
+The semantic workflow is the default. It uses six bounded DSH tools for prepare, batch read/submit, aggregate read/submit, and finalize. Invalid model output gets one repair opportunity at the orchestration level and can then degrade explicitly to the deterministic report. The current session is counted for coverage but excluded from recommendations as meta-analysis.
+
+## Compatible CLI and Skill workflow
+
+The v0.1 file-log CLI and Skill remain available for automation and environments that do not mount the Bundle:
 
 ```bash
-# Review the last 30 days and open the dashboard
-dsh-session-insights report --dsh-home "$DSH_HOME" --days 30 \
+DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
+python3 scripts/bootstrap.py install --dsh-home "$DSH_HOME"
+CLI="$DSH_HOME/tools/dsh-session-insights/venv/bin/dsh-session-insights"
+
+# Review the last 30 days and open an English dashboard
+"$CLI" report --dsh-home "$DSH_HOME" --days 30 --locale en \
   --format html --output ./dsh-insights.html --open
 
 # Limit the report to one project
@@ -116,9 +113,9 @@ The installer manages only:
 
 It refuses symbolic-link targets, overlapping roots, and existing unmarked directories. It does not overwrite another Skill.
 
-## Optional semantic review
+## Manual semantic review
 
-The deterministic dashboard already works without a model call. Semantic review is an optional second stage for synthesizing bounded evidence into workflow narratives and recommendations.
+The native command orchestrates semantic review by default. The CLI also exposes every phase for debugging or automation:
 
 When using the installed DSH Skill, the current DSH model can orchestrate this workflow. For manual operation:
 
@@ -134,22 +131,22 @@ Each model-produced JSON file is validated before it can enter the final report.
 
 ## Current scope and limitations
 
-- Input is file-based DSH `session.jsonl.zstd` under `$DSH_HOME/sessions`.
+- Native input is the trusted DSH `sessionQuery` service; CLI compatibility input remains `session.jsonl.zstd` under `$DSH_HOME/sessions`.
 - Output follows [`dsh-session-insights/1`](docs/schema/report-v1.schema.json).
 - Token counts are deduplicated per `(turn, step)` and are usage measurements, not billing or quota figures.
-- v0.1 does not use the DSH `sessionQuery` API and is not a native plugin or Bundle.
+- The Dashboard and semantic prompt contract support `zh-CN` and `en` from the same report schema.
 - Reports infer patterns from available evidence; they do not prove intent, quality, task acceptance, or security.
 
-Compatibility evidence for v0.1.0:
+Compatibility evidence for the unreleased v0.2.0 Bundle candidate:
 
 | Environment | Evidence |
 |---|---|
-| macOS + DSH `0.1.0-rc.8` | Native lifecycle acceptance |
-| Windows 11 + DSH `0.1.0-rc.8` | Independent native lifecycle acceptance |
-| Ubuntu | CI only; native DSH acceptance has not been completed |
-| Python 3.11–3.13 | Ubuntu, macOS, and Windows CI matrix |
+| macOS + DSH `0.1.1-rc.1` | Local checkout install, composed-config readback, and real Web-profile startup passed |
+| Windows | Native v0.2 Bundle acceptance pending; do not infer it from v0.1 CLI/Skill acceptance |
+| Ubuntu | Existing CI scope only; v0.2 CI has not run remotely |
+| Python | Local Python 3.12 regression and stream-adapter tests passed; release CI pending |
 
-See the [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md) for the exact validation scope and known limits.
+See the [v0.2.0 candidate acceptance record](docs/acceptance/v0.2.0-candidate.md) for current evidence, and the historical [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md) for the released CLI/Skill.
 
 ## Development and project docs
 

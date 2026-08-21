@@ -22,7 +22,8 @@
         "runtime": {"const": "dsh"},
         "privacy_mode": {"enum": ["metrics_only", "redacted_sample", "local_content"]},
         "analysis_privacy_mode": {"enum": ["metrics", "redacted", "local"]},
-        "analysis_depth": {"enum": ["conversation", "evidence"]}
+        "analysis_depth": {"enum": ["conversation", "evidence"]},
+        "locale": {"enum": ["zh-CN", "en"]}
       }
     },
     "coverage": {"type": "object"},
