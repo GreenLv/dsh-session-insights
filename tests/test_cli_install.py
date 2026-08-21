@@ -25,8 +25,8 @@ class CliAndInstallerTests(unittest.TestCase):
         root = home / "tools" / cli.PRODUCT
         python = root / "venv" / ("Scripts/python.exe" if cli.os.name == "nt" else "bin/python")
         python.parent.mkdir(parents=True)
-        python.write_text("synthetic runtime")
-        (root / cli.MARKER).write_text(json.dumps({"product": cli.PRODUCT, "version": "0.1.0", "managed_root": "runtime"}))
+        python.write_text("synthetic runtime", encoding="utf-8")
+        (root / cli.MARKER).write_text(json.dumps({"product": cli.PRODUCT, "version": "0.1.0", "managed_root": "runtime"}), encoding="utf-8")
         return root
 
     def test_public_cli_contract_has_no_legacy_switches(self):
@@ -46,7 +46,7 @@ class CliAndInstallerTests(unittest.TestCase):
             self.fake_runtime(home)
             installed = cli.install_skill(home)
             self.assertTrue((installed / "SKILL.md").is_file())
-            self.assertEqual(json.loads((installed / cli.MARKER).read_text())["product"], cli.PRODUCT)
+            self.assertEqual(json.loads((installed / cli.MARKER).read_text(encoding="utf-8"))["product"], cli.PRODUCT)
             cli.install_skill(home)
             self.assertTrue((installed / "scripts" / "run.py").is_file())
 
@@ -56,10 +56,10 @@ class CliAndInstallerTests(unittest.TestCase):
             self.fake_runtime(home)
             skill = home / "skills" / cli.PRODUCT
             skill.mkdir(parents=True)
-            (skill / "foreign.txt").write_text("do not overwrite")
+            (skill / "foreign.txt").write_text("do not overwrite", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "unmanaged"):
                 cli.install_skill(home)
-            self.assertEqual((skill / "foreign.txt").read_text(), "do not overwrite")
+            self.assertEqual((skill / "foreign.txt").read_text(encoding="utf-8"), "do not overwrite")
 
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
@@ -83,7 +83,7 @@ class CliAndInstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unmanaged"):
                 cli.uninstall(home)
             self.assertTrue(skill.exists())
-            (tool / cli.MARKER).write_text(json.dumps({"product": cli.PRODUCT}))
+            (tool / cli.MARKER).write_text(json.dumps({"product": cli.PRODUCT}), encoding="utf-8")
             with mock.patch.object(cli, "_schedule_runtime_cleanup") as cleanup:
                 cli.uninstall(home)
             self.assertFalse(skill.exists())

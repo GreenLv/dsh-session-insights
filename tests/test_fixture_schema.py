@@ -33,7 +33,7 @@ class FixtureAndSchemaTests(unittest.TestCase):
                 since=datetime(2026, 8, 1, tzinfo=timezone.utc),
                 until=datetime(2026, 8, 21, tzinfo=timezone.utc),
             ))
-            schema = json.loads((ROOT / "docs" / "schema" / "report-v1.schema.json").read_text())
+            schema = json.loads((ROOT / "docs" / "schema" / "report-v1.schema.json").read_text(encoding="utf-8"))
             jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(report)
             self.assertEqual(report["totals"]["sessions"], 1)
 

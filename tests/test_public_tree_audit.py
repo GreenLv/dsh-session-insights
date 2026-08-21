@@ -22,7 +22,7 @@ class PublicTreeAuditTests(unittest.TestCase):
     def test_negative_private_path_and_generated_cache(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            (root / "leak.txt").write_text("private path: /Users/lgr59/work")
+            (root / "leak.txt").write_text("private path: /Users/lgr59/work", encoding="utf-8")
             cache = root / "__pycache__"
             cache.mkdir()
             (cache / "module.pyc").write_bytes(b"binary")

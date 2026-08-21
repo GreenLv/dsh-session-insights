@@ -51,6 +51,6 @@ def records(index: int = 1, *, cwd: str | None = "/workspace/project-a", secret:
 def write_session(home: Path, index: int = 1, *, cwd: str | None = "/workspace/project-a", workspace: str = "--workspace-project-a--", secret: bool = True) -> Path:
     path = session_path(home, index, workspace=workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = "\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in records(index, cwd=cwd, secret=secret)).encode()
+    payload = "\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in records(index, cwd=cwd, secret=secret)).encode("utf-8")
     path.write_bytes(zstandard.ZstdCompressor(level=3, write_checksum=True).compress(payload))
     return path

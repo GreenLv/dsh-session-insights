@@ -55,14 +55,14 @@ class SemanticTests(unittest.TestCase):
         return json.loads(result.stdout)
 
     def write_valid_batches(self, workdir: Path) -> list[dict]:
-        manifest = json.loads((workdir / "manifest.json").read_text())
+        manifest = json.loads((workdir / "manifest.json").read_text(encoding="utf-8"))
         tasks: list[dict] = []
         for batch_id in manifest["batch_ids"]:
-            batch = json.loads((workdir / "batches" / f"{batch_id}.json").read_text())
+            batch = json.loads((workdir / "batches" / f"{batch_id}.json").read_text(encoding="utf-8"))
             tasks.extend(batch["tasks"])
             output = workdir / "facet-outputs" / f"{batch_id}.json"
             output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(json.dumps({"facets": [valid_facet(item) for item in batch["tasks"]]}, ensure_ascii=False))
+            output.write_text(json.dumps({"facets": [valid_facet(item) for item in batch["tasks"]]}, ensure_ascii=False), encoding="utf-8")
             self.run_cli("validate-batch", "--workdir", str(workdir), "--batch", batch_id)
         return tasks
 
@@ -71,8 +71,8 @@ class SemanticTests(unittest.TestCase):
             home, work = Path(temp) / "home", Path(temp) / "work"
             write_session(home)
             result = self.prepare(home, work, "--no-semantic-cache")
-            manifest = json.loads((work / "manifest.json").read_text())
-            evidence = (work / "semantic-evidence.json").read_text()
+            manifest = json.loads((work / "manifest.json").read_text(encoding="utf-8"))
+            evidence = (work / "semantic-evidence.json").read_text(encoding="utf-8")
             self.assertEqual(result["selected"], 1)
             self.assertEqual(manifest["privacy"], "redacted")
             self.assertEqual(manifest["analysis_privacy"], "redacted")
@@ -101,7 +101,7 @@ class SemanticTests(unittest.TestCase):
             home, work = Path(temp) / "home", Path(temp) / "work"
             write_session(home)
             self.prepare(home, work, "--analysis-privacy", "local", "--no-semantic-cache")
-            evidence = (work / "semantic-evidence.json").read_text()
+            evidence = (work / "semantic-evidence.json").read_text(encoding="utf-8")
             self.assertIn("/sensitive-home/person/project", evidence)
             self.assertNotIn("sk-test-", evidence)
 
@@ -127,15 +127,15 @@ class SemanticTests(unittest.TestCase):
             home, work = Path(temp) / "home", Path(temp) / "work"
             write_session(home)
             self.prepare(home, work, "--no-semantic-cache")
-            manifest = json.loads((work / "manifest.json").read_text())
+            manifest = json.loads((work / "manifest.json").read_text(encoding="utf-8"))
             batch_id = manifest["batch_ids"][0]
-            batch = json.loads((work / "batches" / f"{batch_id}.json").read_text())
+            batch = json.loads((work / "batches" / f"{batch_id}.json").read_text(encoding="utf-8"))
             facet = valid_facet(batch["tasks"][0])
             facet["accepted"] = True
             facet["evidence_refs"] = ["unknown-evidence"]
             out = work / "facet-outputs" / f"{batch_id}.json"
             out.parent.mkdir(parents=True)
-            out.write_text(json.dumps({"facets": [facet]}))
+            out.write_text(json.dumps({"facets": [facet]}), encoding="utf-8")
             result = self.run_cli("validate-batch", "--workdir", str(work), "--batch", batch_id, expected=2)
             self.assertIn("不得声明", result.stderr)
 
@@ -151,11 +151,11 @@ class SemanticTests(unittest.TestCase):
             recommendation.update({"recommendation_key": "verification_evidence", "action": "保留短验证摘要。",
                                    "copy_prompt": "请运行验证并报告摘要。", "singleton_observation": True})
             sections["recommendations"] = [recommendation]
-            (work / "semantic-report.json").write_text(json.dumps(sections, ensure_ascii=False))
+            (work / "semantic-report.json").write_text(json.dumps(sections, ensure_ascii=False), encoding="utf-8")
             self.run_cli("validate-aggregate", "--workdir", str(work))
             output = Path(temp) / "complete.html"
             self.run_cli("finalize", "--workdir", str(work), "--output", str(output))
-            companion = json.loads(output.with_suffix(".json").read_text())
+            companion = json.loads(output.with_suffix(".json").read_text(encoding="utf-8"))
             self.assertEqual(companion["semantic_analysis"]["status"], "complete")
             self.assertTrue(work.exists())
 
@@ -163,7 +163,7 @@ class SemanticTests(unittest.TestCase):
             self.prepare(home, fallback_work, "--no-semantic-cache")
             fallback = Path(temp) / "fallback.json"
             self.run_cli("finalize", "--workdir", str(fallback_work), "--fallback", "--format", "json", "--output", str(fallback))
-            self.assertEqual(json.loads(fallback.read_text())["semantic_analysis"]["status"], "fallback")
+            self.assertEqual(json.loads(fallback.read_text(encoding="utf-8"))["semantic_analysis"]["status"], "fallback")
 
             auto = self.run_cli("prepare", "--dsh-home", str(home), "--days", "30", "--privacy", "metrics", "--now", NOW)
             auto_work = Path(json.loads(auto.stdout)["workdir"])

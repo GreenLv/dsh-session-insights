@@ -18,12 +18,12 @@ TARGET = ROOT / "tests" / "fixtures" / "session.jsonl.zstd"
 
 
 def payload() -> bytes:
-    raw = SOURCE.read_bytes()
-    for line_number, line in enumerate(raw.decode("utf-8").splitlines(), 1):
+    text = SOURCE.read_text(encoding="utf-8")
+    raw = ("\n".join(text.splitlines()) + "\n").encode("utf-8")
+    for line_number, line in enumerate(text.splitlines(), 1):
         value = json.loads(line)
         if not isinstance(value, dict) or not isinstance(value.get("type"), str):
             raise ValueError(f"invalid synthetic record at line {line_number}")
-    text = raw.decode("utf-8")
     forbidden = ("/Users/", "api_key=", "Bearer ", "BEGIN PRIVATE KEY", "session_meta")
     hit = next((item for item in forbidden if item in text), None)
     if hit:
@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         TARGET.write_bytes(built)
     decoded = zstandard.ZstdDecompressor().decompress(built)
-    if decoded != SOURCE.read_bytes():
+    if decoded != ("\n".join(SOURCE.read_text(encoding="utf-8").splitlines()) + "\n").encode("utf-8"):
         raise ValueError("compressed fixture round-trip mismatch")
     print(hashlib.sha256(built).hexdigest())
     return 0
