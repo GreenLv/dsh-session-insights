@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.DS_Store
+.venv/
+build/
+dist/
+reports/
+*.html
+!src/dsh_session_insights/assets/dashboard.html
+*.data.json

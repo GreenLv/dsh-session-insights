@@ -1,0 +1,9 @@
+{"agentPreset":"standard","createdAt":1786423200000,"cwd":"/synthetic/workspace/project-a","id":"synthetic-fixture-001","type":"session","version":0}
+{"data":{"turn":1},"time":1786423200000,"type":"turn/start"}
+{"data":{"content":[{"text":"Implement the synthetic fixture and report evidence.","type":"text"}]},"time":1786423200000,"type":"user/message"}
+{"data":{"message":{"content":[{"text":"Implemented the bounded synthetic change.","type":"text"}],"role":"assistant","source":{"kind":"model","model":"synthetic-model","provider":"synthetic-provider"}},"step":1,"turn":1,"usage":{"cacheReadTokens":300,"inputTokens":120,"outputTokens":40,"reasoningTokens":20}},"time":1786423200000,"type":"assistant/message"}
+{"data":{"arguments":"{\"command\": \"python -m unittest\"}","callId":"fixture-call-1","name":"bash","step":1,"turn":1},"time":1786423200000,"type":"tool/call"}
+{"data":{"callId":"fixture-call-1","message":{"content":[{"content":[{"text":"Ran synthetic tests: OK","type":"text"}],"isError":false,"toolCallId":"fixture-call-1","type":"tool-result"}],"source":{"callId":"fixture-call-1","kind":"tool"}},"step":1,"turn":1},"time":1786423200000,"type":"tool/result"}
+{"data":{"content":[{"text":"Keep the change narrow.","type":"text"}]},"time":1786423200000,"type":"user/message"}
+{"data":{"source":{"kind":"provider"},"title":"Synthetic fixture task"},"time":1786423200000,"type":"session/title"}
+{"data":{"reason":{"kind":"completed"},"turn":1},"time":1786423203000,"type":"turn/end"}
