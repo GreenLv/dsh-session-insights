@@ -154,10 +154,10 @@ Compatibility evidence for the unreleased v0.2.0 Bundle candidate:
 
 | Environment | Evidence |
 |---|---|
-| macOS + DSH `0.1.1-rc.1` | Local checkout install, composed-config readback, and real Web-profile startup passed |
-| Windows | Native v0.2 Bundle acceptance pending; do not infer it from v0.1 CLI/Skill acceptance |
-| Ubuntu | Existing CI scope only; v0.2 CI has not run remotely |
-| Python | Local Python 3.12 regression and stream-adapter tests passed; release CI pending |
+| macOS + DSH `0.1.1-rc.1` | Local checkout install, composed-config readback, Web-profile startup, alias-path repetition, and rendered English DOM checks passed |
+| Windows + DSH `0.1.1-rc.1` | Native v0.2 local-link lifecycle and focused real-model `en`/`zh-CN` workflows passed on `11d6fe4`; deterministic slash dispatch and rendered DOM were not invoked natively |
+| Remote CI | Nine Ubuntu/macOS/Windows jobs passed across Python 3.11, 3.12, and 3.13 on `11d6fe4` |
+| Local regression | 11 Node tests and 36 Python tests pass; the npm dry-run contains 17 intended files |
 
 See the [v0.2.0 candidate acceptance record](docs/acceptance/v0.2.0-candidate.md) for current evidence, and the historical [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md) for the released CLI/Skill.
 

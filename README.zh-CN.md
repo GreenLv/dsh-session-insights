@@ -152,10 +152,10 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 | 环境 | 证据范围 |
 |---|---|
-| macOS + DSH `0.1.1-rc.1` | 本地源码安装、合成配置回读和真实 Web profile 启动通过 |
-| Windows | v0.2 Bundle 原生验收待完成；不能从 v0.1 CLI/Skill 验收外推 |
-| Ubuntu | 仅有既有 CI 范围；v0.2 远程 CI 尚未运行 |
-| Python | 本地 Python 3.12 回归与流式适配器测试通过；发布 CI 待完成 |
+| macOS + DSH `0.1.1-rc.1` | 本地源码安装、合成配置回读、Web profile 启动、别名路径重复运行和英文 DOM 渲染检查通过 |
+| Windows + DSH `0.1.1-rc.1` | `11d6fe4` 上的 v0.2 本地链接生命周期及真实模型 `en`/`zh-CN` 聚焦流程通过；未原生触发确定性斜杠命令分发或浏览器 DOM 渲染 |
+| 远程 CI | `11d6fe4` 上 Ubuntu/macOS/Windows × Python 3.11/3.12/3.13 共 9 个任务通过 |
+| 本地回归 | Node 11 项、Python 36 项通过；npm dry-run 含 17 个预期文件 |
 
 当前证据见 [v0.2.0 候选验收记录](docs/acceptance/v0.2.0-candidate.md)；已发布 CLI/Skill 的历史证据见 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。
 
