@@ -28,9 +28,9 @@ All notable changes to this project will be documented here.
 
 - Eleven local Node plugin tests and 36 Python tests pass on macOS with Python 3.12, including aggregate-contract parity and Windows project-path coverage.
 - File-log and `sessionQuery` fixtures produce equivalent core totals; npm dry-run contains only the intended 17 files and no lifecycle scripts or bytecode.
-- An isolated DSH `0.1.1-rc.1` Web profile installed, composed, and started the local Bundle on macOS. The nine-job remote CI matrix passed on base commit `ada5f10`; exact-commit CI for the local remediation remains pending.
+- An isolated DSH `0.1.1-rc.1` Web profile installed, composed, and started the local Bundle on macOS. The nine-job remote CI matrix passed on remediation source commit `1fe5bc4` across Ubuntu, macOS, and Windows with Python 3.11/3.12/3.13.
 - A third independent macOS DSH review reproduced two semantic prepares and two deterministic commands below an aliased DSH home, rendered a complete English semantic workflow with zero CJK characters outside scripts, and confirmed the then-current 10 Node tests, 35 Python tests, and 17-file npm payload. No remaining macOS release blocker was found.
-- Independent Windows acceptance on base commit `ada5f10` passed Bundle installation, composed-config readback, Web startup, the six-tool lifecycle, resume, cancellation, repeated runs, and alias-plus-space paths. Its real-model English run exposed the aggregate-contract omission fixed by the current local remediation; focused Windows revalidation remains pending.
+- Independent Windows acceptance on base commit `ada5f10` passed Bundle installation, composed-config readback, Web startup, the six-tool lifecycle, resume, cancellation, repeated runs, and alias-plus-space paths. Its real-model English run exposed the aggregate-contract omission fixed in `1fe5bc4`; focused Windows revalidation remains pending.
 
 ## [0.1.0] - 2026-08-21
 

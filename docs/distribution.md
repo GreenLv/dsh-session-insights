@@ -2,7 +2,7 @@
 
 Distribution is intentionally separate from local implementation and requires explicit publication authorization.
 
-1. Finish v0.2 release gates: focused Windows real-model revalidation of the aggregate-contract remediation, remote CI on the exact remediation commit, exact package readback, and a clean release commit.
+1. Finish v0.2 release gates: focused Windows real-model revalidation of the aggregate-contract remediation, exact package readback, and a clean release commit.
 2. Publish `dsh-session-insights@0.2.0` to npm and create a matching GitHub tag/Release only with separate authorization. Read back both identities independently.
 3. Submit the Bundle to the DSH plugin marketplace and `dshworks/awesome-dsh-plugins` under observability/evidence or developer-tools categories. Use `/session-insights` in demos and state clearly that it coexists with `dsh-insights`.
 4. Publish one bilingual launch article after the registry install path is reproducible. Lead with a real command-to-report flow, then explain the stdin/no-raw-copy privacy boundary, deterministic fallback, and comparison with adjacent DSH usage/insights tools.

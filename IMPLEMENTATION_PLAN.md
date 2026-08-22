@@ -146,7 +146,7 @@ isolated macOS DSH `0.1.1-rc.1` profile installed, composed, and started the
 Bundle. A third independent macOS DSH retest subsequently closed the alias-path
 and English semantic-rendering findings with no remaining macOS release blocker.
 Windows-native Bundle acceptance on base commit `ada5f10` exercised the local-link
-lifecycle and exposed a missing aggregate enum contract; the local remediation
-awaits focused real-model revalidation and exact-commit remote CI. A real-model
+lifecycle and exposed a missing aggregate enum contract; remediation source
+commit `1fe5bc4` passed the nine-job remote CI matrix and awaits focused real-model revalidation. A real-model
 `zh-CN` semantic review, commit/push, npm publication, tag/Release,
 marketplace submission, and article publication remain separate pending gates.
