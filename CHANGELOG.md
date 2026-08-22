@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented here.
 
-## [Unreleased]
+## [0.2.0] - 2026-08-22
 
 ### Added
 
@@ -13,7 +13,7 @@ All notable changes to this project will be documented here.
 ### Changed
 
 - Semantic retrospective is the native command default; `--deterministic` preserves a no-model path and `--resume` continues the latest bounded run.
-- Candidate version metadata is now `0.2.0`; publication, tag, Release, and marketplace state remain pending.
+- Version metadata is `0.2.0`, and the Bundle supports installation through the DSH npm plugin channel.
 
 ### Fixed
 
@@ -27,10 +27,11 @@ All notable changes to this project will be documented here.
 ### Validation
 
 - Eleven local Node plugin tests and 36 Python tests pass on macOS with Python 3.12, including aggregate-contract parity and Windows project-path coverage.
-- File-log and `sessionQuery` fixtures produce equivalent core totals; npm dry-run contains only the intended 17 files and no lifecycle scripts or bytecode.
+- File-log and `sessionQuery` fixtures produce equivalent core totals. Exact package preflight on the final release candidate produced 17 intended files with no lifecycle scripts or bytecode; two independent packs were byte-identical with SHA-256 `3bb0dd2a64eece762b0eccfca51f6317fe294cece215971211a3bbce84122515`.
 - An isolated DSH `0.1.1-rc.1` Web profile installed, composed, and started the local Bundle on macOS. The nine-job remote CI matrix passed on remediation source commit `1fe5bc4` across Ubuntu, macOS, and Windows with Python 3.11/3.12/3.13.
 - A third independent macOS DSH review reproduced two semantic prepares and two deterministic commands below an aliased DSH home, rendered a complete English semantic workflow with zero CJK characters outside scripts, and confirmed the then-current 10 Node tests, 35 Python tests, and 17-file npm payload. No remaining macOS release blocker was found.
 - Independent Windows acceptance on `11d6fe4` passed Bundle installation, composed-config readback, Web startup, the six-tool lifecycle, resume, cancellation, repeated runs, alias-plus-space paths, native project filtering, and real-model `en`/`zh-CN` semantic completion without fallback. Deterministic slash dispatch and rendered English DOM were not invoked natively on Windows.
+- CI run `32543649712` passed all nine Ubuntu/macOS/Windows jobs on package/runtime source basis `ffc155a` across Python 3.11/3.12/3.13.
 
 ## [0.1.0] - 2026-08-21
 

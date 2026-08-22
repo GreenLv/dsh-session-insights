@@ -30,9 +30,16 @@ The dashboard brings several views of the same evidence together:
 
 The HTML file contains its own styles and data, so you can keep it locally and open it without a server. A machine-readable JSON report is written beside it.
 
-## Quick start from this checkout
+## Install the Bundle
 
-Requirements: DeepSeek Harness and Python 3.11 or newer. The current Bundle candidate has been started natively on macOS with DSH `0.1.1-rc.1`.
+Requirements: DeepSeek Harness and Python 3.11 or newer. Install the published Bundle into a DSH profile, then start that profile:
+
+```bash
+dsh plugin --profile web add dsh-session-insights
+dsh web
+```
+
+To install from a reviewed source checkout instead:
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
@@ -49,7 +56,7 @@ Then run this in the DSH composer:
 
 The command prepares bounded semantic batches, queues the current DSH agent to analyze them serially, and writes the final HTML/JSON under `$DSH_HOME/insights/runs/<run-id>`. Add `--deterministic` to skip the model-assisted stage. The command name intentionally differs from `/insights`, so this Bundle can coexist with `dsh-insights`.
 
-The npm package has no install or build lifecycle script. A registry install command will be documented only after `0.2.0` is actually published; the command above installs the local checkout.
+The npm package has no install or build lifecycle script. The registry command installs the published Bundle; `dsh plugin ... add .` installs the current local checkout.
 
 ## Privacy modes
 
@@ -150,7 +157,7 @@ Each model-produced JSON file is validated before it can enter the final report.
 - The Dashboard and semantic prompt contract support `zh-CN` and `en` from the same report schema.
 - Reports infer patterns from available evidence; they do not prove intent, quality, task acceptance, or security.
 
-Compatibility evidence for the unreleased v0.2.0 Bundle candidate:
+Compatibility evidence for the v0.2.0 Bundle:
 
 | Environment | Evidence |
 |---|---|

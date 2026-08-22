@@ -30,9 +30,16 @@ Dashboard 把同一批证据组织成几个容易浏览的视角：
 
 HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继续处理或审计。
 
-## 从当前源码安装
+## 安装 Bundle
 
-需要 DeepSeek Harness 和 Python 3.11 或更高版本。当前 Bundle 候选已在 macOS + DSH `0.1.1-rc.1` 上完成本机启动验证。
+需要 DeepSeek Harness 和 Python 3.11 或更高版本。先把已发布 Bundle 安装到 DSH profile，再启动该 profile：
+
+```bash
+dsh plugin --profile web add dsh-session-insights
+dsh web
+```
+
+如需从已审查的源码安装：
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
@@ -49,7 +56,7 @@ dsh web
 
 该命令会准备有界语义批次，让当前 DSH agent 串行分析，并把最终 HTML/JSON 写入 `$DSH_HOME/insights/runs/<run-id>`。添加 `--deterministic` 可跳过模型语义阶段。主命令刻意不占用 `/insights`，因此可以与已发布的 `dsh-insights` 共存。
 
-npm 包不含 install/build 生命周期脚本。只有在 `0.2.0` 确实发布后，README 才会把 npm registry 命令写成可用安装入口；上面的命令安装的是当前本地源码。
+npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 Bundle；`dsh plugin ... add .` 安装当前本地源码。
 
 ## 三档隐私模式
 
@@ -148,7 +155,7 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 - Dashboard 与语义提示契约基于同一报告 schema 支持 `zh-CN` 和 `en`。
 - 报告只能根据现有证据推断模式，不能证明意图、质量、任务验收或安全性。
 
-未发布 v0.2.0 Bundle 候选的兼容性证据：
+v0.2.0 Bundle 的兼容性证据：
 
 | 环境 | 证据范围 |
 |---|---|
