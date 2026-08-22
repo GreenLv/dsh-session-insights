@@ -62,6 +62,16 @@ test('command parser accepts the documented surface', () => {
   assert.throws(() => _test.parseCommandInput('--unknown'), /unknown option/)
 })
 
+test('Windows project filters require native path syntax', () => {
+  assert.equal(_test.normalizeProjectInput('C:\\work space\\project', 'win32'), 'C:\\work space\\project')
+  assert.equal(_test.normalizeProjectInput('\\\\server\\share\\project', 'win32'), '\\\\server\\share\\project')
+  assert.throws(
+    () => _test.normalizeProjectInput('/path/to/project', 'win32'),
+    /project must use a Windows path/,
+  )
+  assert.equal(_test.normalizeProjectInput('/path/to/project', 'darwin'), '/path/to/project')
+})
+
 test('registers one command and the six workflow tools', () => {
   const commands = []
   const tools = []

@@ -73,6 +73,11 @@ Reports are refused inside `$DSH_HOME/sessions`, so generated files cannot be mi
   [--locale zh-CN|en] [--deterministic] [--resume] [--no-open]
 ```
 
+Project filters use the host operating system's path syntax. On Windows, pass a
+native path such as `/session-insights --project C:/path/to/project`; a
+POSIX-rooted path such as `/path/to/project` is rejected instead of silently
+matching no sessions.
+
 The semantic workflow is the default. It uses six bounded DSH tools for prepare, batch read/submit, aggregate read/submit, and finalize. Invalid model output gets one repair opportunity at the orchestration level and can then degrade explicitly to the deterministic report. The current session is counted for coverage but excluded from recommendations as meta-analysis.
 
 ## Compatible CLI and Skill workflow
@@ -88,7 +93,7 @@ CLI="$DSH_HOME/tools/dsh-session-insights/venv/bin/dsh-session-insights"
 "$CLI" report --dsh-home "$DSH_HOME" --days 30 --locale en \
   --format html --output ./dsh-insights.html --open
 
-# Limit the report to one project
+# Limit the report to one project on macOS or Linux
 dsh-session-insights report --dsh-home "$DSH_HOME" \
   --project /path/to/project --format html --output ./project-insights.html
 
@@ -98,6 +103,14 @@ dsh-session-insights report --dsh-home "$DSH_HOME" --privacy metrics \
 
 # Check the installation
 dsh-session-insights doctor --dsh-home "$DSH_HOME"
+```
+
+The Windows PowerShell equivalent uses the managed Windows launcher and a
+Windows-native project path:
+
+```powershell
+$Cli = Join-Path $env:DSH_HOME 'tools\dsh-session-insights\venv\Scripts\dsh-session-insights.exe'
+& $Cli report --dsh-home $env:DSH_HOME --project 'C:\path\to\project' --format html --output .\project-insights.html
 ```
 
 To remove only this project's managed directories:

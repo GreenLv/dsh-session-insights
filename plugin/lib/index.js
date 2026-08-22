@@ -32,6 +32,14 @@ function runRoot() {
   return resolve(dshHome(), 'insights', 'runs')
 }
 
+function normalizeProjectInput(value, platform = process.platform) {
+  const project = String(value)
+  if (platform === 'win32' && /^[\\/](?![\\/])/.test(project)) {
+    throw new Error('project must use a Windows path such as C:\\path\\to\\project')
+  }
+  return project
+}
+
 function canonicalPath(value) {
   const unresolved = resolve(String(value))
   const suffix = []
@@ -125,7 +133,7 @@ function lastJsonLine(text) {
 function normalizeOptions(input = {}) {
   const result = {
     days: input.days === undefined ? 30 : Number(input.days),
-    project: input.project || undefined,
+    project: input.project ? normalizeProjectInput(input.project) : undefined,
     privacy: input.privacy || 'redacted',
     analysis_privacy: input.analysis_privacy || undefined,
     analysis_depth: input.analysis_depth || 'evidence',
@@ -393,4 +401,4 @@ export function apply(ctx) {
   })
 }
 
-export const _test = { assertRunPath, canonicalPath, normalizeOptions, parseCommandInput, bridgeLines, orchestrationPrompt, runPython }
+export const _test = { assertRunPath, canonicalPath, normalizeProjectInput, normalizeOptions, parseCommandInput, bridgeLines, orchestrationPrompt, runPython }

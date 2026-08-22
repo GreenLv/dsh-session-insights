@@ -73,6 +73,10 @@ npm 包不含 install/build 生命周期脚本。只有在 `0.2.0` 确实发布�
   [--locale zh-CN|en] [--deterministic] [--resume] [--no-open]
 ```
 
+项目过滤路径遵循宿主操作系统语法。在 Windows 上请使用
+`/session-insights --project C:/path/to/project` 这样的原生路径；如果传入
+`/path/to/project` 这类 POSIX 根路径，插件会明确报错，而不是静默匹配不到会话。
+
 语义复盘是默认流程，通过六个有界 DSH tools 完成 prepare、批次读取/提交、汇总读取/提交和 finalize。模型输出无效时，编排提示要求每阶段最多修复一次，仍失败则显式降级并保留确定性报告。当前 insights 会话计入覆盖范围，但会标记为 meta-analysis，不进入建议生成。
 
 ## 兼容 CLI 与 Skill 流程
@@ -88,7 +92,7 @@ CLI="$DSH_HOME/tools/dsh-session-insights/venv/bin/dsh-session-insights"
 "$CLI" report --dsh-home "$DSH_HOME" --days 30 --locale zh-CN \
   --format html --output ./dsh-insights.html --open
 
-# 只看一个项目
+# 在 macOS 或 Linux 上只看一个项目
 dsh-session-insights report --dsh-home "$DSH_HOME" \
   --project /path/to/project --format html --output ./project-insights.html
 
@@ -98,6 +102,13 @@ dsh-session-insights report --dsh-home "$DSH_HOME" --privacy metrics \
 
 # 检查安装状态
 dsh-session-insights doctor --dsh-home "$DSH_HOME"
+```
+
+Windows PowerShell 应使用受管的 Windows 启动器和 Windows 原生项目路径：
+
+```powershell
+$Cli = Join-Path $env:DSH_HOME 'tools\dsh-session-insights\venv\Scripts\dsh-session-insights.exe'
+& $Cli report --dsh-home $env:DSH_HOME --project 'C:\path\to\project' --format html --output .\project-insights.html
 ```
 
 只卸载本项目管理的目录：

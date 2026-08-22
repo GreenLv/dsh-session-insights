@@ -173,6 +173,18 @@ class SemanticTests(unittest.TestCase):
             self.run_cli("finalize", "--workdir", str(auto_work), "--format", "json", "--output", str(auto_output))
             self.assertFalse(auto_work.exists())
 
+    def test_aggregate_contract_discloses_validator_enums(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home, work = Path(temp) / "home", Path(temp) / "work"
+            write_session(home)
+            self.prepare(home, work, "--no-semantic-cache")
+            self.write_valid_batches(work)
+            self.run_cli("prepare-aggregate", "--workdir", str(work))
+            aggregate_input = json.loads((work / "aggregate-input.json").read_text(encoding="utf-8"))
+            enum_values = aggregate_input["output_contract"]["enum_values"]
+            self.assertEqual(set(enum_values["confidence"]), {"high", "medium", "low"})
+            self.assertEqual(set(enum_values["measurement"]), {"measured", "proxy", "inferred"})
+
     def test_english_finalize_localizes_framework_owned_semantic_strings(self):
         with tempfile.TemporaryDirectory() as temp:
             home, work = Path(temp) / "home", Path(temp) / "work"

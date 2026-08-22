@@ -606,6 +606,10 @@ def command_prepare_aggregate(args: argparse.Namespace) -> int:
                 "required_sections": list(AGGREGATE_SECTIONS),
                 "item_fields": ["title", "text", "supporting_task_family_ids", "evidence_refs", "confidence", "measurement"],
                 "recommendation_extra_fields": ["recommendation_key", "action", "copy_prompt", "singleton_observation"],
+                "enum_values": {
+                    "confidence": sorted(CONFIDENCE_VALUES),
+                    "measurement": sorted(MEASUREMENT_VALUES),
+                },
                 "rules": ([
                     "Every conclusion must cite supplied task_family_id and evidence ids.",
                     "Recommendations need two supporting task families unless singleton_observation is true.",

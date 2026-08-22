@@ -138,13 +138,15 @@ When resuming, start here:
 - [x] Phase D: focused tests, package audit, and available macOS native acceptance
 - [ ] Publication gates separately authorized and completed
 
-Local implementation evidence after the second macOS review remediation: 10 Node tests
-and 35 Python tests pass; fixture reconstruction, public-tree audit, package
+Local implementation evidence after the Windows review remediation: 11 Node tests
+and 36 Python tests pass; fixture reconstruction, public-tree audit, package
 dry-run, diff whitespace checks, exact English UI localization checks, and a
 synthetic browser readback pass; the npm payload contains 17 intended files; an
 isolated macOS DSH `0.1.1-rc.1` profile installed, composed, and started the
 Bundle. A third independent macOS DSH retest subsequently closed the alias-path
 and English semantic-rendering findings with no remaining macOS release blocker.
-Windows-native Bundle acceptance, exact-commit remote CI, real-model bilingual
-semantic review, commit/push, npm publication, tag/Release,
+Windows-native Bundle acceptance on base commit `ada5f10` exercised the local-link
+lifecycle and exposed a missing aggregate enum contract; the local remediation
+awaits focused real-model revalidation and exact-commit remote CI. A real-model
+`zh-CN` semantic review, commit/push, npm publication, tag/Release,
 marketplace submission, and article publication remain separate pending gates.

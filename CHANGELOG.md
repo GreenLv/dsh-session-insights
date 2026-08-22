@@ -21,13 +21,16 @@ All notable changes to this project will be documented here.
 - Cover resume, Python-child cancellation, invalid semantic-output cleanup, and deterministic fallback in the native Bundle regression suite.
 - Use the supported DSH `notice` context form and canonicalize each path through its deepest existing ancestor so macOS `/var` and `/private/var` aliases do not reject a not-yet-created run directory.
 - Localize framework-owned semantic evidence and horizon text when finalizing an English report.
+- Disclose the aggregate validator's `confidence` and `measurement` enums to the model so the default semantic workflow does not fall back for an undiscoverable contract.
+- Reject POSIX-rooted project filters on Windows with a native-path error instead of silently selecting no sessions.
 
 ### Validation
 
-- Ten local Node plugin tests and 35 Python tests pass on macOS with Python 3.12, including repeated runs below an aliased DSH home and English semantic-finalization coverage.
+- Eleven local Node plugin tests and 36 Python tests pass on macOS with Python 3.12, including aggregate-contract parity and Windows project-path coverage.
 - File-log and `sessionQuery` fixtures produce equivalent core totals; npm dry-run contains only the intended 17 files and no lifecycle scripts or bytecode.
-- An isolated DSH `0.1.1-rc.1` Web profile installed, composed, and started the local Bundle on macOS. Windows-native Bundle acceptance and remote CI remain pending.
-- A third independent macOS DSH review reproduced two semantic prepares and two deterministic commands below an aliased DSH home, rendered a complete English semantic workflow with zero CJK characters outside scripts, and confirmed all 10 Node tests, 35 Python tests, and the 17-file npm payload. No remaining macOS release blocker was found; Windows-native Bundle acceptance, exact-commit remote CI, and a real-model bilingual semantic round trip remain pending.
+- An isolated DSH `0.1.1-rc.1` Web profile installed, composed, and started the local Bundle on macOS. The nine-job remote CI matrix passed on base commit `ada5f10`; exact-commit CI for the local remediation remains pending.
+- A third independent macOS DSH review reproduced two semantic prepares and two deterministic commands below an aliased DSH home, rendered a complete English semantic workflow with zero CJK characters outside scripts, and confirmed the then-current 10 Node tests, 35 Python tests, and 17-file npm payload. No remaining macOS release blocker was found.
+- Independent Windows acceptance on base commit `ada5f10` passed Bundle installation, composed-config readback, Web startup, the six-tool lifecycle, resume, cancellation, repeated runs, and alias-plus-space paths. Its real-model English run exposed the aggregate-contract omission fixed by the current local remediation; focused Windows revalidation remains pending.
 
 ## [0.1.0] - 2026-08-21
 
