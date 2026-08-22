@@ -1,5 +1,7 @@
 # dsh-session-insights
 
+[English](README.md)
+
 [![CI](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -14,8 +16,6 @@
 - 哪些做法已经有效，下一步值得尝试什么？
 
 这是**行为复盘，不是遥测**。它不是实时监控器，不计算账单，也不会替你判断工作质量。
-
-[English](README.md)
 
 ## 报告里有什么
 
@@ -63,6 +63,7 @@ npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 
 - 从 [npm](https://www.npmjs.com/package/dsh-session-insights) 安装已发布 Bundle。
 - 从 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases/latest) 下载版本化发布产物。
 - 在 [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/) 查看公开目录条目。
+- 在 [Awesome DeepSeek Harness](https://github.com/Dominic789654/awesome-deepseek-harness/blob/main/README.zh-CN.md#会话与记忆管理) 查看项目条目。
 
 ## 三档隐私模式
 

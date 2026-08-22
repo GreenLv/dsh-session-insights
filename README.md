@@ -1,5 +1,7 @@
 # dsh-session-insights
 
+[简体中文](README.zh-CN.md)
+
 [![CI](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -14,8 +16,6 @@ Turn your DeepSeek Harness session history into a private, local workflow retros
 - Which practices are working, and what should I try next?
 
 This is **behavioral review, not telemetry**. It is not a live monitor, a billing calculator, or a claim that it can judge the quality of your work.
-
-[简体中文](README.zh-CN.md)
 
 ## What you get
 
@@ -63,6 +63,7 @@ The npm package has no install or build lifecycle script. The registry command i
 - Install the published Bundle from [npm](https://www.npmjs.com/package/dsh-session-insights).
 - Download versioned artifacts from [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases/latest).
 - Find the public directory entry on [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/).
+- Find the project in [Awesome DeepSeek Harness](https://github.com/Dominic789654/awesome-deepseek-harness#session--memory-management).
 
 ## Privacy modes
 
