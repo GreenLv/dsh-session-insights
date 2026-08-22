@@ -58,6 +58,12 @@ dsh web
 
 npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 Bundle；`dsh plugin ... add .` 安装当前本地源码。
 
+## 获取渠道
+
+- 从 [npm](https://www.npmjs.com/package/dsh-session-insights) 安装已发布 Bundle。
+- 从 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases/latest) 下载版本化发布产物。
+- 在 [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/) 查看公开目录条目。
+
 ## 三档隐私模式
 
 确定性报告完全离线运行。原生插件把 `sessionQuery` 返回的完整快照经 stdin 流式交给 Python，不会在运行目录复制原始 transcript。你可以决定报告和可选模型阶段允许保留多少会话内容：

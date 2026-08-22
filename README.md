@@ -58,6 +58,12 @@ The command prepares bounded semantic batches, queues the current DSH agent to a
 
 The npm package has no install or build lifecycle script. The registry command installs the published Bundle; `dsh plugin ... add .` installs the current local checkout.
 
+## Availability
+
+- Install the published Bundle from [npm](https://www.npmjs.com/package/dsh-session-insights).
+- Download versioned artifacts from [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases/latest).
+- Find the public directory entry on [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/).
+
 ## Privacy modes
 
 Deterministic reports run offline. In native plugin mode, complete raw snapshots are streamed from `sessionQuery` to Python over stdin and are not copied into the run directory. Choose how much session content the report and optional model stage may retain:
