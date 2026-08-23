@@ -17,6 +17,7 @@ import zstandard
 FORBIDDEN_NAMES = {".DS_Store", "__pycache__", ".pytest_cache", ".mypy_cache", ".coverage"}
 FORBIDDEN_DIR_NAMES = FORBIDDEN_NAMES | {"build", "dist"}
 FORBIDDEN_SUFFIXES = {".pyc", ".pyo", ".log", ".sqlite", ".db"}
+IMAGE_ASSET_SUFFIXES = {".png": b"\x89PNG\r\n\x1a\n", ".jpg": b"\xff\xd8\xff", ".jpeg": b"\xff\xd8\xff"}
 CONTENT_RULES = {
     "private-user-path": re.compile(r"/Users/lgr59|[A-Za-z]:[\\/]Users[\\/]lgr59", re.IGNORECASE),
     "private-source-name": re.compile(r"codex-sync", re.IGNORECASE),
@@ -59,6 +60,20 @@ def auditable_paths(root: Path) -> list[Path]:
     return sorted(root.rglob("*"))
 
 
+def is_declared_image_asset(path: Path, relative: str) -> bool:
+    """Return True when the file is an image under assets/ with a matching magic header."""
+    if not relative.split("/", 1)[0] == "assets":
+        return False
+    suffix = path.suffix.casefold()
+    magic = IMAGE_ASSET_SUFFIXES.get(suffix)
+    if magic is None:
+        return False
+    try:
+        return path.read_bytes().startswith(magic)
+    except OSError:
+        return False
+
+
 def audit(root: Path) -> dict[str, object]:
     root = root.resolve()
     findings: list[dict[str, str]] = []
@@ -78,6 +93,8 @@ def audit(root: Path) -> dict[str, object]:
         files += 1
         if path.suffix.casefold() in FORBIDDEN_SUFFIXES:
             findings.append({"path": relative, "rule": "generated-suffix"})
+            continue
+        if is_declared_image_asset(path, relative):
             continue
         if path.name == "session.jsonl.zstd":
             try:

@@ -13,11 +13,29 @@ AUDIT = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
 SPEC.loader.exec_module(AUDIT)
 
+TINY_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+    "0000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082"
+)
+
 
 class PublicTreeAuditTests(unittest.TestCase):
     def test_current_tree_passes(self):
         result = AUDIT.audit(ROOT)
         self.assertEqual(result["status"], "pass", result["findings"])
+
+    def test_declared_image_assets_pass_while_other_binaries_fail(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "assets").mkdir()
+            (root / "assets" / "ok.png").write_bytes(TINY_PNG)
+            (root / "assets" / "bad.png").write_bytes(b"\x00\x01\x02\xff\xfe not-utf8")
+            (root / "elsewhere.bin").write_bytes(b"\xff\xfe\x00\x01")
+            result = AUDIT.audit(root)
+            findings = {item["path"]: item["rule"] for item in result["findings"]}
+            self.assertNotIn("assets/ok.png", findings)
+            self.assertEqual(findings.get("assets/bad.png"), "unexpected-binary")
+            self.assertEqual(findings.get("elsewhere.bin"), "unexpected-binary")
 
     def test_negative_private_path_and_generated_cache(self):
         with tempfile.TemporaryDirectory() as temp:
