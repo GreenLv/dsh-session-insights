@@ -6,6 +6,8 @@
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+![许多分散的会话轨迹经过分析透镜，收束为结构化证据卡片和一份清晰报告](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/social/hero.jpg)
+
 用 `/session-insights` 把 DeepSeek Harness 的会话历史变成一份只保存在本地的工作流复盘报告。
 
 `dsh-session-insights` 是原生 DSH Bundle，底层复用现有 Python 分析核心。插件模式通过 DSH `sessionQuery` 服务读取已完成回放校验的会话快照，生成一个可直接打开的 HTML Dashboard 和配套 JSON。它主要帮你回答：
@@ -27,6 +29,8 @@ Dashboard 把同一批证据组织成几个容易浏览的视角：
 | 工作与流程拆解 | 项目、角色、代表性工作流和完成证据 |
 | 亮点与摩擦 | 有证据支持的有效做法，以及失败、重试等值得调查的信号 |
 | 建议 | 与测量证据绑定的 DSH 工作方式建议，并附可复制提示词 |
+
+<p align="center"><img src="https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/screenshots/dashboard-overview-zh.png" alt="确定性复盘 Dashboard 总览（合成数据）" width="640"></p>
 
 HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继续处理或审计。
 
@@ -64,6 +68,7 @@ npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 
 - 从 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases/latest) 下载版本化发布产物。
 - 在 [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/) 查看公开目录条目。
 - 在 [Awesome DeepSeek Harness](https://github.com/Dominic789654/awesome-deepseek-harness/blob/main/README.zh-CN.md#会话与记忆管理) 查看项目条目。
+- 在 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/README.zh.md) 查看项目条目，配套商店页面见 [awesome-dsh-plugin.com](https://awesome-dsh-plugin.com/p/GreenLv/dsh-session-insights/)，应用内 DSH 插件市场同步展示。
 
 ## 三档隐私模式
 

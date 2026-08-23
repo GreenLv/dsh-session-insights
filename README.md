@@ -6,6 +6,8 @@
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+![Scattered session trails pass through an analysis lens and resolve into structured evidence cards and a clear report](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/social/hero.jpg)
+
 Turn your DeepSeek Harness session history into a private, local workflow retrospective, directly from `/session-insights`.
 
 `dsh-session-insights` is a native DSH Bundle backed by a mature Python analysis core. In plugin mode it reads replay-validated snapshots through DSH's `sessionQuery` service and produces a self-contained HTML dashboard plus companion JSON. It helps answer questions such as:
@@ -27,6 +29,8 @@ The dashboard brings several views of the same evidence together:
 | Work and workflow breakdown | Projects, roles, representative workflows, and completion evidence |
 | Wins and friction | Evidence-backed strengths plus failures, retries, and other signals worth investigating |
 | Recommendations | DSH workflow suggestions tied to measured evidence, with prompts you can copy |
+
+<p align="center"><img src="https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/screenshots/dashboard-overview-en.png" alt="Deterministic retrospective dashboard overview (synthetic data)" width="640"></p>
 
 The HTML file contains its own styles and data, so you can keep it locally and open it without a server. A machine-readable JSON report is written beside it.
 
@@ -64,6 +68,7 @@ The npm package has no install or build lifecycle script. The registry command i
 - Download versioned artifacts from [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases/latest).
 - Find the public directory entry on [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/).
 - Find the project in [Awesome DeepSeek Harness](https://github.com/Dominic789654/awesome-deepseek-harness#session--memory-management).
+- Find the project in [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin), with a storefront page on [awesome-dsh-plugin.com](https://awesome-dsh-plugin.com/p/GreenLv/dsh-session-insights/) and a listing in the in-app DSH plugin market.
 
 ## Privacy modes
 
