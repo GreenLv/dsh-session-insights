@@ -1,16 +1,14 @@
 # dsh-session-insights
 
-[English](README.md)
+[English](README.md) | [更新日志](CHANGELOG.zh-CN.md)
 
 [![CI](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-![许多分散的会话轨迹经过分析透镜，收束为结构化证据卡片和一份清晰报告](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/social/hero.jpg)
+运行 `/session-insights`，把 DeepSeek Harness 的会话历史整理成一份本地工作流复盘。Bundle 通过 DSH 的 `sessionQuery` 服务读取会话，写出可直接打开的 HTML Dashboard 和配套 JSON。
 
-用 `/session-insights` 把 DeepSeek Harness 的会话历史变成一份只保存在本地的工作流复盘报告。
-
-`dsh-session-insights` 是原生 DSH Bundle，底层复用现有 Python 分析核心。插件模式通过 DSH `sessionQuery` 服务读取已完成回放校验的会话快照，生成一个可直接打开的 HTML Dashboard 和配套 JSON。它主要帮你回答：
+它主要回答：
 
 - 我最近主要让 DSH 做了哪些类型的工作？
 - 哪些项目和工作流投入最多？
@@ -18,6 +16,8 @@
 - 哪些做法已经有效，下一步值得尝试什么？
 
 这是**行为复盘，不是遥测**。它不是实时监控器，不计算账单，也不会替你判断工作质量。
+
+![许多分散的会话轨迹经过分析透镜，收束为结构化证据卡片和一份清晰报告](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/social/hero.jpg)
 
 ## 报告里有什么
 
@@ -67,10 +67,7 @@ npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 
 - 从 [npm](https://www.npmjs.com/package/dsh-session-insights) 安装已发布 Bundle。
 - 从 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases/latest) 下载版本化发布产物。
 - 在 [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/) 查看公开目录条目。
-- 在 [Awesome DeepSeek Harness](https://github.com/Dominic789654/awesome-deepseek-harness/blob/main/README.zh-CN.md#会话与记忆管理) 查看项目条目。
-- 在 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/README.zh.md) 查看项目条目，配套商店页面见 [awesome-dsh-plugin.com](https://awesome-dsh-plugin.com/p/GreenLv/dsh-session-insights/)，应用内 DSH 插件市场同步展示。
-- 在 [dsh-market.com 创意工坊](https://dsh-market.com/) 查看项目条目。
-- 在 [dshworks awesome-dsh-plugins 注册表](https://dsh.works/awesome-dsh-plugins/) 查看项目条目。
+- 其他已核验的社区条目统一记录在[分发状态表](docs/distribution.md)。
 
 ## 三档隐私模式
 
@@ -94,11 +91,9 @@ npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 
   [--locale zh-CN|en] [--deterministic] [--resume] [--no-open]
 ```
 
-项目过滤路径遵循宿主操作系统语法。在 Windows 上请使用
-`/session-insights --project C:/path/to/project` 这样的原生路径；如果传入
-`/path/to/project` 这类 POSIX 根路径，插件会明确报错，而不是静默匹配不到会话。
+项目过滤路径遵循宿主操作系统语法。在 Windows 上请使用 `/session-insights --project C:/path/to/project` 这样的原生路径；如果传入 `/path/to/project` 这类 POSIX 根路径，插件会明确报错，而不是静默匹配不到会话。
 
-语义复盘是默认流程，通过六个有界 DSH tools 完成 prepare、批次读取/提交、汇总读取/提交和 finalize。模型输出无效时，编排提示要求每阶段最多修复一次，仍失败则显式降级并保留确定性报告。当前 insights 会话计入覆盖范围，但会标记为 meta-analysis，不进入建议生成。
+语义复盘是默认流程。模型输出无效时最多修复一次，仍失败则明确降级并保留确定性报告。当前复盘会话计入覆盖范围，但标记为元分析，不进入建议生成。
 
 ## 兼容 CLI 与 Skill 流程
 
@@ -114,15 +109,15 @@ CLI="$DSH_HOME/tools/dsh-session-insights/venv/bin/dsh-session-insights"
   --format html --output ./dsh-insights.html --open
 
 # 在 macOS 或 Linux 上只看一个项目
-dsh-session-insights report --dsh-home "$DSH_HOME" \
+"$CLI" report --dsh-home "$DSH_HOME" \
   --project /path/to/project --format html --output ./project-insights.html
 
 # 不保留摘录，也不生成语义批次
-dsh-session-insights report --dsh-home "$DSH_HOME" --privacy metrics \
+"$CLI" report --dsh-home "$DSH_HOME" --privacy metrics \
   --format json --output ./dsh-metrics.json
 
 # 检查安装状态
-dsh-session-insights doctor --dsh-home "$DSH_HOME"
+"$CLI" doctor --dsh-home "$DSH_HOME"
 ```
 
 Windows PowerShell 应使用受管的 Windows 启动器和 Windows 原生项目路径：
@@ -147,9 +142,7 @@ python3 scripts/bootstrap.py uninstall --dsh-home "$DSH_HOME"
 
 ## 手动语义复盘
 
-原生命令默认编排语义复盘。CLI 也暴露了每个阶段，便于调试或自动化：
-
-通过已安装的 DSH Skill 使用时，当前 DSH 模型可以编排这套流程。若需手动执行：
+原生命令默认编排语义复盘。CLI 也暴露每个阶段，便于调试或自动化：
 
 ```bash
 dsh-session-insights semantic prepare --dsh-home "$DSH_HOME" --days 30 --workdir /safe/workdir
@@ -169,16 +162,7 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 - Dashboard 与语义提示契约基于同一报告 schema 支持 `zh-CN` 和 `en`。
 - 报告只能根据现有证据推断模式，不能证明意图、质量、任务验收或安全性。
 
-v0.2.0 Bundle 的兼容性证据：
-
-| 环境 | 证据范围 |
-|---|---|
-| macOS + DSH `0.1.1-rc.1` | 本地源码安装、合成配置回读、Web profile 启动、别名路径重复运行和英文 DOM 渲染检查通过 |
-| Windows + DSH `0.1.1-rc.1` | `11d6fe4` 上的 v0.2 本地链接生命周期及真实模型 `en`/`zh-CN` 聚焦流程通过；未原生触发确定性斜杠命令分发或浏览器 DOM 渲染 |
-| 远程 CI | `11d6fe4` 上 Ubuntu/macOS/Windows × Python 3.11/3.12/3.13 共 9 个任务通过 |
-| 本地回归 | Node 11 项、Python 36 项通过；npm dry-run 含 17 个预期文件 |
-
-当前证据见 [v0.2.0 候选验收记录](docs/acceptance/v0.2.0-candidate.md)；已发布 CLI/Skill 的历史证据见 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。
+精确包身份、CI、macOS 原生验收和限定的 Windows 原生验收记录在 [v0.2.0 发布验收记录](docs/acceptance/v0.2.0-candidate.md)中。Windows 尚未原生验证确定性斜杠命令分发和英文 DOM 渲染。v0.1 CLI/Skill 的历史证据保留在 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。
 
 ## 开发与项目文档
 
@@ -189,7 +173,7 @@ python3 scripts/build_fixture.py --check
 python3 scripts/audit_public_tree.py --root .
 ```
 
-- [更新记录](CHANGELOG.md)
+- [更新记录](CHANGELOG.zh-CN.md)
 - [安全策略](SECURITY.md)
 - [参与贡献](CONTRIBUTING.md)
 - [分发说明](docs/distribution.md)

@@ -1,16 +1,14 @@
 # dsh-session-insights
 
-[简体中文](README.zh-CN.md)
+[简体中文](README.zh-CN.md) | [Changelog](CHANGELOG.md)
 
 [![CI](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-![Scattered session trails pass through an analysis lens and resolve into structured evidence cards and a clear report](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/social/hero.jpg)
+Run `/session-insights` to turn DeepSeek Harness session history into a local workflow review. The Bundle reads sessions through DSH's `sessionQuery` service and writes a self-contained HTML dashboard plus companion JSON.
 
-Turn your DeepSeek Harness session history into a private, local workflow retrospective, directly from `/session-insights`.
-
-`dsh-session-insights` is a native DSH Bundle backed by a mature Python analysis core. In plugin mode it reads replay-validated snapshots through DSH's `sessionQuery` service and produces a self-contained HTML dashboard plus companion JSON. It helps answer questions such as:
+It helps answer questions such as:
 
 - What kinds of work am I doing with DSH?
 - Which projects and workflows take the most effort?
@@ -18,6 +16,8 @@ Turn your DeepSeek Harness session history into a private, local workflow retros
 - Which practices are working, and what should I try next?
 
 This is **behavioral review, not telemetry**. It is not a live monitor, a billing calculator, or a claim that it can judge the quality of your work.
+
+![Scattered session trails pass through an analysis lens and resolve into structured evidence cards and a clear report](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/social/hero.jpg)
 
 ## What you get
 
@@ -67,10 +67,7 @@ The npm package has no install or build lifecycle script. The registry command i
 - Install the published Bundle from [npm](https://www.npmjs.com/package/dsh-session-insights).
 - Download versioned artifacts from [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases/latest).
 - Find the public directory entry on [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/).
-- Find the project in [Awesome DeepSeek Harness](https://github.com/Dominic789654/awesome-deepseek-harness#session--memory-management).
-- Find the project in [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin), with a storefront page on [awesome-dsh-plugin.com](https://awesome-dsh-plugin.com/p/GreenLv/dsh-session-insights/) and a listing in the in-app DSH plugin market.
-- Find the project in the [dsh-market.com workshop](https://dsh-market.com/).
-- Find the project in the [dshworks awesome-dsh-plugins registry](https://dsh.works/awesome-dsh-plugins/).
+- Other verified community listings are recorded in [the distribution ledger](docs/distribution.md).
 
 ## Privacy modes
 
@@ -94,12 +91,9 @@ Reports are refused inside `$DSH_HOME/sessions`, so generated files cannot be mi
   [--locale zh-CN|en] [--deterministic] [--resume] [--no-open]
 ```
 
-Project filters use the host operating system's path syntax. On Windows, pass a
-native path such as `/session-insights --project C:/path/to/project`; a
-POSIX-rooted path such as `/path/to/project` is rejected instead of silently
-matching no sessions.
+Project filters use the host operating system's path syntax. On Windows, pass a native path such as `/session-insights --project C:/path/to/project`; a POSIX-rooted path such as `/path/to/project` is rejected instead of silently matching no sessions.
 
-The semantic workflow is the default. It uses six bounded DSH tools for prepare, batch read/submit, aggregate read/submit, and finalize. Invalid model output gets one repair opportunity at the orchestration level and can then degrade explicitly to the deterministic report. The current session is counted for coverage but excluded from recommendations as meta-analysis.
+The semantic workflow is the default. Invalid model output gets one repair opportunity and can then fall back explicitly to the deterministic report. The current session is counted for coverage but excluded from recommendations as meta-analysis.
 
 ## Compatible CLI and Skill workflow
 
@@ -115,19 +109,18 @@ CLI="$DSH_HOME/tools/dsh-session-insights/venv/bin/dsh-session-insights"
   --format html --output ./dsh-insights.html --open
 
 # Limit the report to one project on macOS or Linux
-dsh-session-insights report --dsh-home "$DSH_HOME" \
+"$CLI" report --dsh-home "$DSH_HOME" \
   --project /path/to/project --format html --output ./project-insights.html
 
 # Produce aggregate metrics without excerpts or semantic batches
-dsh-session-insights report --dsh-home "$DSH_HOME" --privacy metrics \
+"$CLI" report --dsh-home "$DSH_HOME" --privacy metrics \
   --format json --output ./dsh-metrics.json
 
 # Check the installation
-dsh-session-insights doctor --dsh-home "$DSH_HOME"
+"$CLI" doctor --dsh-home "$DSH_HOME"
 ```
 
-The Windows PowerShell equivalent uses the managed Windows launcher and a
-Windows-native project path:
+The Windows PowerShell equivalent uses the managed Windows launcher and a Windows-native project path:
 
 ```powershell
 $Cli = Join-Path $env:DSH_HOME 'tools\dsh-session-insights\venv\Scripts\dsh-session-insights.exe'
@@ -149,9 +142,7 @@ It refuses symbolic-link targets, overlapping roots, and existing unmarked direc
 
 ## Manual semantic review
 
-The native command orchestrates semantic review by default. The CLI also exposes every phase for debugging or automation:
-
-When using the installed DSH Skill, the current DSH model can orchestrate this workflow. For manual operation:
+The native command orchestrates semantic review by default. The CLI exposes each phase for debugging or automation:
 
 ```bash
 dsh-session-insights semantic prepare --dsh-home "$DSH_HOME" --days 30 --workdir /safe/workdir
@@ -171,16 +162,7 @@ Each model-produced JSON file is validated before it can enter the final report.
 - The Dashboard and semantic prompt contract support `zh-CN` and `en` from the same report schema.
 - Reports infer patterns from available evidence; they do not prove intent, quality, task acceptance, or security.
 
-Compatibility evidence for the v0.2.0 Bundle:
-
-| Environment | Evidence |
-|---|---|
-| macOS + DSH `0.1.1-rc.1` | Local checkout install, composed-config readback, Web-profile startup, alias-path repetition, and rendered English DOM checks passed |
-| Windows + DSH `0.1.1-rc.1` | Native v0.2 local-link lifecycle and focused real-model `en`/`zh-CN` workflows passed on `11d6fe4`; deterministic slash dispatch and rendered DOM were not invoked natively |
-| Remote CI | Nine Ubuntu/macOS/Windows jobs passed across Python 3.11, 3.12, and 3.13 on `11d6fe4` |
-| Local regression | 11 Node tests and 36 Python tests pass; the npm dry-run contains 17 intended files |
-
-See the [v0.2.0 candidate acceptance record](docs/acceptance/v0.2.0-candidate.md) for current evidence, and the historical [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md) for the released CLI/Skill.
+Exact package, CI, native macOS, and focused native Windows evidence is kept in the [v0.2.0 release acceptance record](docs/acceptance/v0.2.0-candidate.md). Deterministic slash dispatch and rendered English DOM remain unverified natively on Windows. The historical v0.1 CLI/Skill evidence remains in the [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md).
 
 ## Development and project docs
 

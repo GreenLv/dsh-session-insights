@@ -1,54 +1,47 @@
 # Changelog
 
-All notable changes to this project will be documented here.
+[简体中文](CHANGELOG.zh-CN.md)
 
-## [0.2.0] - 2026-08-22
+Public releases are listed newest first.
+
+## 0.2.0 - 2026-08-22
+
+Version 0.2.0 turns session review into a native DeepSeek Harness workflow: run `/session-insights`, let the current DSH agent analyze bounded batches, and open the generated local HTML report and companion JSON. The earlier file-log CLI remains available.
 
 ### Added
 
-- Native DSH Bundle candidate with `/session-insights`, official `sessionQuery` ingestion, and six bounded semantic-workflow tools.
-- Versioned stdin JSONL bridge that avoids persisting raw session snapshots in plugin mode while retaining the file-log CLI.
-- Chinese and English Dashboard shells and language-specific semantic output contracts from one report schema.
+- The DSH Bundle reads session history through DSH's `sessionQuery` service and coordinates the review through six bounded workflow tools.
+- Raw session snapshots are streamed to the Python analyzer and are not copied into the run directory in plugin mode.
+- Chinese and English dashboards use the same report data while keeping their own interface and generated narrative language.
 
 ### Changed
 
-- Semantic retrospective is the native command default; `--deterministic` preserves a no-model path and `--resume` continues the latest bounded run.
-- Version metadata is `0.2.0`, and the Bundle supports installation through the DSH npm plugin channel.
+- Model-assisted retrospective is now the normal Bundle path. Use `--deterministic` for a no-model report or `--resume` to continue the latest incomplete bounded run.
+- The published Bundle can be installed through the DSH npm plugin channel.
 
 ### Fixed
 
-- Replace unsafe ordered English substring replacement with exact static localization and explicit dynamic locale rendering, including English Markdown export.
-- Cover resume, Python-child cancellation, invalid semantic-output cleanup, and deterministic fallback in the native Bundle regression suite.
-- Use the supported DSH `notice` context form and canonicalize each path through its deepest existing ancestor so macOS `/var` and `/private/var` aliases do not reject a not-yet-created run directory.
-- Localize framework-owned semantic evidence and horizon text when finalizing an English report.
-- Disclose the aggregate validator's `confidence` and `measurement` enums to the model so the default semantic workflow does not fall back for an undiscoverable contract.
-- Reject POSIX-rooted project filters on Windows with a native-path error instead of silently selecting no sessions.
+- English reports no longer inherit Chinese framework text from ordered substring replacement; static and generated text now follow the requested locale explicitly.
+- Resume, cancellation, invalid model output, and deterministic fallback clean up their run state consistently.
+- macOS aliases such as `/var` and `/private/var`, paths containing spaces, and Windows project filters are handled with native path rules instead of silently rejecting or selecting the wrong sessions.
+- The semantic prompt now exposes every allowed aggregate value, preventing a valid model answer from falling back because the contract was impossible to discover.
 
-### Validation
+Release identity, package checksums, CI, native-platform evidence, and the remaining Windows limits are recorded in [the v0.2.0 acceptance record](docs/acceptance/v0.2.0-candidate.md).
 
-- Eleven local Node plugin tests and 36 Python tests pass on macOS with Python 3.12, including aggregate-contract parity and Windows project-path coverage.
-- File-log and `sessionQuery` fixtures produce equivalent core totals. Exact package preflight on the final release candidate produced 17 intended files with no lifecycle scripts or bytecode; two independent packs were byte-identical with SHA-256 `3bb0dd2a64eece762b0eccfca51f6317fe294cece215971211a3bbce84122515`.
-- An isolated DSH `0.1.1-rc.1` Web profile installed, composed, and started the local Bundle on macOS. The nine-job remote CI matrix passed on remediation source commit `1fe5bc4` across Ubuntu, macOS, and Windows with Python 3.11/3.12/3.13.
-- A third independent macOS DSH review reproduced two semantic prepares and two deterministic commands below an aliased DSH home, rendered a complete English semantic workflow with zero CJK characters outside scripts, and confirmed the then-current 10 Node tests, 35 Python tests, and 17-file npm payload. No remaining macOS release blocker was found.
-- Independent Windows acceptance on `11d6fe4` passed Bundle installation, composed-config readback, Web startup, the six-tool lifecycle, resume, cancellation, repeated runs, alias-plus-space paths, native project filtering, and real-model `en`/`zh-CN` semantic completion without fallback. Deterministic slash dispatch and rendered English DOM were not invoked natively on Windows.
-- CI run `32543649712` passed all nine Ubuntu/macOS/Windows jobs on package/runtime source basis `ffc155a` across Python 3.11/3.12/3.13.
+## 0.1.0 - 2026-08-21
 
-## [0.1.0] - 2026-08-21
+The first release reads DSH file logs and produces an offline workflow-review dashboard plus companion JSON. It can run deterministically or add a recoverable model-assisted analysis stage.
 
 ### Added
 
-- Initial v0.1 candidate: DSH file-log adapter, deterministic reports, offline dashboard and companion JSON.
-- Three privacy modes, recoverable semantic batching, validation, caching, and explicit fallback.
-- Managed Skill/runtime installer, synthetic fixtures, Schema v1, cross-platform CI definition, and governance documents.
+- File-log adapter, Python CLI, managed DSH Skill installation, synthetic fixtures, and three privacy modes.
+- Recoverable semantic batches with validation, caching, and explicit fallback when generated output is invalid or unavailable.
 
 ### Fixed
 
-- Build the managed virtual environment at its final path so Windows console launchers do not retain a removed staging path.
-- Accept complete `<redacted>` credential placeholders in native-acceptance privacy readback while continuing to reject actual values.
+- Windows console launchers are created at their final environment path, so they do not keep references to a removed staging directory.
+- Complete `<redacted>` placeholders pass privacy verification while real credential values remain rejected.
 
-### Validation
+### Platform scope
 
-- 27 unit tests, deterministic fixture reconstruction, Schema validation, public-tree audit, and exact share-boundary audit passed.
-- GitHub Actions passed on Ubuntu, macOS, and Windows with Python 3.11, 3.12, and 3.13.
-- Isolated native acceptance passed on macOS and Windows 11 with DSH `0.1.0-rc.8`; Windows console entrypoints, repeat installation, rollback, uninstall isolation, and privacy-verifier behavior were rechecked after the final installer fix.
-- Native Linux acceptance, real-session smoke testing, real-model semantic round trips, and Windows DSH GUI Skill rescanning were not performed for v0.1.0.
+- Repository checks and cross-platform CI passed, and isolated native acceptance passed on macOS and Windows 11. Linux native acceptance, real-session smoke testing, real-model semantic round trips, and Windows DSH GUI Skill rescanning were not completed for this release.
