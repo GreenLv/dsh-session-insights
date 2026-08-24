@@ -69,6 +69,8 @@ The npm package has no install or build lifecycle script. The registry command i
 - Find the public directory entry on [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/).
 - Find the project in [Awesome DeepSeek Harness](https://github.com/Dominic789654/awesome-deepseek-harness#session--memory-management).
 - Find the project in [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin), with a storefront page on [awesome-dsh-plugin.com](https://awesome-dsh-plugin.com/p/GreenLv/dsh-session-insights/) and a listing in the in-app DSH plugin market.
+- Find the project in the [dsh-market.com workshop](https://dsh-market.com/).
+- Find the project in the [dshworks awesome-dsh-plugins registry](https://dsh.works/awesome-dsh-plugins/).
 
 ## Privacy modes
 

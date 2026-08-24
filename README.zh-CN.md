@@ -69,6 +69,8 @@ npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 
 - 在 [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/) 查看公开目录条目。
 - 在 [Awesome DeepSeek Harness](https://github.com/Dominic789654/awesome-deepseek-harness/blob/main/README.zh-CN.md#会话与记忆管理) 查看项目条目。
 - 在 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/README.zh.md) 查看项目条目，配套商店页面见 [awesome-dsh-plugin.com](https://awesome-dsh-plugin.com/p/GreenLv/dsh-session-insights/)，应用内 DSH 插件市场同步展示。
+- 在 [dsh-market.com 创意工坊](https://dsh-market.com/) 查看项目条目。
+- 在 [dshworks awesome-dsh-plugins 注册表](https://dsh.works/awesome-dsh-plugins/) 查看项目条目。
 
 ## 三档隐私模式
 
