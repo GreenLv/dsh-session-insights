@@ -98,10 +98,10 @@
 
     .toolbar {
       display: grid;
-      grid-template-columns: repeat(5, minmax(130px, 1fr)) auto;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       gap: 12px;
       align-items: end;
-      margin-bottom: 20px;
+      margin-top: 28px;
       padding: 16px;
       background: var(--card);
       border: 1px solid var(--border);
@@ -121,7 +121,13 @@
       border-radius: 8px;
     }
 
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .actions {
+      grid-column: 2 / -1;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .actions button { flex: 1 1 0; min-width: 96px; max-width: 160px; white-space: nowrap; }
 
     button {
       min-height: 38px;
@@ -138,13 +144,13 @@
 
     .kpis {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 14px;
-      margin-bottom: 24px;
+      margin-top: 28px;
     }
 
     .card {
-      padding: 16px;
+      padding: 18px;
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 14px;
@@ -156,28 +162,32 @@
       top: 0;
       z-index: 10;
       display: flex;
-      gap: 6px;
+      gap: 8px;
       margin: 0 0 24px;
-      padding: 9px;
+      padding: 10px;
       overflow-x: auto;
-      background: color-mix(in srgb, var(--background) 88%, transparent);
+      background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
     }
     .toc a {
       flex: 0 0 auto;
-      padding: 6px 9px;
-      color: var(--muted-foreground);
+      padding: 6px 12px;
+      color: var(--foreground);
       text-decoration: none;
-      border-radius: 7px;
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: 999px;
       font-size: 12px;
     }
-    .toc a:hover { color: var(--foreground); background: var(--accent); }
+    .toc a:hover { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+    .toc a.active { color: var(--primary-foreground); background: var(--primary); border-color: var(--primary); }
 
     .glance-grid, .insight-grid, .work-area-grid, .recommendation-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-auto-rows: 1fr;
       gap: 14px;
     }
     .glance-item, .insight-card, .work-area-card, .recommendation-card {
@@ -187,7 +197,20 @@
       border-radius: 14px;
       box-shadow: var(--shadow);
     }
-    .glance-item { border-left: 4px solid var(--series-2); }
+    .work-area-card, .recommendation-card {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+    .glance-item { border-left: 4px solid var(--series-1); }
+    .glance-grid .glance-item:nth-child(5n+2) { border-left-color: var(--series-2); }
+    .glance-grid .glance-item:nth-child(5n+3) { border-left-color: var(--series-3); }
+    .glance-grid .glance-item:nth-child(5n+4) { border-left-color: var(--series-4); }
+    .glance-grid .glance-item:nth-child(5n+5) { border-left-color: var(--series-5); }
+    .glance-grid .glance-item:nth-child(5n+2) .glance-label { color: var(--series-2); }
+    .glance-grid .glance-item:nth-child(5n+3) .glance-label { color: var(--series-3); }
+    .glance-grid .glance-item:nth-child(5n+4) .glance-label { color: var(--series-4); }
+    .glance-grid .glance-item:nth-child(5n+5) .glance-label { color: var(--series-5); }
     .glance-label, .eyebrow {
       margin-bottom: 6px;
       color: var(--primary);
@@ -200,8 +223,7 @@
     .evidence-note { margin-top: 9px; color: var(--muted-foreground); font-size: 12px; }
     .fact-row { display: flex; flex-wrap: wrap; gap: 7px 14px; margin: 10px 0 0; color: var(--muted-foreground); font-size: 12px; }
     .example-list { margin: 10px 0 0; padding-left: 18px; color: var(--muted-foreground); font-size: 13px; }
-    .recommendation-card { display: grid; align-content: start; gap: 8px; }
-    .priority { justify-self: start; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--primary); font-size: 11px; }
+    .priority { align-self: flex-start; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--primary); font-size: 11px; }
     .recommendation-card code {
       display: block;
       padding: 10px;
@@ -213,8 +235,23 @@
       color: var(--muted-foreground);
       font-size: 12px;
     }
-    .copy-prompt { justify-self: start; min-height: 32px; padding: 4px 9px; font-size: 12px; }
-    .recommendation-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+    .copy-prompt {
+      min-height: 38px;
+      padding: 7px 14px;
+      font-size: 13px;
+      color: var(--primary);
+      background: color-mix(in srgb, var(--primary) 8%, var(--card));
+      border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+    }
+    .recommendation-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: auto;
+      padding-top: 6px;
+    }
     .recommendation-actions label { min-width: 130px; }
     .comparison-grid {
       display: grid;
@@ -233,7 +270,7 @@
     .comparison-prior { color: var(--muted-foreground); font-size: 12px; }
     .delta { margin-top: 6px; color: var(--primary); font-size: 12px; }
     .delta.negative { color: var(--destructive); }
-    .drill-action { margin-top: 12px; min-height: 32px; padding: 4px 9px; color: var(--primary); font-size: 12px; }
+    .drill-action { margin-top: auto; align-self: flex-start; min-height: 34px; padding: 5px 12px; color: var(--primary); font-size: 12px; }
     .drilldown-list { display: grid; gap: 0; }
     .drilldown-item {
       display: grid;
@@ -245,13 +282,12 @@
     .drilldown-item:first-child { border-top: 0; }
     .drilldown-title { font-weight: 500; }
     .drilldown-meta { color: var(--muted-foreground); font-size: 12px; }
-    .usage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
 
     .kpi-label { color: var(--muted-foreground); font-size: 12px; }
     .kpi-value { margin-top: 3px; font-size: clamp(23px, 4vw, 31px); font-weight: 500; letter-spacing: -0.03em; }
     .kpi-context { margin-top: 3px; color: var(--muted-foreground); font-size: 12px; }
 
-    section { margin-top: 28px; }
+    section { margin-top: 28px; scroll-margin-top: 76px; }
 
     .section-heading {
       display: flex;
@@ -265,8 +301,8 @@
     .section-heading select { width: auto; min-width: 150px; }
 
     .chart-frame {
-      min-height: 270px;
-      padding: 8px 0 0;
+      min-height: 280px;
+      padding: 4px 2px 2px;
     }
 
     .trend-chart { display: block; width: 100%; height: auto; color: var(--series-1); }
@@ -278,7 +314,23 @@
     .two-column {
       display: grid;
       grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
-      gap: 28px;
+      gap: 14px;
+      margin-top: 28px;
+    }
+
+    .usage-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 28px;
+    }
+    .two-column > section, .usage-grid > section {
+      padding: 18px;
+      min-width: 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
     }
 
     .bars { display: grid; gap: 12px; }
@@ -287,6 +339,12 @@
     .bar-track { height: 10px; background: var(--muted); border-radius: 999px; overflow: hidden; }
     .bar-fill { display: block; height: 100%; width: var(--bar-width); background: var(--series-1); border-radius: inherit; }
     .bar-fill.friction { background: var(--series-4); }
+    #session-type-bars .bar-fill { background: var(--series-2); }
+    #tool-bars .bar-fill { background: var(--series-3); }
+    #skill-bars .bar-fill { background: var(--series-1); }
+    #plugin-bars .bar-fill { background: var(--series-5); }
+    #file-type-bars .bar-fill { background: var(--series-4); }
+    #hour-bars .bar-fill { background: var(--series-5); }
     .bar-value { color: var(--muted-foreground); font-size: 12px; white-space: nowrap; }
 
     .metric-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
@@ -295,14 +353,16 @@
     .metric-label { color: var(--muted-foreground); font-size: 12px; }
 
     .workflow-list { display: grid; gap: 10px; }
+    #task-family-list { margin-top: 24px; }
     .workflow {
       display: grid;
-      grid-template-columns: minmax(130px, 0.38fr) minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 14px;
       padding: 13px 0;
       border-top: 1px solid var(--border);
     }
     .workflow:first-child { border-top: 0; }
+    .workflow-evidence { grid-column: 1 / -1; }
     .workflow-facts { display: flex; flex-wrap: wrap; gap: 7px 14px; color: var(--muted-foreground); font-size: 12px; }
 
     details { padding: 11px 0; border-top: 1px solid var(--border); }
@@ -319,6 +379,14 @@
       border-radius: 999px;
       font-size: 11px;
     }
+    .status-pill.completed { color: #0f7b3d; background: #d6f2e0; }
+    .status-pill.aborted { color: #a63a2a; background: #fbe0da; }
+    .status-pill.partial { color: #8a5a08; background: #faf0d3; }
+    @media (prefers-color-scheme: dark) {
+      .status-pill.completed { color: #7fe0a8; background: #173a28; }
+      .status-pill.aborted { color: #ffb4a4; background: #4a1f1a; }
+      .status-pill.partial { color: #f6d585; background: #3d3117; }
+    }
 
     .warning-list { margin: 8px 0 0; padding-left: 20px; color: var(--muted-foreground); }
     .friction-note { margin-top: 10px; }
@@ -334,19 +402,22 @@
     @media (max-width: 850px) {
       header { display: grid; }
       .privacy { max-width: none; }
-      .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .actions { grid-column: 1 / -1; }
       .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .kpis > .card:last-child:nth-child(odd) { grid-column: 1 / -1; }
       .two-column { grid-template-columns: 1fr; }
-      .usage-grid { grid-template-columns: 1fr; }
+      .usage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .comparison-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .glance-grid, .insight-grid, .work-area-grid, .recommendation-grid { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 520px) {
       .shell { width: min(100% - 20px, 1180px); padding-top: 18px; }
       .toolbar, .kpis { grid-template-columns: 1fr; }
+      .usage-grid { grid-template-columns: 1fr; }
       .actions { grid-column: auto; }
-      .actions button { flex: 1 1 auto; }
+      .actions button { flex: 1 1 auto; max-width: none; }
       .bar-row { grid-template-columns: 1fr auto; }
       .bar-track { grid-column: 1 / -1; grid-row: 2; }
       .workflow { grid-template-columns: 1fr; }
@@ -375,14 +446,16 @@
     <nav class="toc" aria-label="报告目录">
       <a href="#section-glance">一眼看懂</a>
       <a href="#section-semantic">语义样本</a>
-      <a href="#section-comparison">时段对比</a>
       <a href="#section-families">任务族</a>
+      <a href="#section-comparison">时段对比</a>
       <a href="#section-work">你的工作</a>
+      <a href="#section-drilldown">会话明细</a>
       <a href="#section-usage">使用方式</a>
       <a href="#section-wins">亮点</a>
       <a href="#section-friction">摩擦</a>
       <a href="#section-recommendations">建议</a>
       <a href="#section-horizon">未来工作流</a>
+      <a href="#evidence-section">证据</a>
     </nav>
 
     <section id="section-glance" aria-labelledby="glance-title">
@@ -433,14 +506,19 @@
 
     <div class="kpis" aria-live="polite">
       <article class="card">
-        <div class="kpi-label">Rollout 数</div>
-        <div class="kpi-value" id="kpi-sessions">0</div>
-        <div class="kpi-context" id="kpi-session-context"></div>
-      </article>
-      <article class="card">
         <div class="kpi-label">活跃时间</div>
         <div class="kpi-value" id="kpi-hours">0h</div>
         <div class="kpi-context" id="kpi-time-context"></div>
+      </article>
+      <article class="card">
+        <div class="kpi-label">Token 用量</div>
+        <div class="kpi-value" id="kpi-tokens">0</div>
+        <div class="kpi-context" id="kpi-token-context"></div>
+      </article>
+      <article class="card">
+        <div class="kpi-label">会话数</div>
+        <div class="kpi-value" id="kpi-sessions">0</div>
+        <div class="kpi-context" id="kpi-session-context"></div>
       </article>
       <article class="card">
         <div class="kpi-label">轮次数</div>
@@ -458,7 +536,7 @@
       <h2 id="families-title">任务族、角色与完成证据</h2>
       <p class="section-intro">任务族按根 session_id 归并。Token 是日志原始累计最大值；缓存输入不等于免费或普通输入，不用于推导账单或配额。时间中的 active/tool/wait/reviewer 值除明确标为 measured 外均为 proxy。</p>
       <div class="work-area-grid" id="role-grid"></div>
-      <div class="workflow-list" id="task-family-list"></div>
+      <div class="workflow-list card" id="task-family-list"></div>
     </section>
 
     <section id="section-comparison" aria-labelledby="comparison-title">
@@ -474,12 +552,12 @@
     </section>
 
     <section class="card" id="section-drilldown" aria-labelledby="drilldown-title">
-      <h2 id="drilldown-title">任务分类钻取</h2>
+      <h2 id="drilldown-title">会话明细</h2>
       <p class="section-intro">显示当前筛选范围内的会话摘要；点击上方工作分类卡片可快速聚焦。</p>
       <div class="drilldown-list" id="drilldown-list"></div>
     </section>
 
-    <section id="section-usage" aria-labelledby="activity-title">
+    <section class="card" id="section-usage" aria-labelledby="activity-title">
       <div class="section-heading">
         <h2 id="activity-title">如何使用 DSH</h2>
         <label>指标
@@ -514,6 +592,14 @@
         <h2 id="tools-title">常用工具</h2>
         <div class="bars" id="tool-bars"></div>
       </section>
+      <section aria-labelledby="skill-usage-title">
+        <h2 id="skill-usage-title">Skill 使用</h2>
+        <div class="bars" id="skill-bars"></div>
+      </section>
+      <section aria-labelledby="plugin-usage-title">
+        <h2 id="plugin-usage-title">插件/MCP 使用</h2>
+        <div class="bars" id="plugin-bars"></div>
+      </section>
       <section aria-labelledby="files-title">
         <h2 id="files-title">常见文件类型</h2>
         <div class="bars" id="file-type-bars"></div>
@@ -530,7 +616,7 @@
       <div class="insight-grid" id="wins-grid"></div>
     </section>
 
-    <section id="section-friction" aria-labelledby="friction-title">
+    <section class="card" id="section-friction" aria-labelledby="friction-title">
       <h2 id="friction-title">摩擦信号</h2>
       <div class="bars" id="friction-bars"></div>
       <p class="meta friction-note">这些信号用于定位值得调查的环节，并不自动代表质量问题。</p>
@@ -542,7 +628,7 @@
       <div class="recommendation-grid" id="recommendation-grid"></div>
     </section>
 
-    <section aria-labelledby="workflows-title">
+    <section class="card" aria-labelledby="workflows-title">
       <h2 id="workflows-title">代表性工作流</h2>
       <div class="workflow-list" id="workflow-list"></div>
     </section>
@@ -553,12 +639,12 @@
       <div class="insight-grid" id="horizon-grid"></div>
     </section>
 
-    <section aria-labelledby="evidence-title" id="evidence-section">
+    <section class="card" aria-labelledby="evidence-title" id="evidence-section">
       <h2 id="evidence-title">脱敏证据</h2>
       <div id="evidence-list"></div>
     </section>
 
-    <section aria-labelledby="warnings-title" id="warnings-section">
+    <section class="card" aria-labelledby="warnings-title" id="warnings-section">
       <h2 id="warnings-title">覆盖说明</h2>
       <ul class="warning-list" id="warning-list"></ul>
     </section>
@@ -584,12 +670,12 @@
       ["状态", "Status"], ["全部会话", "All sessions"], ["角色", "Role"], ["全部角色", "All roles"],
       ["平台", "Platform"], ["全部平台", "All platforms"], ["工作分类", "Work area"], ["全部分类", "All areas"],
       ["重置筛选", "Reset filters"], ["导出 JSON", "Export JSON"], ["导出 Markdown", "Export Markdown"],
-      ["Rollout 数", "Rollouts"], ["活跃时间", "Active time"], ["轮次数", "Turns"], ["工具调用", "Tool calls"],
+      ["活跃时间", "Active time"], ["Token 用量", "Tokens"], ["轮次数", "Turns"], ["工具调用", "Tool calls"],
       ["任务族、角色与完成证据", "Task families, roles, and completion evidence"],
-      ["你的工作内容", "What you work on"], ["任务分类钻取", "Task drilldown"], ["如何使用 DSH", "How you use DSH"],
+      ["你的工作内容", "What you work on"], ["会话明细", "Session details"], ["如何使用 DSH", "How you use DSH"],
       ["可验证亮点", "Evidence-backed strengths"], ["摩擦信号", "Friction signals"],
       ["建议尝试的 DSH 工作方式", "Recommended DSH workflows"], ["代表性工作流", "Representative workflows"],
-      ["值得推进的新工作流", "Promising next workflows"], ["脱敏证据", "Redacted evidence"], ["本地内容证据", "Local-content evidence"],
+      ["值得推进的新工作流", "Promising next workflows"], ["证据", "Evidence"], ["脱敏证据", "Redacted evidence"], ["本地内容证据", "Local-content evidence"],
       ["覆盖说明", "Coverage notes"], ["已完成", "Completed"], ["已中止", "Aborted"], ["未完成", "Incomplete"],
       ["把统计信号转成可行动的结论。以下叙事基于当前报告的完整分析范围；下方筛选器只影响定量图表、工作流和证据片段。", "Turn statistical signals into actionable conclusions. Narrative sections use the full report scope; filters affect only quantitative charts, workflows, and evidence excerpts."],
       ["当前报告未请求语义增强；以下统计仍覆盖完整日志范围。", "Semantic analysis was not requested; the deterministic statistics still cover the full log scope."],
@@ -598,7 +684,8 @@
       ["根据提示词语义、工具活动和项目分布归纳工作领域；分类是启发式结果，不是人工标签。", "Work areas are inferred from prompt semantics, tool activity, and project distribution; classifications are heuristic, not human labels."],
       ["显示当前筛选范围内的会话摘要；点击上方工作分类卡片可快速聚焦。", "Show session summaries in the current filter scope; select a work-area card above to focus quickly."],
       ["指标", "Metric"], ["会话数", "Sessions"], ["项目领域", "Project areas"], ["交互模式", "Interaction patterns"],
-      ["会话类型", "Session types"], ["常用工具", "Top tools"], ["常见文件类型", "Common file types"], ["本地活跃时段", "Local active hours"],
+      ["会话类型", "Session types"], ["常用工具", "Top tools"], ["Skill 使用", "Skill usage"], ["插件/MCP 使用", "Plugin / MCP usage"],
+      ["常见文件类型", "Common file types"], ["本地活跃时段", "Local active hours"],
       ["区分 log_completed、verified_completed 与 accepted；缺少证据时保持 unknown，不从正面措辞推断接受。", "Distinguish log_completed, verified_completed, and accepted. Keep unknown when evidence is absent; do not infer acceptance from positive wording."],
       ["这些信号用于定位值得调查的环节，并不自动代表质量问题。", "These signals identify areas worth investigating; they do not automatically indicate quality problems."],
       ["每条建议都绑定测量证据，并提供可直接复制的提示词。状态只保存在当前浏览器，不自动修改配置、权限、AGENTS.md 或 Skill。", "Each recommendation is tied to measured evidence and includes a copyable prompt. Tracking stays in this browser and never changes configuration, permissions, AGENTS.md, or Skills."],
@@ -643,9 +730,10 @@
     const taskFamilies = Array.isArray(report.task_families) ? report.task_families : [];
     const excerpts = Array.isArray(report.excerpts) ? report.excerpts : [];
     const byId = (id) => document.getElementById(id);
-    const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
-    const integer = new Intl.NumberFormat();
-    const compact = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
+    const numberLocale = isEnglish ? "en" : "zh-CN";
+    const number = new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 });
+    const integer = new Intl.NumberFormat(numberLocale);
+    const compact = new Intl.NumberFormat(numberLocale, { notation: "compact", maximumFractionDigits: 1 });
     const svgNS = "http://www.w3.org/2000/svg";
     const statusLabels = isEnglish ? { completed: "Completed", aborted: "Aborted", partial: "Incomplete" } : { completed: "已完成", aborted: "已中止", partial: "未完成" };
     const roleLabels = isEnglish ? { root_task: "Root task", task_subagent: "Task subagent", action_reviewer: "Action reviewer", unknown_system_rollout: "Unknown system rollout" } : { root_task: "根任务", task_subagent: "业务子代理", action_reviewer: "动作审查", unknown_system_rollout: "未知系统 rollout" };
@@ -768,7 +856,7 @@
         facts.className = "meta";
         facts.textContent = isEnglish
           ? `${unit(integer.format(role.rollouts), "rollout")} · ${unit(integer.format(role.task_families), "task family", "task families")} · ${(Number(role.total_token_share || 0) * 100).toFixed(1)}% logged tokens`
-          : `${integer.format(role.rollouts)} rollout · ${integer.format(role.task_families)} 任务族 · ${(Number(role.total_token_share || 0) * 100).toFixed(1)}% 日志 Token`;
+          : `${integer.format(role.rollouts)} 会话 · ${integer.format(role.task_families)} 任务族 · ${(Number(role.total_token_share || 0) * 100).toFixed(1)}% 日志 Token`;
         card.append(title, facts);
         roleContainer.append(card);
       }
@@ -781,7 +869,7 @@
         facts.className = "meta";
         facts.textContent = isEnglish
           ? `${unit(integer.format(platform.rollouts), "rollout")} · ${unit(integer.format(platform.task_families), "task family", "task families")} · ${(Number(platform.total_token_share || 0) * 100).toFixed(1)}% logged tokens`
-          : `${integer.format(platform.rollouts)} rollout · ${integer.format(platform.task_families)} 任务族 · ${(Number(platform.total_token_share || 0) * 100).toFixed(1)}% 日志 Token`;
+          : `${integer.format(platform.rollouts)} 会话 · ${integer.format(platform.task_families)} 任务族 · ${(Number(platform.total_token_share || 0) * 100).toFixed(1)}% 日志 Token`;
         card.append(title, facts);
         roleContainer.append(card);
       }
@@ -803,8 +891,9 @@
         meta.className = "meta";
         meta.textContent = isEnglish
           ? `${family.date} · ${family.platform} · ${unit(family.rollout_count, "rollout")} · ${compact.format(family.tokens?.total_tokens || 0)} logged tokens`
-          : `${family.date} · ${family.platform} · ${family.rollout_count} rollout · ${compact.format(family.tokens?.total_tokens || 0)} 日志 Token`;
+          : `${family.date} · ${family.platform} · ${family.rollout_count} 会话 · ${compact.format(family.tokens?.total_tokens || 0)} 日志 Token`;
         const evidence = document.createElement("p");
+        evidence.className = "workflow-evidence";
         evidence.textContent = isEnglish
           ? `Log complete: ${completionLabels[family.completion?.log_completed] || "Unknown"}; verified complete: ${completionLabels[family.completion?.verified_completed] || "Unknown"}; user accepted: ${completionLabels[family.completion?.accepted] || "Unknown"}. Structured failures ${family.structured_failures || 0}, text signals ${family.text_error_signals || 0}, diagnostic nonzero exits ${family.diagnostic_nonzero || 0}.`
           : `日志完成：${completionLabels[family.completion?.log_completed] || "未知"}；验证完成：${completionLabels[family.completion?.verified_completed] || "未知"}；用户接受：${completionLabels[family.completion?.accepted] || "未知"}。结构化失败 ${family.structured_failures || 0}，文本信号 ${family.text_error_signals || 0}，诊断性非零 ${family.diagnostic_nonzero || 0}。`;
@@ -1201,6 +1290,10 @@
       renderBars("session-type-bars", sessionTypes, "count");
       const tools = (profile.top_tools || []).slice(0, 8).map((item) => ({ label: item.tool, count: item.count, display: integer.format(item.count) }));
       renderBars("tool-bars", tools, "count");
+      const skillUsage = (profile.skill_usage || []).map((item) => ({ label: item.skill, count: item.count, display: integer.format(item.count) }));
+      renderBars("skill-bars", skillUsage, "count");
+      const pluginUsage = (profile.plugin_usage || []).map((item) => ({ label: item.name, count: item.count, display: integer.format(item.count) }));
+      renderBars("plugin-bars", pluginUsage, "count");
       const files = (profile.file_types || []).slice(0, 8).map((item) => ({ label: `.${item.extension}`, count: item.count, display: integer.format(item.count) }));
       renderBars("file-type-bars", files, "count");
       const hourCounts = new Map((profile.hours_local || []).map((item) => [item.hour, item.count]));
@@ -1221,15 +1314,22 @@
       setText("kpi-session-context", isEnglish
         ? `Completed ${stats.completed} · Aborted ${stats.aborted} · Incomplete ${stats.partial}`
         : `已完成 ${stats.completed} · 已中止 ${stats.aborted} · 未完成 ${stats.partial}`);
-      setText("kpi-hours", `${number.format(stats.activeMinutes / 60)}h`);
+      setText("kpi-hours", isEnglish
+        ? `${number.format(stats.activeMinutes / 60)}h`
+        : `${number.format(stats.activeMinutes / 60)} 小时`);
       setText("kpi-time-context", ui(
         `平均每会话 ${number.format(stats.activeMinutes / Math.max(1, stats.sessions))} 分钟`,
         `${unit(number.format(stats.activeMinutes / Math.max(1, stats.sessions)), "minute")} per session on average`,
       ));
+      setText("kpi-tokens", compact.format(stats.totalTokens));
+      setText("kpi-token-context", ui(
+        `日志原始计量 · 缓存输入 ${compact.format(stats.cachedTokens)}`,
+        `raw log measure · cached input ${compact.format(stats.cachedTokens)}`,
+      ));
       setText("kpi-turns", integer.format(stats.turns));
       setText("kpi-turn-context", ui(
-        `平均每会话 ${number.format(stats.turns / Math.max(1, stats.sessions))} 轮 · ${compact.format(stats.totalTokens)} tokens`,
-        `${unit(number.format(stats.turns / Math.max(1, stats.sessions)), "turn")} per session on average · ${compact.format(stats.totalTokens)} tokens`,
+        `平均每会话 ${number.format(stats.turns / Math.max(1, stats.sessions))} 轮`,
+        `${unit(number.format(stats.turns / Math.max(1, stats.sessions)), "turn")} per session on average`,
       ));
       setText("kpi-tools", integer.format(stats.toolCalls));
       setText("kpi-tool-context", ui(
@@ -1242,6 +1342,14 @@
       const element = document.createElementNS(svgNS, name);
       for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
       return element;
+    }
+
+    function textWidthApprox(text) {
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      if (!context) return String(text).length * 7;
+      context.font = "11px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      return context.measureText(String(text)).width;
     }
 
     function renderTrend(rows) {
@@ -1257,8 +1365,8 @@
 
       const measure = byId("trend-measure").value;
       const labels = isEnglish
-        ? { active_minutes: ["Active time", "minutes"], sessions: ["Sessions", "sessions"], tool_calls: ["Tool calls", "calls"] }
-        : { active_minutes: ["活跃时间", "分钟"], sessions: ["会话数", "个会话"], tool_calls: ["工具调用", "次"] };
+        ? { active_minutes: ["Active time", "hours"], sessions: ["Sessions", "sessions"], tool_calls: ["Tool calls", "calls"] }
+        : { active_minutes: ["活跃时间", "小时"], sessions: ["会话数", "个会话"], tool_calls: ["工具调用", "次"] };
       const grouped = new Map();
       for (const row of rows) {
         const current = grouped.get(row.date) || { active_minutes: 0, sessions: 0, tool_calls: 0 };
@@ -1267,16 +1375,20 @@
         current.tool_calls += Number(row.tool_calls) || 0;
         grouped.set(row.date, current);
       }
-      const points = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, values]) => ({ date, value: values[measure] }));
+      const points = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, values]) => ({
+        date,
+        value: measure === "active_minutes" ? values[measure] / 60 : values[measure],
+      }));
       const width = 960;
       const height = 270;
-      const left = 56;
       const right = 24;
       const top = 18;
+      const maxValue = Math.max(1, ...points.map((point) => point.value));
+      // The top tick carries the unit, so fit the axis margin to the widest y-axis label.
+      const left = Math.max(56, Math.ceil(textWidthApprox(`${number.format(maxValue)} ${labels[measure][1]}`)) + 20);
       const bottom = 42;
       const plotWidth = width - left - right;
       const plotHeight = height - top - bottom;
-      const maxValue = Math.max(1, ...points.map((point) => point.value));
       const x = (index) => points.length === 1 ? left + plotWidth / 2 : left + (index / (points.length - 1)) * plotWidth;
       const y = (value) => top + plotHeight - (value / maxValue) * plotHeight;
 
@@ -1295,7 +1407,7 @@
         const lineY = y(value);
         svg.append(createSvgElement("line", { class: "grid", x1: left, y1: lineY, x2: width - right, y2: lineY }));
         const label = createSvgElement("text", { class: "axis-label", x: left - 8, y: lineY + 4, "text-anchor": "end" });
-        label.textContent = number.format(value);
+        label.textContent = step === 4 ? `${number.format(value)} ${labels[measure][1]}` : number.format(value);
         svg.append(label);
       }
 
@@ -1309,10 +1421,17 @@
         svg.append(circle);
       });
 
-      const tickCount = Math.min(6, points.length);
+      // Show every date label for day-level series; otherwise sample evenly but always keep the first and last.
+      const maxTicks = 12;
       const tickIndexes = new Set();
-      for (let index = 0; index < tickCount; index += 1) tickIndexes.add(Math.round((index / Math.max(1, tickCount - 1)) * (points.length - 1)));
-      for (const index of tickIndexes) {
+      if (points.length <= maxTicks) {
+        for (let index = 0; index < points.length; index += 1) tickIndexes.add(index);
+      } else {
+        const step = Math.ceil(points.length / maxTicks);
+        for (let index = 0; index < points.length; index += step) tickIndexes.add(index);
+        tickIndexes.add(points.length - 1);
+      }
+      for (const index of [...tickIndexes].sort((a, b) => a - b)) {
         const label = createSvgElement("text", { class: "axis-label", x: x(index), y: height - 15, "text-anchor": "middle" });
         label.textContent = points[index].date.slice(5);
         svg.append(label);
@@ -1380,7 +1499,7 @@
         [number.format(stats.correctionMessages / Math.max(1, stats.userMessages) * 100) + "%", ui("纠正倾向消息比例", "Correction-oriented message rate")],
         [integer.format(stats.clarificationRequests), ui("澄清请求", "Clarification requests")],
         [integer.format(stats.subagentSessions), ui("多代理会话", "Multi-agent sessions")],
-        [`${integer.format(stats.webSearches)} / ${integer.format(stats.mcpCalls)}`, ui("Web / MCP 调用", "Web / MCP calls")],
+        [integer.format(stats.webSearches), ui("Web 搜索", "Web searches")],
         [ui(`${number.format(report.interaction_metrics?.median_assistant_latency_seconds || 0)} 秒`, `${number.format(report.interaction_metrics?.median_assistant_latency_seconds || 0)} seconds`), ui("首次助手响应中位数", "Median first-assistant response")],
         [integer.format(report.interaction_metrics?.max_concurrent || 0), ui("同时活跃会话峰值", "Peak concurrent sessions")]
       ];
@@ -1434,7 +1553,7 @@
         meta.className = "meta";
         meta.textContent = row.date;
         const status = document.createElement("span");
-        status.className = "status-pill";
+        status.className = row.status ? `status-pill ${row.status}` : "status-pill";
         status.textContent = statusLabels[row.status] || row.status;
         const project = document.createElement("div");
         project.className = "meta";
@@ -1682,6 +1801,31 @@
       return lines.join("\n");
     }
 
+    function initTocSpy() {
+      const links = [...document.querySelectorAll(".toc a")];
+      const linkById = new Map(links.map((link) => [link.getAttribute("href").slice(1), link]));
+      // querySelectorAll returns document order, so walk sections top-to-bottom and
+      // keep the last linked section whose top is above the reading probe.
+      const linkedSections = [...document.querySelectorAll("main section[id]")].filter((section) => linkById.has(section.id));
+      if (!linkedSections.length) return;
+      let current = null;
+      const update = () => {
+        const probe = window.scrollY + 80;
+        let next = linkedSections[0].id;
+        for (const section of linkedSections) {
+          if (section.getBoundingClientRect().top + window.scrollY <= probe) next = section.id;
+          else break;
+        }
+        if (next !== current) {
+          current = next;
+          for (const [id, link] of linkById) link.classList.toggle("active", id === current);
+        }
+      };
+      window.addEventListener("scroll", update, { passive: true });
+      window.addEventListener("resize", update);
+      update();
+    }
+
     function initialize() {
       const dates = sessions.map((row) => row.date).sort();
       const projects = [...new Set(sessions.map((row) => row.project))].sort((a, b) => a.localeCompare(b));
@@ -1735,7 +1879,7 @@
         : "";
       setText("coverage-line", isEnglish
         ? `Analyzed ${unit(report.coverage.sessions_analyzed, "rollout")} from ${unit(report.coverage.files_scanned, "file")} and grouped them into ${unit(report.task_family_totals?.task_families || 0, "task family", "task families")}${cacheSuffix}`
-        : `从 ${report.coverage.files_scanned} 个文件中分析了 ${report.coverage.sessions_analyzed} 个 rollout，归并为 ${report.task_family_totals?.task_families || 0} 个任务族${cacheSuffix}`);
+        : `从 ${report.coverage.files_scanned} 个文件中分析了 ${report.coverage.sessions_analyzed} 个会话，归并为 ${report.task_family_totals?.task_families || 0} 个任务族${cacheSuffix}`);
       const privacyNotes = isEnglish ? {
         local_content: "This report retains local task context to improve insight quality while always removing credentials, tokens, URL query parameters, and system environment blocks. It makes no network requests.",
         redacted_sample: "This report contains only aggregates and bounded redacted excerpts. It makes no network requests.",
@@ -1759,6 +1903,7 @@
       renderHorizon();
       renderWarnings();
       applyFilters();
+      initTocSpy();
     }
 
     byId("filters").addEventListener("change", applyFilters);

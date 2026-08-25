@@ -25,8 +25,9 @@ The dashboard brings several views of the same evidence together:
 
 | View | What it helps you understand |
 |---|---|
-| Overview and time comparison | Rollouts, task families, tool use, token mix, and changes between two periods |
+| Overview and time comparison | Sessions, task families, token usage, and changes between two periods |
 | Work and workflow breakdown | Projects, roles, representative workflows, and completion evidence |
+| Usage patterns | Daily active-time trends, session types, top tools, skill and plugin/MCP usage, file types, and local active hours |
 | Wins and friction | Evidence-backed strengths plus failures, retries, and other signals worth investigating |
 | Recommendations | DSH workflow suggestions tied to measured evidence, with prompts you can copy |
 

@@ -24,7 +24,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.2.0"
+ANALYZER_VERSION = "0.2.2"
 FAILURE_RULE_VERSION = "5.0.0"
 DETERMINISTIC_CACHE_VERSION = 1
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
@@ -756,6 +756,41 @@ def canonical_tool_name(name: str) -> str:
     return name.rsplit("__", 1)[-1].rsplit(".", 1)[-1]
 
 
+def mcp_server_name(tool_name: str) -> str | None:
+    """Derive the MCP server / plugin name from a namespaced tool name."""
+    lowered = tool_name.casefold()
+    if "mcp__" in lowered:
+        parts = tool_name.split("__")
+        return parts[1] if len(parts) > 1 else parts[0]
+    if lowered.startswith("mcp"):
+        return derived_mcp_server_after_prefix(tool_name)
+    return None
+
+
+def derived_mcp_server_after_prefix(tool_name: str) -> str:
+    return tool_name[3:].split("_")[0] or tool_name
+
+
+def skill_name(arguments: Any) -> str:
+    """Extract the skill name from a skill tool call, with a stable fallback bucket."""
+    decoded = arguments
+    if isinstance(arguments, str):
+        try:
+            decoded = json.loads(arguments)
+        except (json.JSONDecodeError, TypeError):
+            decoded = arguments
+    if isinstance(decoded, dict):
+        value = decoded.get("name")
+    elif isinstance(decoded, str):
+        match = re.search(r'"name"\s*:\s*"([^"]+)"', decoded)
+        value = match.group(1) if match else None
+    else:
+        value = None
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return "skill"
+
+
 def call_fingerprint(name: str, arguments: Any) -> str:
     decoded = arguments
     if isinstance(arguments, str):
@@ -858,6 +893,9 @@ def new_session(meta: dict[str, Any], timestamp: datetime, path: Path, config: A
         "subagents": 0,
         "web_searches": 0,
         "mcp_calls": 0,
+        "skill_calls": 0,
+        "skill_counts": Counter(),
+        "mcp_server_counts": Counter(),
         "web_search_events": 0,
         "mcp_call_events": 0,
         "aborted_turns": 0,
@@ -1126,6 +1164,11 @@ def process_call(
         session["web_searches"] += 1
     if lowered.startswith("mcp") or "mcp__" in raw_name.casefold():
         session["mcp_calls"] += 1
+        server = mcp_server_name(name) or mcp_server_name(raw_name) or name
+        session["mcp_server_counts"][server] += 1
+    if lowered == "skill":
+        session["skill_calls"] += 1
+        session["skill_counts"][skill_name(arguments)] += 1
     polling = lowered in {"wait", "wait_agent", "wait_threads", "write_stdin"}
     prior_failure = session["last_failed_calls"].get(fingerprint)
     if polling and session["fingerprint_counts"][fingerprint] > 1:
@@ -1817,6 +1860,7 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "subagents": session["subagents"],
         "web_searches": session["web_searches"],
         "mcp_calls": session["mcp_calls"],
+        "skill_calls": session["skill_calls"],
         "aborted_turns": session["aborted_turns"],
         "permission_blocks": session["permission_blocks"],
         "repeated_retries": session["repeated_retries"],
@@ -2724,12 +2768,16 @@ def build_report(
     skill_counter: Counter[str] = Counter()
     hour_counter: Counter[int] = Counter()
     weekday_counter: Counter[int] = Counter()
+    skill_usage_counter: Counter[str] = Counter()
+    plugin_usage_counter: Counter[str] = Counter()
     for session, public in zip(sessions, session_summaries):
         area_map[public["work_area"]].append(public)
         type_counter[public["session_type"]] += 1
         tool_counter.update(session["tool_counts"])
         extension_counter.update(session["file_extensions"])
         skill_counter.update(session["skill_mentions"])
+        skill_usage_counter.update(session["skill_counts"])
+        plugin_usage_counter.update(session["mcp_server_counts"])
         hour_counter[public["start_hour_local"]] += 1
         weekday_counter[public["weekday"]] += 1
     work_areas = []
@@ -2757,6 +2805,8 @@ def build_report(
         "top_tools": [{"tool": name, "count": count} for name, count in tool_counter.most_common(12)],
         "file_types": [{"extension": name, "count": count} for name, count in extension_counter.most_common(12)],
         "skill_mentions": [{"skill": name, "count": count} for name, count in skill_counter.most_common(12)],
+        "skill_usage": [{"skill": name, "count": count} for name, count in skill_usage_counter.most_common(10)],
+        "plugin_usage": [{"name": name, "count": count} for name, count in plugin_usage_counter.most_common(10)],
         "hours_local": [{"hour": hour, "count": hour_counter.get(hour, 0)} for hour in range(24)],
         "weekdays": [{"weekday": day, "count": weekday_counter.get(day, 0)} for day in range(7)],
     }
