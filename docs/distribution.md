@@ -5,7 +5,7 @@
 1. [GitHub Release `v0.3.0`](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.3.0) is published as a non-draft, non-prerelease release (read back 2026-08-25); the tag points at commit `d6065402`.
 2. npm publication is **pending**: `npm publish` is blocked by local registry authentication (`ENEEDAUTH`; the machine registry is set to `registry.npmmirror.com` and no `npm` login is present). Publish with `npm config set registry https://registry.npmjs.org/ && npm adduser && npm publish`, then verify `npm view dsh-session-insights version` resolves to `0.3.0`.
 3. Community indexes and dsh.pub resolve the npm/`latest` entry or the `main`-branch screenshot URLs, so screenshots refresh automatically; no community-index PR is expected for this release.
-4. The codex-sync consumer index pins this release at `config/shareable-upstreams/dsh-session-insights.json` (`v0.3.0` / `d6065402`).
+4. The sibling cross-machine skill-sync consumer index pins this release at its own `dsh-session-insights.json` (`v0.3.0` / `d6065402`).
 
 Validation: local pytest (37) and node --test (11) pass; CI matrix (ubuntu/macos/windows × 3.11–3.13) runs on the `v0.3.0` commit. Native-acceptance evidence for this release is **not** recorded yet; the v0.2.0 acceptance record remains the last full native readback, and the documented Windows limits (slash-command dispatch, English DOM) are unchanged.
 
