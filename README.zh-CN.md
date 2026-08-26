@@ -1,6 +1,6 @@
 # dsh-session-insights
 
-[English](README.md) | [更新日志](CHANGELOG.zh-CN.md)
+[English](README.md) | [介绍文章](https://blog.csdn.net/LvGreat/article/details/164067146) | [更新日志](CHANGELOG.zh-CN.md)
 
 [![CI](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
