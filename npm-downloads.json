@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-30T14:30:29.961Z",
+  "data_through": "2026-08-29",
+  "period": {
+    "start": "2026-08-22",
+    "end": "2026-08-29"
+  },
+  "title": "dsh-session-insights npm download history",
+  "rename": null,
+  "packages": [
+    {
+      "package": "dsh-session-insights",
+      "label": "dsh-session-insights",
+      "color": "#2563eb",
+      "start": "2026-08-22",
+      "total": 428,
+      "downloads": [
+        {
+          "day": "2026-08-22",
+          "downloads": 124,
+          "cumulative": 124
+        },
+        {
+          "day": "2026-08-23",
+          "downloads": 13,
+          "cumulative": 137
+        },
+        {
+          "day": "2026-08-24",
+          "downloads": 20,
+          "cumulative": 157
+        },
+        {
+          "day": "2026-08-25",
+          "downloads": 156,
+          "cumulative": 313
+        },
+        {
+          "day": "2026-08-26",
+          "downloads": 39,
+          "cumulative": 352
+        },
+        {
+          "day": "2026-08-27",
+          "downloads": 32,
+          "cumulative": 384
+        },
+        {
+          "day": "2026-08-28",
+          "downloads": 23,
+          "cumulative": 407
+        },
+        {
+          "day": "2026-08-29",
+          "downloads": 21,
+          "cumulative": 428
+        }
+      ]
+    }
+  ],
+  "project_cumulative": [
+    {
+      "day": "2026-08-22",
+      "downloads": 124,
+      "cumulative": 124
+    },
+    {
+      "day": "2026-08-23",
+      "downloads": 13,
+      "cumulative": 137
+    },
+    {
+      "day": "2026-08-24",
+      "downloads": 20,
+      "cumulative": 157
+    },
+    {
+      "day": "2026-08-25",
+      "downloads": 156,
+      "cumulative": 313
+    },
+    {
+      "day": "2026-08-26",
+      "downloads": 39,
+      "cumulative": 352
+    },
+    {
+      "day": "2026-08-27",
+      "downloads": 32,
+      "cumulative": 384
+    },
+    {
+      "day": "2026-08-28",
+      "downloads": 23,
+      "cumulative": 407
+    },
+    {
+      "day": "2026-08-29",
+      "downloads": 21,
+      "cumulative": 428
+    }
+  ],
+  "sources": [
+    {
+      "package": "dsh-session-insights",
+      "start": "2026-08-22",
+      "end": "2026-08-29",
+      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-08-29/dsh-session-insights",
+      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-08-29/dsh-session-insights"
+    }
+  ],
+  "note": "npm downloads are requests, not unique installs or users"
+}

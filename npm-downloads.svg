@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="640" viewBox="0 0 960 640" role="img" aria-labelledby="chart-title chart-desc">
+  <title id="chart-title">dsh-session-insights npm download history</title>
+  <desc id="chart-desc">dsh-session-insights npm download history. Daily npm downloads by package above and combined cumulative downloads below. Data through 2026-08-29. npm downloads are requests, not unique installs or users.</desc>
+  <style>
+    text { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #172033; }
+    .title { font-size: 22px; font-weight: 700; } .subtitle { font-size: 12px; fill: #596579; }
+    .panel { font-size: 14px; font-weight: 650; } .axis { font-size: 11px; fill: #657086; }
+    .legend { font-size: 12px; } .grid { stroke: #dce2ea; stroke-width: 1; }
+    .rename { stroke: #8b5cf6; stroke-width: 1.5; stroke-dasharray: 5 4; } .rename-label { font-size: 11px; fill: #6d28d9; }
+  </style>
+  <rect width="100%" height="100%" rx="14" fill="#ffffff"/>
+  <text x="78" y="34" class="title">dsh-session-insights npm download history</text>
+  <text x="78" y="54" class="subtitle">Data through 2026-08-29 · Source: npm Downloads API · downloads are not unique installs</text>
+  <g transform="translate(78,72)"><line x1="0" y1="0" x2="24" y2="0" stroke="#2563eb" stroke-width="3"/><text x="32" y="4" class="legend">dsh-session-insights (428)</text></g>
+  <text x="78" y="90" class="panel">Daily npm downloads</text>
+  <line x1="78" y1="294" x2="932" y2="294" class="grid"/><text x="66" y="298" text-anchor="end" class="axis">0</text><line x1="78" y1="246.5" x2="932" y2="246.5" class="grid"/><text x="66" y="250.5" text-anchor="end" class="axis">39</text><line x1="78" y1="199" x2="932" y2="199" class="grid"/><text x="66" y="203" text-anchor="end" class="axis">78</text><line x1="78" y1="151.5" x2="932" y2="151.5" class="grid"/><text x="66" y="155.5" text-anchor="end" class="axis">117</text><line x1="78" y1="104" x2="932" y2="104" class="grid"/><text x="66" y="108" text-anchor="end" class="axis">156</text>
+  <polyline points="78.00,142.97 200.00,278.17 322.00,269.64 444.00,104.00 566.00,246.50 688.00,255.03 810.00,265.99 932.00,268.42" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <text x="78" y="356" class="panel">Combined cumulative npm downloads</text>
+  <line x1="78" y1="560" x2="932" y2="560" class="grid"/><text x="66" y="564" text-anchor="end" class="axis">0</text><line x1="78" y1="512.5" x2="932" y2="512.5" class="grid"/><text x="66" y="516.5" text-anchor="end" class="axis">107</text><line x1="78" y1="465" x2="932" y2="465" class="grid"/><text x="66" y="469" text-anchor="end" class="axis">214</text><line x1="78" y1="417.5" x2="932" y2="417.5" class="grid"/><text x="66" y="421.5" text-anchor="end" class="axis">321</text><line x1="78" y1="370" x2="932" y2="370" class="grid"/><text x="66" y="374" text-anchor="end" class="axis">428</text>
+  <polyline points="78.00,504.95 200.00,499.18 322.00,490.30 444.00,421.05 566.00,403.74 688.00,389.53 810.00,379.32 932.00,370.00" fill="none" stroke="#0f766e" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+  
+  <text x="78" y="588" text-anchor="start" class="axis">2026-08-22</text><text x="322" y="588" text-anchor="middle" class="axis">2026-08-24</text><text x="566" y="588" text-anchor="middle" class="axis">2026-08-26</text><text x="688" y="588" text-anchor="middle" class="axis">2026-08-27</text><text x="886" y="588" text-anchor="middle" class="axis">2026-08-29</text>
+  <text x="78" y="618" class="subtitle">Generated 2026-08-30T14:30:29.961Z · npm download counts measure registry requests, not people or successful installations.</text>
+</svg>
