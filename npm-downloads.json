@@ -1,12 +1,13 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-30T14:30:29.961Z",
+  "generated_at": "2026-08-30T15:00:22.181Z",
   "data_through": "2026-08-29",
   "period": {
     "start": "2026-08-22",
     "end": "2026-08-29"
   },
   "title": "dsh-session-insights npm download history",
+  "project": "dsh-session-insights",
   "rename": null,
   "packages": [
     {
