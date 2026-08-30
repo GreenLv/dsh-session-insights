@@ -167,9 +167,9 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 ## npm 下载量历史
 
-![dsh-session-insights 的每日与累计 npm 下载量](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/stats/npm-downloads.svg)
+![dsh-session-insights 的累计 npm 下载量增长](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/stats/npm-downloads.zh-CN.svg)
 
-该图每天根据 npm Downloads API 自动生成。npm 下载量统计的是 registry 请求次数，不等于独立用户数或已确认的真实安装人数。如果 GitHub 延迟或停用定时任务，也可以手动触发工作流。
+该累计图每天根据 npm Downloads API 自动生成。npm 下载量统计的是 registry 请求次数，不等于独立用户数或已确认的真实安装人数。如果 GitHub 延迟或停用定时任务，也可以手动触发工作流。
 
 ## 开发与项目文档
 

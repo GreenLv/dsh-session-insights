@@ -41,7 +41,8 @@ jobs:
           git -C "$STATS_WORKTREE" rm -rf . >/dev/null 2>&1 || true
           cp "$OUTPUT_DIR/npm-downloads.json" "$STATS_WORKTREE/npm-downloads.json"
           cp "$OUTPUT_DIR/npm-downloads.svg" "$STATS_WORKTREE/npm-downloads.svg"
-          git -C "$STATS_WORKTREE" add npm-downloads.json npm-downloads.svg
+          cp "$OUTPUT_DIR/npm-downloads.zh-CN.svg" "$STATS_WORKTREE/npm-downloads.zh-CN.svg"
+          git -C "$STATS_WORKTREE" add npm-downloads.json npm-downloads.svg npm-downloads.zh-CN.svg
           if git -C "$STATS_WORKTREE" diff --cached --quiet; then
             exit 0
           fi

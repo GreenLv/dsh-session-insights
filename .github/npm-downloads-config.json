@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "title": "dsh-session-insights npm download history",
+  "project": "dsh-session-insights",
   "packages": [
     {
       "package": "dsh-session-insights",

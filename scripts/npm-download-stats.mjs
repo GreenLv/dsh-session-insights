@@ -153,6 +153,7 @@ export function buildStatsDocument(config, collected, generatedAt, end) {
     data_through: end,
     period: { start, end },
     title: config.title,
+    project: config.project ?? config.title,
     rename: config.rename ?? null,
     packages: series,
     project_cumulative: projectCumulative,
@@ -175,75 +176,142 @@ function tickIndexes(length) {
   return [...indexes].sort((a, b) => a - b);
 }
 
-export function renderSvg(document) {
+function niceCeiling(value) {
+  if (value <= 1) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const step = magnitude >= 10 ? magnitude / 2 : 1;
+  return Math.ceil(value / step) * step;
+}
+
+function formatCount(value, locale) {
+  return new Intl.NumberFormat(locale === "zh-CN" ? "zh-CN" : "en-US").format(value);
+}
+
+const COPY = {
+  en: {
+    title: (project) => `${project} npm download growth`,
+    subtitle: "Cumulative registry downloads over time",
+    total: "Total downloads",
+    axis: "Cumulative downloads",
+    through: "Data through",
+    source: "Source: npm Downloads API",
+    note: "Download counts measure registry requests, not unique users or confirmed installations.",
+    previous: "Previous package",
+    current: "Current package",
+    package: "Package",
+    renamed: "Renamed",
+  },
+  "zh-CN": {
+    title: (project) => `${project} npm 下载增长`,
+    subtitle: "累计 registry 下载请求随时间的变化",
+    total: "累计下载量",
+    axis: "累计下载量",
+    through: "数据截至",
+    source: "来源：npm Downloads API",
+    note: "下载量统计 registry 请求，不等于独立用户数或已确认的真实安装人数。",
+    previous: "旧包",
+    current: "当前包",
+    package: "npm 包",
+    renamed: "更名",
+  },
+};
+
+export function renderSvg(document, locale = "en") {
+  assert(Object.hasOwn(COPY, locale), `unsupported locale: ${locale}`);
+  const copy = COPY[locale];
   const width = 960;
-  const height = 640;
-  const left = 78;
-  const right = 28;
+  const height = 540;
+  const left = 84;
+  const right = 36;
   const plotWidth = width - left - right;
-  const topY = 104;
-  const panelHeight = 190;
-  const lowerY = 370;
+  const plotTop = 176;
+  const plotBottom = 436;
+  const plotHeight = plotBottom - plotTop;
   const allDays = enumerateDays(document.period.start, document.period.end);
   const dayIndex = new Map(allDays.map((day, index) => [day, index]));
   const x = (index) => left + (allDays.length === 1 ? plotWidth / 2 : (index / (allDays.length - 1)) * plotWidth);
-  const dailyMax = Math.max(1, ...document.packages.flatMap((item) => item.downloads.map((entry) => entry.downloads)));
-  const cumulativeMax = Math.max(1, ...document.project_cumulative.map((entry) => entry.cumulative));
-  const yDaily = (value) => topY + panelHeight - (value / dailyMax) * panelHeight;
-  const yCumulative = (value) => lowerY + panelHeight - (value / cumulativeMax) * panelHeight;
-  const grid = (originY, max) => Array.from({ length: 5 }, (_, index) => {
-    const value = Math.round((max * index) / 4);
-    const y = originY + panelHeight - (panelHeight * index) / 4;
-    return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" class="grid"/><text x="${left - 12}" y="${y + 4}" text-anchor="end" class="axis">${value}</text>`;
-  }).join("");
-  const dailyLines = document.packages.map((item) => {
-    const values = allDays.map((day) => item.downloads.find((entry) => entry.day === day)?.downloads ?? 0);
-    return `<polyline points="${linePoints(values, x, yDaily)}" fill="none" stroke="${xml(item.color)}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const projectTotal = document.project_cumulative.at(-1)?.cumulative ?? 0;
+  const cumulativeMax = niceCeiling(Math.max(1, projectTotal));
+  const yCumulative = (value) => plotBottom - (value / cumulativeMax) * plotHeight;
+  const grid = Array.from({ length: 5 }, (_, index) => {
+    const value = Math.round((cumulativeMax * index) / 4);
+    const y = plotBottom - (plotHeight * index) / 4;
+    return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" class="grid"/><text x="${left - 14}" y="${y + 4}" text-anchor="end" class="axis">${xml(formatCount(value, locale))}</text>`;
   }).join("");
   const cumulativeValues = document.project_cumulative.map((entry) => entry.cumulative);
+  const cumulativePoints = linePoints(cumulativeValues, x, yCumulative);
+  const areaPoints = `${x(0).toFixed(2)},${plotBottom} ${cumulativePoints} ${x(allDays.length - 1).toFixed(2)},${plotBottom}`;
   const ticks = tickIndexes(allDays.length);
   const xTicks = ticks.map((index, tickPosition) => {
     const isFirst = tickPosition === 0;
     const isLast = tickPosition === ticks.length - 1;
-    const anchor = isFirst ? "start" : "middle";
-    const tickX = isLast ? Math.min(x(index), width - right - 46) : x(index);
-    return `<text x="${tickX}" y="${lowerY + panelHeight + 28}" text-anchor="${anchor}" class="axis">${xml(allDays[index])}</text>`;
+    const anchor = isFirst ? "start" : isLast ? "end" : "middle";
+    return `<text x="${x(index)}" y="${plotBottom + 28}" text-anchor="${anchor}" class="axis">${xml(allDays[index])}</text>`;
   }).join("");
-  const legend = document.packages.map((item, index) => `<g transform="translate(${left + index * 260},72)"><line x1="0" y1="0" x2="24" y2="0" stroke="${xml(item.color)}" stroke-width="3"/><text x="32" y="4" class="legend">${xml(item.label)} (${item.total})</text></g>`).join("");
+  const packageSummary = document.packages.map((item, index) => {
+    const role = document.packages.length === 1 ? copy.package : index === 0 ? copy.previous : copy.current;
+    const summaryX = left + index * 272;
+    return `<g transform="translate(${summaryX},102)"><circle cx="5" cy="-4" r="5" fill="${xml(item.color)}"/><text x="18" y="0" class="package-role">${xml(role)}</text><text x="18" y="23" class="package-name">${xml(item.package)}</text><text x="244" y="23" text-anchor="end" class="package-total">${xml(formatCount(item.total, locale))}</text></g>`;
+  }).join("");
   let renameMarker = "";
   if (document.rename) {
     const index = dayIndex.get(document.rename.date);
     assert(index !== undefined, `rename date is outside chart period: ${document.rename.date}`);
-    const markerX = Math.min(width - right - 1, x(index));
-    const markerLabel = `${document.rename.label} · ${document.rename.date}`;
-    const labelX = left + 8;
-    renameMarker = `<line x1="${markerX}" y1="${topY}" x2="${markerX}" y2="${lowerY + panelHeight}" class="rename"/><text x="${labelX}" y="${topY + 14}" text-anchor="start" class="rename-label">${xml(markerLabel)}</text>`;
+    const markerX = x(index);
+    const markerAnchor = markerX > width - right - 180 ? "end" : "start";
+    const markerLabelX = markerAnchor === "end" ? markerX - 10 : markerX + 10;
+    renameMarker = `<line x1="${markerX}" y1="${plotTop}" x2="${markerX}" y2="${plotBottom}" class="rename"/><text x="${markerLabelX}" y="${plotTop + 18}" text-anchor="${markerAnchor}" class="rename-label">${xml(copy.renamed)} · ${xml(document.rename.date)}</text>`;
   }
-  const description = `${document.title}. Daily npm downloads by package above and combined cumulative downloads below. Data through ${document.data_through}. npm downloads are requests, not unique installs or users.`;
+  const project = document.project ?? document.title;
+  const title = copy.title(project);
+  const description = `${title}. ${copy.subtitle}. ${copy.through} ${document.data_through}. ${copy.note}`;
+  const endX = x(allDays.length - 1);
+  const endY = yCumulative(projectTotal);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="chart-title chart-desc">
-  <title id="chart-title">${xml(document.title)}</title>
+  <title id="chart-title">${xml(title)}</title>
   <desc id="chart-desc">${xml(description)}</desc>
+  <defs>
+    <linearGradient id="growth-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#14b8a6" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#14b8a6" stop-opacity="0.02"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+  </defs>
   <style>
-    text { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #172033; }
-    .title { font-size: 22px; font-weight: 700; } .subtitle { font-size: 12px; fill: #596579; }
-    .panel { font-size: 14px; font-weight: 650; } .axis { font-size: 11px; fill: #657086; }
-    .legend { font-size: 12px; } .grid { stroke: #dce2ea; stroke-width: 1; }
-    .rename { stroke: #8b5cf6; stroke-width: 1.5; stroke-dasharray: 5 4; } .rename-label { font-size: 11px; fill: #6d28d9; }
+    text { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; fill: #172033; }
+    .title { font-size: 24px; font-weight: 720; letter-spacing: -0.3px; }
+    .subtitle { font-size: 12px; fill: #64748b; }
+    .metric-label { font-size: 11px; fill: #64748b; font-weight: 650; letter-spacing: 0.4px; }
+    .metric-value { font-size: 34px; fill: #0f766e; font-weight: 760; letter-spacing: -1px; }
+    .axis-title { font-size: 12px; fill: #475569; font-weight: 650; }
+    .axis { font-size: 11px; fill: #718096; }
+    .grid { stroke: #e6edf4; stroke-width: 1; }
+    .package-role { font-size: 11px; fill: #64748b; font-weight: 650; }
+    .package-name { font-size: 12px; fill: #334155; }
+    .package-total { font-size: 13px; fill: #172033; font-weight: 720; }
+    .rename { stroke: #8b5cf6; stroke-width: 1.5; stroke-dasharray: 5 5; }
+    .rename-label { font-size: 11px; fill: #6d28d9; font-weight: 650; }
+    .endpoint { font-size: 12px; fill: #0f766e; font-weight: 740; }
   </style>
-  <rect width="100%" height="100%" rx="14" fill="#ffffff"/>
-  <text x="${left}" y="34" class="title">${xml(document.title)}</text>
-  <text x="${left}" y="54" class="subtitle">Data through ${xml(document.data_through)} · Source: npm Downloads API · downloads are not unique installs</text>
-  ${legend}
-  <text x="${left}" y="${topY - 14}" class="panel">Daily npm downloads</text>
-  ${grid(topY, dailyMax)}
-  ${dailyLines}
-  <text x="${left}" y="${lowerY - 14}" class="panel">Combined cumulative npm downloads</text>
-  ${grid(lowerY, cumulativeMax)}
-  <polyline points="${linePoints(cumulativeValues, x, yCumulative)}" fill="none" stroke="#0f766e" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect width="100%" height="100%" rx="18" fill="#f8fafc"/>
+  <rect x="18" y="18" width="924" height="504" rx="16" fill="#ffffff" filter="url(#soft-shadow)"/>
+  <text x="${left}" y="50" class="title">${xml(title)}</text>
+  <text x="${left}" y="72" class="subtitle">${xml(copy.subtitle)} · ${xml(copy.through)} ${xml(document.data_through)}</text>
+  <text x="${width - right}" y="38" text-anchor="end" class="metric-label">${xml(copy.total)}</text>
+  <text x="${width - right}" y="70" text-anchor="end" class="metric-value">${xml(formatCount(projectTotal, locale))}</text>
+  ${packageSummary}
+  <text x="${left}" y="${plotTop - 16}" class="axis-title">${xml(copy.axis)}</text>
+  ${grid}
+  <polygon points="${areaPoints}" fill="url(#growth-fill)"/>
+  <polyline points="${cumulativePoints}" fill="none" stroke="#0f766e" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
   ${renameMarker}
+  <circle cx="${endX}" cy="${endY}" r="5" fill="#ffffff" stroke="#0f766e" stroke-width="3"/>
+  <text x="${endX - 10}" y="${Math.max(plotTop + 14, endY - 12)}" text-anchor="end" class="endpoint">${xml(formatCount(projectTotal, locale))}</text>
   ${xTicks}
-  <text x="${left}" y="618" class="subtitle">Generated ${xml(document.generated_at)} · npm download counts measure registry requests, not people or successful installations.</text>
+  <text x="${left}" y="496" class="subtitle">${xml(copy.source)} · ${xml(copy.note)}</text>
 </svg>
 `;
 }
@@ -283,11 +351,13 @@ export async function run(argv, fetchImpl = fetch) {
   const config = JSON.parse(await readFile(args.config, "utf8"));
   const collected = await Promise.all(config.packages.map((spec) => collectPackageSeries(spec, args.end, fetchImpl)));
   const document = buildStatsDocument(config, collected, args.generatedAt, args.end);
-  const svg = renderSvg(document);
-  assert(!svg.includes("NaN"), "generated SVG contains NaN");
+  const svg = renderSvg(document, "en");
+  const svgZhCn = renderSvg(document, "zh-CN");
+  assert(!svg.includes("NaN") && !svgZhCn.includes("NaN"), "generated SVG contains NaN");
   await mkdir(args.outputDir, { recursive: true });
   await writeAtomic(path.join(args.outputDir, "npm-downloads.json"), `${JSON.stringify(document, null, 2)}\n`);
   await writeAtomic(path.join(args.outputDir, "npm-downloads.svg"), svg);
+  await writeAtomic(path.join(args.outputDir, "npm-downloads.zh-CN.svg"), svgZhCn);
   return document;
 }
 

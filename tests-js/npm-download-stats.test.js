@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { collectPackageSeries, normalizeRangePayload, reconcilePointPayload } from "../scripts/npm-download-stats.mjs";
+import { buildStatsDocument, collectPackageSeries, normalizeRangePayload, reconcilePointPayload, renderSvg } from "../scripts/npm-download-stats.mjs";
 
 const fixture = JSON.parse(await readFile(new URL("./fixtures/npm-downloads-range.json", import.meta.url), "utf8"));
 const expected = { packageName: "dsh-session-insights", start: "2026-08-22", end: "2026-08-25" };
@@ -37,4 +37,25 @@ test("rejects malformed range values", () => {
 test("fails without writing when the npm API request fails", async () => {
   const spec = { package: "dsh-session-insights", label: "dsh-session-insights", color: "#2563eb", start: "2026-08-22" };
   await assert.rejects(collectPackageSeries(spec, "2026-08-22", async () => ({ ok: false, status: 503 })), /HTTP 503/);
+});
+
+test("renders separate cumulative-only English and Chinese charts", () => {
+  const spec = { package: "dsh-session-insights", label: "dsh-session-insights", color: "#2563eb", start: "2026-08-22" };
+  const document = buildStatsDocument(
+    { schema: 1, title: "fixture", project: "dsh-session-insights", packages: [spec] },
+    [{ spec, downloads: normalizeRangePayload(fixture.range, expected), sources: [] }],
+    "2026-08-26T04:37:00.000Z",
+    "2026-08-25",
+  );
+  const english = renderSvg(document, "en");
+  const chinese = renderSvg(document, "zh-CN");
+  assert.match(english, /dsh-session-insights npm download growth/);
+  assert.match(english, /Cumulative downloads/);
+  assert.match(chinese, /dsh-session-insights npm 下载增长/);
+  assert.match(chinese, /累计下载量/);
+  assert.doesNotMatch(english, /Daily npm downloads/);
+  assert.doesNotMatch(chinese, /每日 npm 下载量/);
+  assert.match(english, /<title id="chart-title">/);
+  assert.match(chinese, /<desc id="chart-desc">/);
+  assert.doesNotMatch(`${english}${chinese}`, /NaN/);
 });
