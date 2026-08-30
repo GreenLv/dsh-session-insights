@@ -1,0 +1,51 @@
+name: npm download statistics
+
+on:
+  schedule:
+    - cron: '37 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: npm-download-statistics
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test collector
+        run: node --test tests-js/npm-download-stats.test.js
+      - name: Collect and validate npm data
+        run: node scripts/npm-download-stats.mjs --config .github/npm-downloads-config.json --output-dir "$RUNNER_TEMP/npm-downloads"
+      - name: Publish stats branch
+        env:
+          OUTPUT_DIR: ${{ runner.temp }}/npm-downloads
+          STATS_WORKTREE: ${{ runner.temp }}/stats-branch
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin stats >/dev/null 2>&1; then
+            git fetch origin stats:refs/remotes/origin/stats
+            git worktree add --detach "$STATS_WORKTREE"
+            git -C "$STATS_WORKTREE" switch -C stats refs/remotes/origin/stats
+          else
+            git worktree add --detach "$STATS_WORKTREE"
+            git -C "$STATS_WORKTREE" switch --orphan stats
+          fi
+          git -C "$STATS_WORKTREE" rm -rf . >/dev/null 2>&1 || true
+          cp "$OUTPUT_DIR/npm-downloads.json" "$STATS_WORKTREE/npm-downloads.json"
+          cp "$OUTPUT_DIR/npm-downloads.svg" "$STATS_WORKTREE/npm-downloads.svg"
+          git -C "$STATS_WORKTREE" add npm-downloads.json npm-downloads.svg
+          if git -C "$STATS_WORKTREE" diff --cached --quiet; then
+            exit 0
+          fi
+          git -C "$STATS_WORKTREE" config user.name github-actions[bot]
+          git -C "$STATS_WORKTREE" config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git -C "$STATS_WORKTREE" commit -m "chore: update npm download statistics"
+          git -C "$STATS_WORKTREE" push origin HEAD:stats

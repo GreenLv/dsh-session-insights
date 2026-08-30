@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "title": "dsh-session-insights npm download history",
+  "packages": [
+    {
+      "package": "dsh-session-insights",
+      "label": "dsh-session-insights",
+      "color": "#2563eb",
+      "start": "2026-08-22"
+    }
+  ]
+}

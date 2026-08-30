@@ -1,0 +1,18 @@
+{
+  "range": {
+    "start": "2026-08-22",
+    "end": "2026-08-25",
+    "package": "dsh-session-insights",
+    "downloads": [
+      { "day": "2026-08-25", "downloads": 4 },
+      { "day": "2026-08-22", "downloads": 2 },
+      { "day": "2026-08-24", "downloads": 3 }
+    ]
+  },
+  "point": {
+    "start": "2026-08-22",
+    "end": "2026-08-25",
+    "package": "dsh-session-insights",
+    "downloads": 9
+  }
+}

@@ -165,6 +165,12 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 精确包身份、CI、macOS 原生验收和限定的 Windows 原生验收记录在 [v0.2.0 发布验收记录](docs/acceptance/v0.2.0-candidate.md)中。Windows 尚未原生验证确定性斜杠命令分发和英文 DOM 渲染。v0.1 CLI/Skill 的历史证据保留在 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。
 
+## npm 下载量历史
+
+![dsh-session-insights 的每日与累计 npm 下载量](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/stats/npm-downloads.svg)
+
+该图每天根据 npm Downloads API 自动生成。npm 下载量统计的是 registry 请求次数，不等于独立用户数或已确认的真实安装人数。如果 GitHub 延迟或停用定时任务，也可以手动触发工作流。
+
 ## 开发与项目文档
 
 ```bash
