@@ -41,6 +41,6 @@
   
   <circle cx="924" cy="188.7111111111111" r="5" fill="#ffffff" stroke="#0f766e" stroke-width="3"/>
   <text x="914" y="190" text-anchor="end" class="endpoint">428</text>
-  <text x="84" y="464" text-anchor="start" class="axis">2026-08-22</text><text x="324" y="464" text-anchor="middle" class="axis">2026-08-24</text><text x="564" y="464" text-anchor="middle" class="axis">2026-08-26</text><text x="684" y="464" text-anchor="middle" class="axis">2026-08-27</text><text x="924" y="464" text-anchor="end" class="axis">2026-08-29</text>
+  <text x="84" y="464" text-anchor="start" class="axis">2026-08-22</text><text x="204" y="464" text-anchor="middle" class="axis">2026-08-23</text><text x="324" y="464" text-anchor="middle" class="axis">2026-08-24</text><text x="444" y="464" text-anchor="middle" class="axis">2026-08-25</text><text x="564" y="464" text-anchor="middle" class="axis">2026-08-26</text><text x="684" y="464" text-anchor="middle" class="axis">2026-08-27</text><text x="804" y="464" text-anchor="middle" class="axis">2026-08-28</text><text x="924" y="464" text-anchor="end" class="axis">2026-08-29</text>
   <text x="84" y="496" class="subtitle">来源：npm Downloads API · 下载量统计 registry 请求，不等于独立用户数或已确认的真实安装人数。</text>
 </svg>
