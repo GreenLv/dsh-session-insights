@@ -4,10 +4,10 @@ import test from "node:test";
 import {
   buildStatsDocument,
   collectPackageSeries,
+  latestCompleteUtcDay,
   normalizeRangePayload,
   reconcilePointPayload,
   renderSvg,
-  resolveLatestCompleteDay,
 } from "../scripts/npm-download-stats.mjs";
 
 const fixture = JSON.parse(await readFile(new URL("./fixtures/npm-downloads-range.json", import.meta.url), "utf8"));
@@ -46,26 +46,10 @@ test("fails without writing when the npm API request fails", async () => {
   await assert.rejects(collectPackageSeries(spec, "2026-08-22", async () => ({ ok: false, status: 503 })), /HTTP 503/);
 });
 
-test("uses the latest complete npm day by default", async () => {
-  const specs = [{ package: "dsh-session-insights", start: "2026-08-22" }];
-  const fetchImpl = async () => new Response(JSON.stringify({
-    package: "dsh-session-insights",
-    start: "2026-08-29",
-    end: "2026-08-29",
-    downloads: 21,
-  }), { status: 200 });
-  assert.equal(await resolveLatestCompleteDay(specs, fetchImpl), "2026-08-29");
-});
-
-test("rejects malformed last-day metadata instead of publishing a partial period", async () => {
-  const specs = [{ package: "dsh-session-insights", start: "2026-08-22" }];
-  const fetchImpl = async () => new Response(JSON.stringify({
-    package: "wrong-package",
-    start: "2026-08-29",
-    end: "2026-08-29",
-    downloads: 21,
-  }), { status: 200 });
-  await assert.rejects(() => resolveLatestCompleteDay(specs, fetchImpl), /package mismatch/);
+test("uses the previous UTC calendar day as the default data end", () => {
+  assert.equal(latestCompleteUtcDay("2026-09-02T11:10:51.000Z"), "2026-09-01");
+  assert.equal(latestCompleteUtcDay("2026-09-02T00:30:00+08:00"), "2026-08-31");
+  assert.throws(() => latestCompleteUtcDay("not-a-timestamp"), /generatedAt must be an ISO timestamp/);
 });
 
 test("shows every x-axis date when all labels fit", () => {
@@ -90,7 +74,7 @@ test("shows every x-axis date when all labels fit", () => {
   ]);
 });
 
-test("adapts x-axis tick density for long periods while preserving endpoints", () => {
+test("adapts x-axis tick density for long periods without crowding endpoints", () => {
   const spec = { package: "dsh-session-insights", label: "dsh-session-insights", color: "#2563eb", start: "2026-08-22" };
   const document = buildStatsDocument(
     { schema: 1, title: "fixture", project: "dsh-session-insights", packages: [spec] },
@@ -100,7 +84,7 @@ test("adapts x-axis tick density for long periods while preserving endpoints", (
   );
   const svg = renderSvg(document, "en");
   const labels = [...svg.matchAll(/class="axis">(\d{4}-\d{2}-\d{2})<\/text>/g)].map((match) => match[1]);
-  assert.ok(labels.length > 5 && labels.length <= 11);
+  assert.ok(labels.length > 5 && labels.length <= 8);
   assert.equal(labels[0], "2026-08-22");
   assert.equal(labels.at(-1), "2026-10-01");
 });

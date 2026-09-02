@@ -89,24 +89,11 @@ async function fetchJson(url, fetchImpl) {
   }
 }
 
-export async function resolveLatestCompleteDay(packageSpecs, fetchImpl = fetch) {
-  assert(Array.isArray(packageSpecs) && packageSpecs.length > 0, "package specs must be a non-empty array");
-  const completeDays = await Promise.all(packageSpecs.map(async (spec) => {
-    assert(spec && typeof spec.package === "string" && spec.package.length > 0, "package name is required");
-    const encodedPackage = encodeURIComponent(spec.package);
-    const payload = await fetchJson(`https://api.npmjs.org/downloads/point/last-day/${encodedPackage}`, fetchImpl);
-    assert(payload.package === spec.package, `last-day package mismatch for ${spec.package}`);
-    assert(payload.start === payload.end, `last-day bounds mismatch for ${spec.package}`);
-    parseDay(payload.end, `latest complete day for ${spec.package}`);
-    assert(Number.isSafeInteger(payload.downloads) && payload.downloads >= 0, `invalid last-day total for ${spec.package}`);
-    return payload.end;
-  }));
-  const end = [...completeDays].sort()[0];
-  for (const spec of packageSpecs) {
-    parseDay(spec.start, `start for ${spec.package}`);
-    assert(parseDay(spec.start) <= parseDay(end), `latest complete day is before package start for ${spec.package}`);
-  }
-  return end;
+export function latestCompleteUtcDay(generatedAt = new Date().toISOString()) {
+  const generatedTime = Date.parse(generatedAt);
+  assert(Number.isFinite(generatedTime), "generatedAt must be an ISO timestamp");
+  const generatedUtcDay = new Date(generatedTime).toISOString().slice(0, 10);
+  return addDays(generatedUtcDay, -1);
 }
 
 export async function collectPackageSeries(spec, end, fetchImpl = fetch) {
@@ -193,8 +180,8 @@ function linePoints(values, xForIndex, yForValue) {
 function tickIndexes(labels, availableWidth) {
   if (labels.length === 0) return [];
   const widestLabelWidth = Math.max(...labels.map((label) => String(label).length * 6.6));
-  const minimumSpacing = widestLabelWidth + 16;
-  const maximumTicks = Math.max(2, Math.floor(availableWidth / minimumSpacing) + 1);
+  const endpointSpacing = widestLabelWidth * 1.5 + 16;
+  const maximumTicks = Math.max(2, Math.floor(availableWidth / endpointSpacing) + 1);
   if (labels.length <= maximumTicks) return labels.map((_, index) => index);
   const indexes = new Set([0, labels.length - 1]);
   for (let step = 1; step < maximumTicks - 1; step += 1) {
@@ -369,7 +356,7 @@ async function writeAtomic(filePath, content) {
 export async function run(argv, fetchImpl = fetch) {
   const args = parseArgs(argv);
   const config = JSON.parse(await readFile(args.config, "utf8"));
-  const end = args.end ?? await resolveLatestCompleteDay(config.packages, fetchImpl);
+  const end = args.end ?? latestCompleteUtcDay(args.generatedAt);
   parseDay(end, "end date");
   const collected = await Promise.all(config.packages.map((spec) => collectPackageSeries(spec, end, fetchImpl)));
   const document = buildStatsDocument(config, collected, args.generatedAt, end);
