@@ -57,8 +57,8 @@ test("shows every x-axis date when all labels fit", () => {
   const document = buildStatsDocument(
     { schema: 1, title: "fixture", project: "dsh-session-insights", packages: [spec] },
     [{ spec, downloads: normalizeRangePayload(fixture.range, expected), sources: [] }],
-    "2026-08-30T04:37:00.000Z",
-    "2026-08-29",
+    "2026-09-02T04:37:00.000Z",
+    "2026-09-01",
   );
   const svg = renderSvg(document, "en");
   const labels = [...svg.matchAll(/class="axis">(\d{4}-\d{2}-\d{2})<\/text>/g)].map((match) => match[1]);
@@ -71,6 +71,9 @@ test("shows every x-axis date when all labels fit", () => {
     "2026-08-27",
     "2026-08-28",
     "2026-08-29",
+    "2026-08-30",
+    "2026-08-31",
+    "2026-09-01",
   ]);
 });
 

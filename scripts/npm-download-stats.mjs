@@ -182,15 +182,13 @@ function tickIndexes(labels, availableWidth) {
   if (labels.length === 1) return [0];
   const widestLabelWidth = Math.max(...labels.map((label) => String(label).length * 6.6));
   const pointSpacing = availableWidth / (labels.length - 1);
-  const internalSpacing = widestLabelWidth + 16;
-  const endpointSpacing = widestLabelWidth * 1.5 + 16;
+  const minimumSpacing = widestLabelWidth + 16;
   const indexes = [0];
   let previousIndex = 0;
   for (let index = 1; index < labels.length - 1; index += 1) {
     const distanceFromPrevious = (index - previousIndex) * pointSpacing;
-    const requiredFromPrevious = previousIndex === 0 ? endpointSpacing : internalSpacing;
     const distanceToEnd = (labels.length - 1 - index) * pointSpacing;
-    if (distanceFromPrevious >= requiredFromPrevious && distanceToEnd >= endpointSpacing) {
+    if (distanceFromPrevious >= minimumSpacing && distanceToEnd >= minimumSpacing) {
       indexes.push(index);
       previousIndex = index;
     }
@@ -263,11 +261,8 @@ export function renderSvg(document, locale = "en") {
   const cumulativePoints = linePoints(cumulativeValues, x, yCumulative);
   const areaPoints = `${x(0).toFixed(2)},${plotBottom} ${cumulativePoints} ${x(allDays.length - 1).toFixed(2)},${plotBottom}`;
   const ticks = tickIndexes(allDays, plotWidth);
-  const xTicks = ticks.map((index, tickPosition) => {
-    const isFirst = tickPosition === 0;
-    const isLast = tickPosition === ticks.length - 1;
-    const anchor = isFirst ? "start" : isLast ? "end" : "middle";
-    return `<text x="${x(index)}" y="${plotBottom + 28}" text-anchor="${anchor}" class="axis">${xml(allDays[index])}</text>`;
+  const xTicks = ticks.map((index) => {
+    return `<text x="${x(index)}" y="${plotBottom + 28}" text-anchor="middle" class="axis">${xml(allDays[index])}</text>`;
   }).join("");
   const packageSummary = document.packages.map((item, index) => {
     const role = document.packages.length === 1 ? copy.package : index === 0 ? copy.previous : copy.current;
