@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-02T11:04:03.529Z",
-  "data_through": "2026-08-29",
+  "generated_at": "2026-09-02T11:19:40.629Z",
+  "data_through": "2026-09-01",
   "period": {
     "start": "2026-08-22",
-    "end": "2026-08-29"
+    "end": "2026-09-01"
   },
   "title": "dsh-session-insights npm download history",
   "project": "dsh-session-insights",
@@ -15,7 +15,7 @@
       "label": "dsh-session-insights",
       "color": "#2563eb",
       "start": "2026-08-22",
-      "total": 428,
+      "total": 461,
       "downloads": [
         {
           "day": "2026-08-22",
@@ -56,6 +56,21 @@
           "day": "2026-08-29",
           "downloads": 21,
           "cumulative": 428
+        },
+        {
+          "day": "2026-08-30",
+          "downloads": 24,
+          "cumulative": 452
+        },
+        {
+          "day": "2026-08-31",
+          "downloads": 9,
+          "cumulative": 461
+        },
+        {
+          "day": "2026-09-01",
+          "downloads": 0,
+          "cumulative": 461
         }
       ]
     }
@@ -100,15 +115,30 @@
       "day": "2026-08-29",
       "downloads": 21,
       "cumulative": 428
+    },
+    {
+      "day": "2026-08-30",
+      "downloads": 24,
+      "cumulative": 452
+    },
+    {
+      "day": "2026-08-31",
+      "downloads": 9,
+      "cumulative": 461
+    },
+    {
+      "day": "2026-09-01",
+      "downloads": 0,
+      "cumulative": 461
     }
   ],
   "sources": [
     {
       "package": "dsh-session-insights",
       "start": "2026-08-22",
-      "end": "2026-08-29",
-      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-08-29/dsh-session-insights",
-      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-08-29/dsh-session-insights"
+      "end": "2026-09-01",
+      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-09-01/dsh-session-insights",
+      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-09-01/dsh-session-insights"
     }
   ],
   "note": "npm downloads are requests, not unique installs or users"
