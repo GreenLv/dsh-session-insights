@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { buildStatsDocument, collectPackageSeries, normalizeRangePayload, reconcilePointPayload, renderSvg } from "../scripts/npm-download-stats.mjs";
+import {
+  buildStatsDocument,
+  collectPackageSeries,
+  normalizeRangePayload,
+  reconcilePointPayload,
+  renderSvg,
+  resolveLatestCompleteDay,
+} from "../scripts/npm-download-stats.mjs";
 
 const fixture = JSON.parse(await readFile(new URL("./fixtures/npm-downloads-range.json", import.meta.url), "utf8"));
 const expected = { packageName: "dsh-session-insights", start: "2026-08-22", end: "2026-08-25" };
@@ -39,6 +46,28 @@ test("fails without writing when the npm API request fails", async () => {
   await assert.rejects(collectPackageSeries(spec, "2026-08-22", async () => ({ ok: false, status: 503 })), /HTTP 503/);
 });
 
+test("uses the latest complete npm day by default", async () => {
+  const specs = [{ package: "dsh-session-insights", start: "2026-08-22" }];
+  const fetchImpl = async () => new Response(JSON.stringify({
+    package: "dsh-session-insights",
+    start: "2026-08-29",
+    end: "2026-08-29",
+    downloads: 21,
+  }), { status: 200 });
+  assert.equal(await resolveLatestCompleteDay(specs, fetchImpl), "2026-08-29");
+});
+
+test("rejects malformed last-day metadata instead of publishing a partial period", async () => {
+  const specs = [{ package: "dsh-session-insights", start: "2026-08-22" }];
+  const fetchImpl = async () => new Response(JSON.stringify({
+    package: "wrong-package",
+    start: "2026-08-29",
+    end: "2026-08-29",
+    downloads: 21,
+  }), { status: 200 });
+  await assert.rejects(() => resolveLatestCompleteDay(specs, fetchImpl), /package mismatch/);
+});
+
 test("renders separate cumulative-only English and Chinese charts", () => {
   const spec = { package: "dsh-session-insights", label: "dsh-session-insights", color: "#2563eb", start: "2026-08-22" };
   const document = buildStatsDocument(
@@ -51,8 +80,10 @@ test("renders separate cumulative-only English and Chinese charts", () => {
   const chinese = renderSvg(document, "zh-CN");
   assert.match(english, /dsh-session-insights npm download growth/);
   assert.match(english, /Cumulative downloads/);
+  assert.match(english, /All available history · 2026-08-22 → 2026-08-25/);
   assert.match(chinese, /dsh-session-insights npm 下载增长/);
   assert.match(chinese, /累计下载量/);
+  assert.match(chinese, /全量历史 · 2026-08-22 → 2026-08-25/);
   assert.doesNotMatch(english, /Daily npm downloads/);
   assert.doesNotMatch(chinese, /每日 npm 下载量/);
   assert.match(english, /<title id="chart-title">/);

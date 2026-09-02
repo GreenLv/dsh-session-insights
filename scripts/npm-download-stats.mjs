@@ -89,6 +89,26 @@ async function fetchJson(url, fetchImpl) {
   }
 }
 
+export async function resolveLatestCompleteDay(packageSpecs, fetchImpl = fetch) {
+  assert(Array.isArray(packageSpecs) && packageSpecs.length > 0, "package specs must be a non-empty array");
+  const completeDays = await Promise.all(packageSpecs.map(async (spec) => {
+    assert(spec && typeof spec.package === "string" && spec.package.length > 0, "package name is required");
+    const encodedPackage = encodeURIComponent(spec.package);
+    const payload = await fetchJson(`https://api.npmjs.org/downloads/point/last-day/${encodedPackage}`, fetchImpl);
+    assert(payload.package === spec.package, `last-day package mismatch for ${spec.package}`);
+    assert(payload.start === payload.end, `last-day bounds mismatch for ${spec.package}`);
+    parseDay(payload.end, `latest complete day for ${spec.package}`);
+    assert(Number.isSafeInteger(payload.downloads) && payload.downloads >= 0, `invalid last-day total for ${spec.package}`);
+    return payload.end;
+  }));
+  const end = [...completeDays].sort()[0];
+  for (const spec of packageSpecs) {
+    parseDay(spec.start, `start for ${spec.package}`);
+    assert(parseDay(spec.start) <= parseDay(end), `latest complete day is before package start for ${spec.package}`);
+  }
+  return end;
+}
+
 export async function collectPackageSeries(spec, end, fetchImpl = fetch) {
   assert(spec && typeof spec === "object", "package spec must be an object");
   assert(typeof spec.package === "string" && spec.package.length > 0, "package name is required");
@@ -190,10 +210,9 @@ function formatCount(value, locale) {
 const COPY = {
   en: {
     title: (project) => `${project} npm download growth`,
-    subtitle: "Cumulative registry downloads over time",
+    coverage: (start, end) => `All available history · ${start} → ${end}`,
     total: "Total downloads",
     axis: "Cumulative downloads",
-    through: "Data through",
     source: "Source: npm Downloads API",
     note: "Download counts measure registry requests, not unique users or confirmed installations.",
     previous: "Previous package",
@@ -203,10 +222,9 @@ const COPY = {
   },
   "zh-CN": {
     title: (project) => `${project} npm 下载增长`,
-    subtitle: "累计 registry 下载请求随时间的变化",
+    coverage: (start, end) => `全量历史 · ${start} → ${end}`,
     total: "累计下载量",
     axis: "累计下载量",
-    through: "数据截至",
     source: "来源：npm Downloads API",
     note: "下载量统计 registry 请求，不等于独立用户数或已确认的真实安装人数。",
     previous: "旧包",
@@ -264,7 +282,8 @@ export function renderSvg(document, locale = "en") {
   }
   const project = document.project ?? document.title;
   const title = copy.title(project);
-  const description = `${title}. ${copy.subtitle}. ${copy.through} ${document.data_through}. ${copy.note}`;
+  const coverage = copy.coverage(document.period.start, document.period.end);
+  const description = `${title}. ${coverage}. ${copy.note}`;
   const endX = x(allDays.length - 1);
   const endY = yCumulative(projectTotal);
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -299,7 +318,7 @@ export function renderSvg(document, locale = "en") {
   <rect width="100%" height="100%" rx="18" fill="#f8fafc"/>
   <rect x="18" y="18" width="924" height="504" rx="16" fill="#ffffff" filter="url(#soft-shadow)"/>
   <text x="${left}" y="50" class="title">${xml(title)}</text>
-  <text x="${left}" y="72" class="subtitle">${xml(copy.subtitle)} · ${xml(copy.through)} ${xml(document.data_through)}</text>
+  <text x="${left}" y="72" class="subtitle">${xml(coverage)}</text>
   <text x="${width - right}" y="38" text-anchor="end" class="metric-label">${xml(copy.total)}</text>
   <text x="${width - right}" y="70" text-anchor="end" class="metric-value">${xml(formatCount(projectTotal, locale))}</text>
   ${packageSummary}
@@ -316,13 +335,8 @@ export function renderSvg(document, locale = "en") {
 `;
 }
 
-function yesterdayUtc() {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - DAY_MS).toISOString().slice(0, 10);
-}
-
 function parseArgs(argv) {
-  const result = { end: yesterdayUtc(), generatedAt: new Date().toISOString() };
+  const result = { generatedAt: new Date().toISOString() };
   for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index];
     const value = argv[index + 1];
@@ -347,10 +361,11 @@ async function writeAtomic(filePath, content) {
 
 export async function run(argv, fetchImpl = fetch) {
   const args = parseArgs(argv);
-  parseDay(args.end, "end date");
   const config = JSON.parse(await readFile(args.config, "utf8"));
-  const collected = await Promise.all(config.packages.map((spec) => collectPackageSeries(spec, args.end, fetchImpl)));
-  const document = buildStatsDocument(config, collected, args.generatedAt, args.end);
+  const end = args.end ?? await resolveLatestCompleteDay(config.packages, fetchImpl);
+  parseDay(end, "end date");
+  const collected = await Promise.all(config.packages.map((spec) => collectPackageSeries(spec, end, fetchImpl)));
+  const document = buildStatsDocument(config, collected, args.generatedAt, end);
   const svg = renderSvg(document, "en");
   const svgZhCn = renderSvg(document, "zh-CN");
   assert(!svg.includes("NaN") && !svgZhCn.includes("NaN"), "generated SVG contains NaN");
