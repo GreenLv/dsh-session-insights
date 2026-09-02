@@ -68,6 +68,43 @@ test("rejects malformed last-day metadata instead of publishing a partial period
   await assert.rejects(() => resolveLatestCompleteDay(specs, fetchImpl), /package mismatch/);
 });
 
+test("shows every x-axis date when all labels fit", () => {
+  const spec = { package: "dsh-session-insights", label: "dsh-session-insights", color: "#2563eb", start: "2026-08-22" };
+  const document = buildStatsDocument(
+    { schema: 1, title: "fixture", project: "dsh-session-insights", packages: [spec] },
+    [{ spec, downloads: normalizeRangePayload(fixture.range, expected), sources: [] }],
+    "2026-08-30T04:37:00.000Z",
+    "2026-08-29",
+  );
+  const svg = renderSvg(document, "en");
+  const labels = [...svg.matchAll(/class="axis">(\d{4}-\d{2}-\d{2})<\/text>/g)].map((match) => match[1]);
+  assert.deepEqual(labels, [
+    "2026-08-22",
+    "2026-08-23",
+    "2026-08-24",
+    "2026-08-25",
+    "2026-08-26",
+    "2026-08-27",
+    "2026-08-28",
+    "2026-08-29",
+  ]);
+});
+
+test("adapts x-axis tick density for long periods while preserving endpoints", () => {
+  const spec = { package: "dsh-session-insights", label: "dsh-session-insights", color: "#2563eb", start: "2026-08-22" };
+  const document = buildStatsDocument(
+    { schema: 1, title: "fixture", project: "dsh-session-insights", packages: [spec] },
+    [{ spec, downloads: normalizeRangePayload(fixture.range, expected), sources: [] }],
+    "2026-10-02T04:37:00.000Z",
+    "2026-10-01",
+  );
+  const svg = renderSvg(document, "en");
+  const labels = [...svg.matchAll(/class="axis">(\d{4}-\d{2}-\d{2})<\/text>/g)].map((match) => match[1]);
+  assert.ok(labels.length > 5 && labels.length <= 11);
+  assert.equal(labels[0], "2026-08-22");
+  assert.equal(labels.at(-1), "2026-10-01");
+});
+
 test("renders separate cumulative-only English and Chinese charts", () => {
   const spec = { package: "dsh-session-insights", label: "dsh-session-insights", color: "#2563eb", start: "2026-08-22" };
   const document = buildStatsDocument(

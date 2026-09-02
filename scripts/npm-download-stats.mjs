@@ -190,9 +190,16 @@ function linePoints(values, xForIndex, yForValue) {
   return values.map((value, index) => `${xForIndex(index).toFixed(2)},${yForValue(value).toFixed(2)}`).join(" ");
 }
 
-function tickIndexes(length) {
-  const indexes = new Set([0, Math.max(0, length - 1)]);
-  for (let step = 1; step < 4; step += 1) indexes.add(Math.round(((length - 1) * step) / 4));
+function tickIndexes(labels, availableWidth) {
+  if (labels.length === 0) return [];
+  const widestLabelWidth = Math.max(...labels.map((label) => String(label).length * 6.6));
+  const minimumSpacing = widestLabelWidth + 16;
+  const maximumTicks = Math.max(2, Math.floor(availableWidth / minimumSpacing) + 1);
+  if (labels.length <= maximumTicks) return labels.map((_, index) => index);
+  const indexes = new Set([0, labels.length - 1]);
+  for (let step = 1; step < maximumTicks - 1; step += 1) {
+    indexes.add(Math.round(((labels.length - 1) * step) / (maximumTicks - 1)));
+  }
   return [...indexes].sort((a, b) => a - b);
 }
 
@@ -259,7 +266,7 @@ export function renderSvg(document, locale = "en") {
   const cumulativeValues = document.project_cumulative.map((entry) => entry.cumulative);
   const cumulativePoints = linePoints(cumulativeValues, x, yCumulative);
   const areaPoints = `${x(0).toFixed(2)},${plotBottom} ${cumulativePoints} ${x(allDays.length - 1).toFixed(2)},${plotBottom}`;
-  const ticks = tickIndexes(allDays.length);
+  const ticks = tickIndexes(allDays, plotWidth);
   const xTicks = ticks.map((index, tickPosition) => {
     const isFirst = tickPosition === 0;
     const isLast = tickPosition === ticks.length - 1;
