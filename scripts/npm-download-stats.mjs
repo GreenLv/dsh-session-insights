@@ -179,15 +179,24 @@ function linePoints(values, xForIndex, yForValue) {
 
 function tickIndexes(labels, availableWidth) {
   if (labels.length === 0) return [];
+  if (labels.length === 1) return [0];
   const widestLabelWidth = Math.max(...labels.map((label) => String(label).length * 6.6));
+  const pointSpacing = availableWidth / (labels.length - 1);
+  const internalSpacing = widestLabelWidth + 16;
   const endpointSpacing = widestLabelWidth * 1.5 + 16;
-  const maximumTicks = Math.max(2, Math.floor(availableWidth / endpointSpacing) + 1);
-  if (labels.length <= maximumTicks) return labels.map((_, index) => index);
-  const indexes = new Set([0, labels.length - 1]);
-  for (let step = 1; step < maximumTicks - 1; step += 1) {
-    indexes.add(Math.round(((labels.length - 1) * step) / (maximumTicks - 1)));
+  const indexes = [0];
+  let previousIndex = 0;
+  for (let index = 1; index < labels.length - 1; index += 1) {
+    const distanceFromPrevious = (index - previousIndex) * pointSpacing;
+    const requiredFromPrevious = previousIndex === 0 ? endpointSpacing : internalSpacing;
+    const distanceToEnd = (labels.length - 1 - index) * pointSpacing;
+    if (distanceFromPrevious >= requiredFromPrevious && distanceToEnd >= endpointSpacing) {
+      indexes.push(index);
+      previousIndex = index;
+    }
   }
-  return [...indexes].sort((a, b) => a - b);
+  indexes.push(labels.length - 1);
+  return indexes;
 }
 
 function niceCeiling(value) {

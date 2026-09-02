@@ -83,10 +83,19 @@ test("adapts x-axis tick density for long periods without crowding endpoints", (
     "2026-10-01",
   );
   const svg = renderSvg(document, "en");
-  const labels = [...svg.matchAll(/class="axis">(\d{4}-\d{2}-\d{2})<\/text>/g)].map((match) => match[1]);
-  assert.ok(labels.length > 5 && labels.length <= 8);
-  assert.equal(labels[0], "2026-08-22");
-  assert.equal(labels.at(-1), "2026-10-01");
+  const ticks = [...svg.matchAll(/<text x="([^"]+)" y="464" text-anchor="(start|middle|end)" class="axis">(\d{4}-\d{2}-\d{2})<\/text>/g)].map((match) => {
+    const x = Number(match[1]);
+    const width = match[3].length * 6.6;
+    const left = match[2] === "start" ? x : match[2] === "end" ? x - width : x - width / 2;
+    const right = match[2] === "start" ? x + width : match[2] === "end" ? x : x + width / 2;
+    return { label: match[3], left, right };
+  });
+  assert.ok(ticks.length > 5 && ticks.length <= 11);
+  assert.equal(ticks[0].label, "2026-08-22");
+  assert.equal(ticks.at(-1).label, "2026-10-01");
+  for (let index = 1; index < ticks.length; index += 1) {
+    assert.ok(ticks[index].left - ticks[index - 1].right >= 15.9);
+  }
 });
 
 test("renders separate cumulative-only English and Chinese charts", () => {
