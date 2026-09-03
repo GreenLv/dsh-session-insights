@@ -22,8 +22,22 @@ jobs:
           node-version: '22'
       - name: Test collector
         run: node --test tests-js/npm-download-stats.test.js
+      - name: Read previous observations
+        env:
+          PREVIOUS_DIR: ${{ runner.temp }}/npm-downloads-previous
+        run: |
+          set -euo pipefail
+          mkdir -p "$PREVIOUS_DIR"
+          if git ls-remote --exit-code --heads origin stats >/dev/null 2>&1; then
+            git fetch origin stats:refs/remotes/origin/stats
+            for file in observations.json npm-downloads.json npm-downloads.svg npm-downloads.zh-CN.svg; do
+              if git cat-file -e "refs/remotes/origin/stats:$file" 2>/dev/null; then
+                git show "refs/remotes/origin/stats:$file" > "$PREVIOUS_DIR/$file"
+              fi
+            done
+          fi
       - name: Collect and validate npm data
-        run: node scripts/npm-download-stats.mjs --config .github/npm-downloads-config.json --output-dir "$RUNNER_TEMP/npm-downloads"
+        run: node scripts/npm-download-stats.mjs --config .github/npm-downloads-config.json --previous-dir "$RUNNER_TEMP/npm-downloads-previous" --output-dir "$RUNNER_TEMP/npm-downloads"
       - name: Publish stats branch
         env:
           OUTPUT_DIR: ${{ runner.temp }}/npm-downloads
@@ -39,10 +53,11 @@ jobs:
             git -C "$STATS_WORKTREE" switch --orphan stats
           fi
           git -C "$STATS_WORKTREE" rm -rf . >/dev/null 2>&1 || true
+          cp "$OUTPUT_DIR/observations.json" "$STATS_WORKTREE/observations.json"
           cp "$OUTPUT_DIR/npm-downloads.json" "$STATS_WORKTREE/npm-downloads.json"
           cp "$OUTPUT_DIR/npm-downloads.svg" "$STATS_WORKTREE/npm-downloads.svg"
           cp "$OUTPUT_DIR/npm-downloads.zh-CN.svg" "$STATS_WORKTREE/npm-downloads.zh-CN.svg"
-          git -C "$STATS_WORKTREE" add npm-downloads.json npm-downloads.svg npm-downloads.zh-CN.svg
+          git -C "$STATS_WORKTREE" add observations.json npm-downloads.json npm-downloads.svg npm-downloads.zh-CN.svg
           if git -C "$STATS_WORKTREE" diff --cached --quiet; then
             exit 0
           fi
