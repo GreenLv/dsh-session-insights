@@ -363,8 +363,7 @@ export function renderSvg(document, locale = "en") {
   const plotHeight = plotBottom - plotTop;
   const allDays = enumerateDays(document.period.start, document.period.end);
   const dayIndex = new Map(allDays.map((day, index) => [day, index]));
-  const xBoundary = (index) => left + (index / allDays.length) * plotWidth;
-  const xDay = (index) => xBoundary(index + 1);
+  const xDay = (index) => left + (allDays.length === 1 ? 0 : (index / (allDays.length - 1)) * plotWidth);
   const projectTotal = document.project_cumulative.at(-1)?.cumulative ?? 0;
   const cumulativeMax = niceCeiling(Math.max(1, projectTotal));
   const yCumulative = (value) => plotBottom - (value / cumulativeMax) * plotHeight;
@@ -373,9 +372,10 @@ export function renderSvg(document, locale = "en") {
     const y = plotBottom - (plotHeight * index) / 4;
     return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" class="grid"/><text x="${left - 14}" y="${y + 4}" text-anchor="end" class="axis">${xml(formatCount(value, locale))}</text>`;
   }).join("");
-  const cumulativeValues = [0, ...document.project_cumulative.map((entry) => entry.cumulative)];
-  const cumulativePoints = linePoints(cumulativeValues, xBoundary, yCumulative);
-  const areaPoints = `${cumulativePoints} ${xDay(allDays.length - 1).toFixed(2)},${plotBottom}`;
+  const cumulativeValues = document.project_cumulative.map((entry) => entry.cumulative);
+  assert(cumulativeValues.length === allDays.length, "cumulative series and chart dates differ");
+  const cumulativePoints = linePoints(cumulativeValues, xDay, yCumulative);
+  const areaPoints = `${xDay(0).toFixed(2)},${plotBottom} ${cumulativePoints} ${xDay(allDays.length - 1).toFixed(2)},${plotBottom}`;
   const ticks = buildTickLayout(allDays, left, plotWidth);
   const xTicks = ticks.map((tick) => {
     return `<text x="${tick.x.toFixed(2)}" y="${plotBottom + 28}" text-anchor="${tick.anchor}" class="axis x-axis-tick" data-day="${tick.day}">${xml(tick.label)}</text>`;

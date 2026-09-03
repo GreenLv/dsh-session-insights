@@ -75,15 +75,20 @@ test("settles only unchanged observations that are old enough and contiguous", (
   assert.equal(settledThrough(tooSoon), null);
 });
 
-test("renders a real zero baseline and every compact date in the current twelve-day range", () => {
+test("renders a zero-based y axis and aligns every point with its date label", () => {
   const document = buildStatsDocument(config, collected("2026-08-22", "2026-09-02"), "2026-09-03T04:37:00.000Z", "2026-09-02");
   const svg = renderSvg(document, "en");
-  assert.match(svg, /<polyline points="84\.00,436\.00 /);
+  assert.match(svg, /y1="436"[^>]+class="grid"\/><text[^>]+class="axis">0<\/text>/);
   assert.match(svg, /data-renderer-version="2"/);
   const labels = [...svg.matchAll(/class="axis x-axis-tick" data-day="([^"]+)">([^<]+)<\/text>/g)];
   assert.equal(labels.length, 12);
   assert.deepEqual(labels.map((match) => match[1]), enumerateDays("2026-08-22", "2026-09-02"));
   assert.deepEqual(labels.map((match) => match[2]), ["08-22", "08-23", "08-24", "08-25", "08-26", "08-27", "08-28", "08-29", "08-30", "08-31", "09-01", "09-02"]);
+  const tickXs = [...svg.matchAll(/<text x="([^"]+)" y="464"[^>]+data-day="([^"]+)"/g)];
+  const points = svg.match(/<polyline points="([^"]+)"/)[1].split(" ").map((point) => point.split(",").map(Number));
+  assert.equal(points.length, tickXs.length);
+  assert.ok(points[0][1] < 436, "the first real daily value must not be replaced by a synthetic zero point");
+  assert.deepEqual(points.map((point) => point[0]), tickXs.map((match) => Number(match[1])));
   assert.match(svg, /x="84\.00" y="464" text-anchor="start" class="axis x-axis-tick" data-day="2026-08-22"/);
   assert.match(svg, /x="924\.00" y="464" text-anchor="end" class="axis x-axis-tick" data-day="2026-09-02"/);
   assert.match(svg, /class="endpoint-badge" data-position="above">/);
