@@ -1,6 +1,7 @@
 {
-  "schema_version": 1,
-  "generated_at": "2026-09-03T09:07:49.274Z",
+  "schema_version": 2,
+  "renderer_version": 2,
+  "generated_at": "2026-09-03T12:41:51.580Z",
   "data_through": "2026-09-02",
   "period": {
     "start": "2026-08-22",
@@ -15,7 +16,7 @@
       "label": "dsh-session-insights",
       "color": "#2563eb",
       "start": "2026-08-22",
-      "total": 479,
+      "total": 497,
       "downloads": [
         {
           "day": "2026-08-22",
@@ -74,8 +75,8 @@
         },
         {
           "day": "2026-09-02",
-          "downloads": 0,
-          "cumulative": 479
+          "downloads": 18,
+          "cumulative": 497
         }
       ]
     }
@@ -138,8 +139,8 @@
     },
     {
       "day": "2026-09-02",
-      "downloads": 0,
-      "cumulative": 479
+      "downloads": 18,
+      "cumulative": 497
     }
   ],
   "sources": [
@@ -151,5 +152,13 @@
       "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-09-02/dsh-session-insights"
     }
   ],
+  "observation_through": "2026-09-02",
+  "settlement": {
+    "mode": "latest-available-day",
+    "latest_day_status": "provisional",
+    "stable_through": null,
+    "minimum_age_days": 2,
+    "minimum_observation_span_hours": 12
+  },
   "note": "npm downloads are requests, not unique installs or users"
 }
