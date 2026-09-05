@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" role="img" aria-labelledby="chart-title chart-desc" data-renderer-version="2">
   <title id="chart-title">dsh-session-insights npm 下载增长</title>
-  <desc id="chart-desc">dsh-session-insights npm 下载增长. 全量每日历史 · 2026-08-22 → 2026-09-03 · 13 个每日数据点 · 最新一天可能调整. 下载量统计 registry 请求，不等于独立用户数或已确认的真实安装人数。</desc>
+  <desc id="chart-desc">dsh-session-insights npm 下载增长. 全量每日历史 · 2026-08-22 → 2026-09-04 · 14 个每日数据点 · 日期标签已抽样 · 最新一天可能调整. 下载量统计 registry 请求，不等于独立用户数或已确认的真实安装人数。</desc>
   <defs>
     <linearGradient id="growth-fill" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#14b8a6" stop-opacity="0.24"/>
@@ -32,20 +32,20 @@
   <rect width="100%" height="100%" rx="18" fill="#f8fafc"/>
   <rect x="18" y="18" width="924" height="504" rx="16" fill="#ffffff" filter="url(#soft-shadow)"/>
   <text x="84" y="50" class="title">dsh-session-insights npm 下载增长</text>
-  <text x="84" y="72" class="subtitle">全量每日历史 · 2026-08-22 → 2026-09-03 · 13 个每日数据点 · 最新一天可能调整</text>
+  <text x="84" y="72" class="subtitle">全量每日历史 · 2026-08-22 → 2026-09-04 · 14 个每日数据点 · 日期标签已抽样 · 最新一天可能调整</text>
   <text x="924" y="38" text-anchor="end" class="metric-label">累计下载量</text>
   <text x="924" y="70" text-anchor="end" class="metric-value">497</text>
   <g transform="translate(84,102)"><circle cx="5" cy="-4" r="5" fill="#2563eb"/><text x="18" y="0" class="package-role">npm 包</text><text x="18" y="23" class="package-name">dsh-session-insights</text><text x="244" y="23" text-anchor="end" class="package-total">497</text></g>
   <text x="84" y="160" class="axis-title">累计下载量</text>
   <line x1="84" y1="436" x2="924" y2="436" class="grid"/><text x="70" y="440" text-anchor="end" class="axis">0</text><line x1="84" y1="371" x2="924" y2="371" class="grid"/><text x="70" y="375" text-anchor="end" class="axis">125</text><line x1="84" y1="306" x2="924" y2="306" class="grid"/><text x="70" y="310" text-anchor="end" class="axis">250</text><line x1="84" y1="241" x2="924" y2="241" class="grid"/><text x="70" y="245" text-anchor="end" class="axis">375</text><line x1="84" y1="176" x2="924" y2="176" class="grid"/><text x="70" y="180" text-anchor="end" class="axis">500</text>
-  <polygon points="84.00,436 84.00,371.52 154.00,364.76 224.00,354.36 294.00,273.24 364.00,252.96 434.00,236.32 504.00,224.36 574.00,213.44 644.00,200.96 714.00,196.28 784.00,186.92 854.00,177.56 924.00,177.56 924.00,436" fill="url(#growth-fill)"/>
-  <polyline points="84.00,371.52 154.00,364.76 224.00,354.36 294.00,273.24 364.00,252.96 434.00,236.32 504.00,224.36 574.00,213.44 644.00,200.96 714.00,196.28 784.00,186.92 854.00,177.56 924.00,177.56" fill="none" stroke="#0f766e" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="84.00,436 84.00,371.52 148.62,364.76 213.23,354.36 277.85,273.24 342.46,252.96 407.08,236.32 471.69,224.36 536.31,213.44 600.92,200.96 665.54,196.28 730.15,186.92 794.77,177.56 859.38,177.56 924.00,177.56 924.00,436" fill="url(#growth-fill)"/>
+  <polyline points="84.00,371.52 148.62,364.76 213.23,354.36 277.85,273.24 342.46,252.96 407.08,236.32 471.69,224.36 536.31,213.44 600.92,200.96 665.54,196.28 730.15,186.92 794.77,177.56 859.38,177.56 924.00,177.56" fill="none" stroke="#0f766e" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
   
   <circle cx="924" cy="177.56" r="5" fill="#ffffff" stroke="#0f766e" stroke-width="3"/>
   <g class="endpoint-badge" data-position="below">
     <rect x="879.50" y="189.56" width="36.50" height="22" rx="6" class="endpoint-backdrop"/>
     <text x="909.00" y="204.56" text-anchor="end" class="endpoint">497</text>
   </g>
-  <text x="84.00" y="464" text-anchor="start" class="axis x-axis-tick" data-day="2026-08-22">08-22</text><text x="154.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-23">08-23</text><text x="224.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-24">08-24</text><text x="294.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-25">08-25</text><text x="364.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-26">08-26</text><text x="434.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-27">08-27</text><text x="504.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-28">08-28</text><text x="574.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-29">08-29</text><text x="644.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-30">08-30</text><text x="714.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-31">08-31</text><text x="784.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-01">09-01</text><text x="854.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-02">09-02</text><text x="924.00" y="464" text-anchor="end" class="axis x-axis-tick" data-day="2026-09-03">09-03</text>
+  <text x="84.00" y="464" text-anchor="start" class="axis x-axis-tick" data-day="2026-08-22">08-22</text><text x="213.23" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-24">08-24</text><text x="277.85" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-25">08-25</text><text x="342.46" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-26">08-26</text><text x="407.08" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-27">08-27</text><text x="471.69" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-28">08-28</text><text x="536.31" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-29">08-29</text><text x="600.92" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-30">08-30</text><text x="665.54" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-31">08-31</text><text x="730.15" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-01">09-01</text><text x="794.77" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-02">09-02</text><text x="924.00" y="464" text-anchor="end" class="axis x-axis-tick" data-day="2026-09-04">09-04</text>
   <text x="84" y="496" class="subtitle">来源：npm Downloads API · 下载量统计 registry 请求，不等于独立用户数或已确认的真实安装人数。</text>
 </svg>
