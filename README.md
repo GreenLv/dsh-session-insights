@@ -37,7 +37,11 @@ The HTML file contains its own styles and data, so you can keep it locally and o
 
 ## Install the Bundle
 
-Requirements: DeepSeek Harness and Python 3.11 or newer. Install the published Bundle into a DSH profile, then start that profile:
+Requirements: DeepSeek Harness and Python 3.11 or newer.
+
+**DSH compatibility:** The plugin declares `0.1.0-rc.8` as its minimum DSH version. The relevant APIs in `0.1.2-rc.1` have been reviewed, with no compatibility changes identified as necessary; full native-host acceptance testing on that version has not yet been completed.
+
+Install the published Bundle into a DSH profile, then start that profile:
 
 ```bash
 dsh plugin --profile web add dsh-session-insights

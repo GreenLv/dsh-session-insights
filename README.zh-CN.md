@@ -37,7 +37,11 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 ## 安装 Bundle
 
-需要 DeepSeek Harness 和 Python 3.11 或更高版本。先把已发布 Bundle 安装到 DSH profile，再启动该 profile：
+需要 DeepSeek Harness 和 Python 3.11 或更高版本。
+
+**DSH 兼容性：** 插件声明的最低 DSH 版本为 `0.1.0-rc.8`。已核对 `0.1.2-rc.1` 的相关接口，未发现需要修改的兼容性问题；该版本的完整宿主原生验收尚未完成。
+
+先把已发布 Bundle 安装到 DSH profile，再启动该 profile：
 
 ```bash
 dsh plugin --profile web add dsh-session-insights
