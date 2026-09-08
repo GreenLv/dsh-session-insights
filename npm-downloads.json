@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "renderer_version": 2,
-  "generated_at": "2026-09-07T09:37:58.339Z",
-  "data_through": "2026-09-06",
+  "renderer_version": 3,
+  "generated_at": "2026-09-08T04:18:23.646Z",
+  "data_through": "2026-09-07",
   "period": {
     "start": "2026-08-22",
-    "end": "2026-09-06"
+    "end": "2026-09-07"
   },
   "title": "dsh-session-insights npm download history",
   "project": "dsh-session-insights",
@@ -97,6 +97,11 @@
           "day": "2026-09-06",
           "downloads": 21,
           "cumulative": 576
+        },
+        {
+          "day": "2026-09-07",
+          "downloads": 0,
+          "cumulative": 576
         }
       ]
     }
@@ -181,22 +186,27 @@
       "day": "2026-09-06",
       "downloads": 21,
       "cumulative": 576
+    },
+    {
+      "day": "2026-09-07",
+      "downloads": 0,
+      "cumulative": 576
     }
   ],
   "sources": [
     {
       "package": "dsh-session-insights",
       "start": "2026-08-22",
-      "end": "2026-09-06",
-      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-09-06/dsh-session-insights",
-      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-09-06/dsh-session-insights"
+      "end": "2026-09-07",
+      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-09-07/dsh-session-insights",
+      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-09-07/dsh-session-insights"
     }
   ],
-  "observation_through": "2026-09-06",
+  "observation_through": "2026-09-07",
   "settlement": {
     "mode": "latest-available-day",
     "latest_day_status": "provisional",
-    "stable_through": "2026-09-05",
+    "stable_through": "2026-09-06",
     "minimum_age_days": 2,
     "minimum_observation_span_hours": 12
   },
