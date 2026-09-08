@@ -79,7 +79,7 @@ test("renders a zero-based y axis and aligns every point with its date label", (
   const document = buildStatsDocument(config, collected("2026-08-22", "2026-09-02"), "2026-09-03T04:37:00.000Z", "2026-09-02");
   const svg = renderSvg(document, "en");
   assert.match(svg, /y1="436"[^>]+class="grid"\/><text[^>]+class="axis">0<\/text>/);
-  assert.match(svg, /data-renderer-version="2"/);
+  assert.match(svg, /data-renderer-version="3"/);
   const labels = [...svg.matchAll(/class="axis x-axis-tick" data-day="([^"]+)">([^<]+)<\/text>/g)];
   assert.equal(labels.length, 12);
   assert.deepEqual(labels.map((match) => match[1]), enumerateDays("2026-08-22", "2026-09-02"));
@@ -89,8 +89,8 @@ test("renders a zero-based y axis and aligns every point with its date label", (
   assert.equal(points.length, tickXs.length);
   assert.ok(points[0][1] < 436, "the first real daily value must not be replaced by a synthetic zero point");
   assert.deepEqual(points.map((point) => point[0]), tickXs.map((match) => Number(match[1])));
-  assert.match(svg, /x="84\.00" y="464" text-anchor="start" class="axis x-axis-tick" data-day="2026-08-22"/);
-  assert.match(svg, /x="924\.00" y="464" text-anchor="end" class="axis x-axis-tick" data-day="2026-09-02"/);
+  assert.match(svg, /x="84\.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-22"/);
+  assert.match(svg, /x="924\.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-02"/);
   assert.match(svg, /class="endpoint-badge" data-position="above">/);
   assert.match(svg, /class="endpoint-backdrop"/);
   const endpointY = Number(svg.match(/<circle cx="[^"]+" cy="([^"]+)" r="5" fill="#ffffff" stroke="#0f766e"/)[1]);
@@ -101,21 +101,21 @@ test("renders a zero-based y axis and aligns every point with its date label", (
   assert.match(svg, /All available daily history · 2026-08-22 → 2026-09-02 · 12 daily points/);
 });
 
-test("keeps computed tick bounds inside the plot and samples long ranges stably", () => {
+test("keeps centered tick bounds inside the canvas and samples long ranges stably", () => {
   const shortTicks = buildTickLayout(enumerateDays("2026-08-22", "2026-09-02"), 84, 840);
   assert.equal(shortTicks.length, 12);
   assert.equal(shortTicks[0].x, 84);
-  assert.equal(shortTicks[0].anchor, "start");
+  assert.equal(shortTicks[0].anchor, "middle");
   assert.equal(shortTicks.at(-1).x, 924);
-  assert.equal(shortTicks.at(-1).anchor, "end");
+  assert.equal(shortTicks.at(-1).anchor, "middle");
   const longTicks = buildTickLayout(enumerateDays("2026-01-01", "2026-12-31"), 84, 840);
   assert.ok(longTicks.length < 365);
-  assert.equal(longTicks[0].day, "2026-01-01");
+  assert.ok(longTicks[0].day >= "2026-01-01");
   assert.equal(longTicks.at(-1).day, "2026-12-31");
   for (const ticks of [shortTicks, longTicks]) {
     for (let index = 0; index < ticks.length; index += 1) {
-      assert.ok(ticks[index].left >= 84);
-      assert.ok(ticks[index].right <= 924);
+      assert.ok(ticks[index].left >= 48);
+      assert.ok(ticks[index].right <= 960);
       if (index > 0) assert.ok(ticks[index].left - ticks[index - 1].right >= 13.9);
     }
   }
@@ -169,4 +169,21 @@ test("publishes the latest available day as provisional when observations have n
 
 test("fails without writing when the npm API request fails", async () => {
   await assert.rejects(collectPackageSeries(spec, "2026-08-22", async () => ({ ok: false, status: 503 })), /HTTP 503/);
+});
+
+test("shows every date in the reported 16-day range at equal intervals", () => {
+  for (const end of ["2026-09-06", "2026-09-07"]) {
+    const days = enumerateDays("2026-08-22", end);
+    const ticks = buildTickLayout(days, 84, 840);
+    assert.deepEqual(ticks.map((tick) => tick.day), days);
+    assert.ok(ticks.some((tick) => tick.day === "2026-09-05"));
+  }
+  for (const end of ["2026-09-06", "2026-12-31", "2027-08-22"]) {
+    const ticks = buildTickLayout(enumerateDays("2026-08-22", end), 84, 840);
+    const step = ticks[1].x - ticks[0].x;
+    for (let i = 1; i < ticks.length; i++) {
+      assert.ok(Math.abs(ticks[i].x - ticks[i - 1].x - step) < 1e-9);
+      assert.equal(ticks[i].anchor, "middle");
+    }
+  }
 });

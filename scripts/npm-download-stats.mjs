@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 
 const DAY_MS = 86_400_000;
 const MAX_RANGE_DAYS = 365;
-const RENDERER_VERSION = 2;
+const RENDERER_VERSION = 3;
 const MIN_SETTLEMENT_AGE_DAYS = 2;
 const MIN_OBSERVATION_SPAN_MS = 12 * 60 * 60 * 1000;
 
@@ -286,30 +286,21 @@ function textBounds(x, width, anchor) {
 
 export function buildTickLayout(days, plotLeft, plotWidth) {
   if (days.length === 0) return [];
-  const plotRight = plotLeft + plotWidth;
-  const entries = days.map((day, index) => {
-    const label = tickLabel(day, days);
-    const x = plotLeft + (days.length === 1 ? 0 : (index / (days.length - 1)) * plotWidth);
-    const width = label.length * 7;
-    let anchor = index === 0 ? "start" : index === days.length - 1 ? "end" : "middle";
-    let bounds = textBounds(x, width, anchor);
-    if (bounds.left < plotLeft) {
-      anchor = "start";
-      bounds = textBounds(x, width, anchor);
-    }
-    return { index, day, label, x, anchor, ...bounds };
-  });
+  // Center every label on its actual date, including the endpoints. The SVG
+  // margins accommodate half a label beyond either edge of the plot.
+  const width = tickLabel(days[0], days).length * 7;
   const gap = 14;
-  const allFit = entries.every((entry, index) => entry.left >= plotLeft && entry.right <= plotRight
-    && (index === 0 || entry.left - entries[index - 1].right >= gap));
-  if (allFit || entries.length === 1) return entries;
-  const selected = [entries[0]];
-  const last = entries.at(-1);
-  for (const entry of entries.slice(1, -1)) {
-    if (entry.left - selected.at(-1).right >= gap && last.left - entry.right >= gap) selected.push(entry);
-  }
-  if (last.index !== selected.at(-1).index) selected.push(last);
-  return selected;
+  const dailySpacing = days.length === 1 ? plotWidth : plotWidth / (days.length - 1);
+  const stride = Math.max(1, Math.ceil((width + gap) / dailySpacing));
+  // Sample backwards from the latest day with a constant stride. Coverage
+  // dates remain in the subtitle; never append an uneven final interval.
+  const first = (days.length - 1) % stride;
+  return days.flatMap((day, index) => {
+    if ((index - first) % stride !== 0) return [];
+    const label = tickLabel(day, days);
+    const x = plotLeft + (days.length === 1 ? 0 : index * dailySpacing);
+    return [{ index, day, label, x, anchor: "middle", ...textBounds(x, width, "middle") }];
+  });
 }
 
 function niceCeiling(value) {
