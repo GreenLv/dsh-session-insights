@@ -39,7 +39,7 @@ The HTML file contains its own styles and data, so you can keep it locally and o
 
 Requirements: DeepSeek Harness and Python 3.11 or newer.
 
-**DSH compatibility:** Minimum `0.1.0-rc.8`; `0.1.5-rc.2` has macOS native workflow verification. See [DSH compatibility](#dsh-compatibility) for other-platform scope.
+**DSH compatibility:** The current verified support baseline is `0.1.5-rc.2` (macOS native workflows). See [DSH compatibility](#dsh-compatibility) for other-platform scope.
 
 Install the published Bundle into a DSH profile, then start that profile:
 
@@ -171,15 +171,17 @@ Exact package, CI, native macOS, and focused native Windows evidence is kept in 
 
 ## DSH compatibility
 
-The plugin declares `0.1.0-rc.8` as its minimum DSH version.
+We support only the explicitly verified minimum baseline or the latest DSH version after verification. We do not maintain historical DSH releases, promise compatibility across intervening versions, or treat a new release as supported before validation. Users on older hosts should upgrade to the verified baseline.
+
+The current support baseline is `0.1.5-rc.2`. The published plugin still declares `0.1.0-rc.8` as its installation threshold; that metadata does not promise ongoing support for the older host.
 
 | Scope | DSH version | Status |
 | --- | --- | --- |
-| Declared minimum | `0.1.0-rc.8` | Supported floor; not re-verified for this change |
+| Current support baseline | `0.1.5-rc.2` | Verified within the scopes below |
 | Source and automated-test review | `0.1.5-rc.2` | Reviewed and adapted against the installed packages; passing locally |
 | Native host acceptance | `0.1.5-rc.2` | macOS isolated host: deterministic, full semantic, metrics skip, fallback, and Skill discovery passed |
 
-`0.3.1` supports session-log generations 0–3 through the existing installation paths. This change does not alter platform-specific launchers or host interfaces, so the full Windows/Linux native model workflows are not repeated. The existing three-platform CI checks shared code and paths; it does not establish native acceptance on those platforms. The minimum version was not re-tested natively for this change, and future DSH versions are not claimed as verified.
+`0.3.1` supports session-log generations 0–3 through the existing installation paths. This change does not alter platform-specific launchers or host interfaces, so the full Windows/Linux native model workflows are not repeated. The existing three-platform CI checks shared code and paths; it does not establish native acceptance on those platforms. These results apply to the named DSH version and verification scope. Historical acceptance records remain release evidence, not continuing support commitments.
 
 ## Session log generations
 
@@ -188,7 +190,7 @@ One logical session can hold several immutable log generations. The reader selec
 | Situation | Behavior |
 | --- | --- |
 | Several canonical generations in one session directory | The highest version wins; the session is counted once, and a migrated session is never summed twice |
-| Generation 0 only (`session.jsonl[.zstd]`) | Read as before, so legacy homes keep working |
+| Generation 0 only (`session.jsonl[.zstd]`) | Read the retained log format; this does not imply support for an older DSH host |
 | Noncanonical names (temporary, uppercase, leading-zero, `.v0`, `session.lock`) | Never selected; an in-flight write cannot be mistaken for a committed generation |
 | Newer than the supported generation | Reported and skipped, with a warning; the session is **not** silently reported from an older generation |
 | Corrupt or undecompressable current generation | Reported as unreadable; the reader does **not** fall back to an older generation |

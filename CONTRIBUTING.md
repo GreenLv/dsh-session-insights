@@ -11,3 +11,9 @@ Contributions should preserve the local-first privacy model and DSH-only public 
 5. Run the development commands in the README.
 
 Compatibility claims require native acceptance against an exact DSH version. CI results alone may be reported only as automated test coverage.
+
+## DSH support policy
+
+Support only the explicitly verified minimum baseline or the latest DSH release after verification. Do not maintain historical host versions or promise compatibility with every version between verified targets. When changing the support baseline, update both READMEs and record the exact DSH version and validation scope. A new upstream release, an old installation threshold, or a historical acceptance record does not establish current support.
+
+Retained readers and fixtures for older session-log formats cover data that can remain after a host upgrade; they do not require maintaining the old host. Ask users to reproduce compatibility issues on a supported, verified baseline.
