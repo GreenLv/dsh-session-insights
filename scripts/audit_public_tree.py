@@ -18,6 +18,10 @@ FORBIDDEN_NAMES = {".DS_Store", "__pycache__", ".pytest_cache", ".mypy_cache", "
 FORBIDDEN_DIR_NAMES = FORBIDDEN_NAMES | {"build", "dist"}
 FORBIDDEN_SUFFIXES = {".pyc", ".pyo", ".log", ".sqlite", ".db"}
 IMAGE_ASSET_SUFFIXES = {".png": b"\x89PNG\r\n\x1a\n", ".jpg": b"\xff\xd8\xff", ".jpeg": b"\xff\xd8\xff"}
+# Canonical DSH session-log generations: `session.jsonl` is generation 0 and
+# `session.vN.jsonl` is generation N >= 1, each optionally zstd-compressed.
+# Mirrors the analyzer grammar; a test asserts the two stay in sync.
+SESSION_LOG_NAME_RE = re.compile(r"^session(?:\.v[1-9][0-9]*)?\.jsonl(?:\.zstd)?$")
 CONTENT_RULES = {
     "private-user-path": re.compile(r"/Users/lgr59|[A-Za-z]:[\\/]Users[\\/]lgr59", re.IGNORECASE),
     "private-source-name": re.compile(r"codex-sync", re.IGNORECASE),
@@ -96,9 +100,12 @@ def audit(root: Path) -> dict[str, object]:
             continue
         if is_declared_image_asset(path, relative):
             continue
-        if path.name == "session.jsonl.zstd":
+        if SESSION_LOG_NAME_RE.match(path.name):
             try:
-                decoded = zstandard.ZstdDecompressor().decompress(path.read_bytes()).decode("utf-8")
+                if path.name.endswith(".zstd"):
+                    decoded = zstandard.ZstdDecompressor().decompress(path.read_bytes()).decode("utf-8")
+                else:
+                    decoded = path.read_text(encoding="utf-8")
             except Exception:
                 findings.append({"path": relative, "rule": "invalid-compressed-fixture"})
                 continue

@@ -1,0 +1,144 @@
+{
+  "schema": "repository-reader-review/v1",
+  "status": "passed",
+  "audience": {
+    "role": "DSH users upgrading the session insights Bundle",
+    "prior_knowledge": "careful_upgrader"
+  },
+  "documents": [
+    {
+      "path": "README.md",
+      "role": "readme",
+      "language": "en",
+      "sha256": "1b4d672941f5eab5990ced0edd9e5484e23faff0e94bd30a06f3396617096418"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "role": "readme",
+      "language": "zh-CN",
+      "sha256": "dcb201107f2b1a0db3991b58703dcc21785d27e4f4f259fc0c4e2b5cecc864f2"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "role": "changelog",
+      "language": "en",
+      "sha256": "aa4f5c430ef54ba975145b185d1cd4163f946e2fa776a4ac52a3197fbd5accc6"
+    },
+    {
+      "path": "CHANGELOG.zh-CN.md",
+      "role": "changelog",
+      "language": "zh-CN",
+      "sha256": "77c0deaa8cca20392b58bba24fed538110979e58a09e7ff084ce0dbea19b7f63"
+    },
+    {
+      "path": "docs/acceptance/v0.1.5-rc.2-compatibility.md",
+      "role": "release_notes",
+      "language": "en",
+      "sha256": "ad4e52b993f95e23938cbcd666701a9ab912bc0a4ab6f86921e175e2818e71dd"
+    },
+    {
+      "path": "docs/release-notes/v0.3.1.md",
+      "role": "release_notes",
+      "language": "en",
+      "sha256": "5ae86c5968b9f5372972108cc2bd7571518a41707d62a6fe6b470c290d2fb3d8"
+    }
+  ],
+  "document_set_sha256": "6451b0d449baf943a5c9a7aa47d313adabbfda8d2d8506e5a368662bf1ca8bf8",
+  "method": {
+    "kind": "cold_read",
+    "implementation_context_used": false,
+    "claim_ledger_used": false
+  },
+  "checks": [
+    {
+      "id": "document_role",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/acceptance/v0.1.5-rc.2-compatibility.md",
+        "docs/release-notes/v0.3.1.md"
+      ],
+      "note": "README introduces use and installation; changelogs explain the 0.3.1 delta; the acceptance record separates evidence scopes; bilingual release notes explain upgrade impact."
+    },
+    {
+      "id": "reader_outcome",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/acceptance/v0.1.5-rc.2-compatibility.md",
+        "docs/release-notes/v0.3.1.md"
+      ],
+      "note": "Both languages name the missing upgraded sessions and corrected work counts, retain the install command on the first page, and state the target host version and native platform boundary."
+    },
+    {
+      "id": "term_onboarding",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/acceptance/v0.1.5-rc.2-compatibility.md",
+        "docs/release-notes/v0.3.1.md"
+      ],
+      "note": "The versioned-file and surface terms are introduced through observable reading/replacement behavior before their tables."
+    },
+    {
+      "id": "evidence_boundary",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/acceptance/v0.1.5-rc.2-compatibility.md",
+        "docs/release-notes/v0.3.1.md"
+      ],
+      "note": "The acceptance record distinguishes cached facet reuse from a fresh full batch, source-native evidence from artifacts, and CI from Windows/Linux native execution."
+    },
+    {
+      "id": "density_and_order",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/acceptance/v0.1.5-rc.2-compatibility.md",
+        "docs/release-notes/v0.3.1.md"
+      ],
+      "note": "Installation precedes the detailed format tables. The new changelog has five focused bullets rather than a development transcript."
+    },
+    {
+      "id": "language_independence",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/acceptance/v0.1.5-rc.2-compatibility.md",
+        "docs/release-notes/v0.3.1.md"
+      ],
+      "note": "Chinese and English README, changelog and release-note sections stand alone and agree on versions, paths, privacy rules and platform limits."
+    }
+  ],
+  "findings": [],
+  "limitations": [
+    "Cold reader review is not native or public-release proof.",
+    "The native record is English-only, following existing repository convention; user-facing README, changelog and release notes cover both maintained languages.",
+    "Release-note CI claims are candidate text and may be published only after the exact commit passes CI."
+  ]
+}

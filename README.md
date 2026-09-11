@@ -39,7 +39,7 @@ The HTML file contains its own styles and data, so you can keep it locally and o
 
 Requirements: DeepSeek Harness and Python 3.11 or newer.
 
-**DSH compatibility:** The plugin declares `0.1.0-rc.8` as its minimum DSH version. The relevant APIs in `0.1.2-rc.1` have been reviewed, with no compatibility changes identified as necessary; full native-host acceptance testing on that version has not yet been completed.
+**DSH compatibility:** Minimum `0.1.0-rc.8`; `0.1.5-rc.2` has macOS native workflow verification. See [DSH compatibility](#dsh-compatibility) for other-platform scope.
 
 Install the published Bundle into a DSH profile, then start that profile:
 
@@ -161,13 +161,53 @@ Each model-produced JSON file is validated before it can enter the final report.
 
 ## Current scope and limitations
 
-- Native input is the trusted DSH `sessionQuery` service; CLI compatibility input remains `session.jsonl.zstd` under `$DSH_HOME/sessions`.
+- Native input is the trusted DSH `sessionQuery` service; CLI compatibility input is the current session-log generation under `$DSH_HOME/sessions` — `session.jsonl.zstd` for generation 0, `session.vN.jsonl.zstd` for generation N, and the plaintext `.jsonl` forms when a home is configured without compression.
 - Output follows [`dsh-session-insights/1`](docs/schema/report-v1.schema.json).
 - Token counts are deduplicated per `(turn, step)` and are usage measurements, not billing or quota figures.
 - The Dashboard and semantic prompt contract support `zh-CN` and `en` from the same report schema.
 - Reports infer patterns from available evidence; they do not prove intent, quality, task acceptance, or security.
 
-Exact package, CI, native macOS, and focused native Windows evidence is kept in the [v0.2.0 release acceptance record](docs/acceptance/v0.2.0-candidate.md). Deterministic slash dispatch and rendered English DOM remain unverified natively on Windows. The historical v0.1 CLI/Skill evidence remains in the [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md).
+Exact package, CI, native macOS, and focused native Windows evidence is kept in the [v0.2.0 release acceptance record](docs/acceptance/v0.2.0-candidate.md). Deterministic slash dispatch and rendered English DOM remain unverified natively on Windows. The historical v0.1 CLI/Skill evidence remains in the [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md). Current compatibility evidence and its platform limits are recorded in the [0.1.5-rc.2 acceptance record](docs/acceptance/v0.1.5-rc.2-compatibility.md).
+
+## DSH compatibility
+
+The plugin declares `0.1.0-rc.8` as its minimum DSH version.
+
+| Scope | DSH version | Status |
+| --- | --- | --- |
+| Declared minimum | `0.1.0-rc.8` | Supported floor; not re-verified for this change |
+| Source and automated-test review | `0.1.5-rc.2` | Reviewed and adapted against the installed packages; passing locally |
+| Native host acceptance | `0.1.5-rc.2` | macOS isolated host: deterministic, full semantic, metrics skip, fallback, and Skill discovery passed |
+
+`0.3.1` supports session-log generations 0–3 through the existing installation paths. This change does not alter platform-specific launchers or host interfaces, so the full Windows/Linux native model workflows are not repeated. The existing three-platform CI checks shared code and paths; it does not establish native acceptance on those platforms. The minimum version was not re-tested natively for this change, and future DSH versions are not claimed as verified.
+
+## Session log generations
+
+One logical session can hold several immutable log generations. The reader selects exactly one, using the canonical filename rather than file timestamps.
+
+| Situation | Behavior |
+| --- | --- |
+| Several canonical generations in one session directory | The highest version wins; the session is counted once, and a migrated session is never summed twice |
+| Generation 0 only (`session.jsonl[.zstd]`) | Read as before, so legacy homes keep working |
+| Noncanonical names (temporary, uppercase, leading-zero, `.v0`, `session.lock`) | Never selected; an in-flight write cannot be mistaken for a committed generation |
+| Newer than the supported generation | Reported and skipped, with a warning; the session is **not** silently reported from an older generation |
+| Corrupt or undecompressable current generation | Reported as unreadable; the reader does **not** fall back to an older generation |
+| Both compression encodings in one directory | Reported as ambiguous; the session is not read |
+| Several project directories claim one session id | Each session directory is counted independently |
+
+Tool and usage counts retain historical events, while semantic evidence excludes replaced messages. DSH derives an ordered model-visible conversation (the surface) from its event log. Replacement endpoints refer to positions in that conversation, not a numeric range of event sequence numbers.
+
+| Event | Behavior |
+| --- | --- |
+| `system/message` | Counted as system content; never user work, never excerpted, never leaked into titles or semantic evidence |
+| `user/message` with `source.kind == "user"` | A direct human prompt: counts as user work and may seed the title |
+| `user/message` with any other `source.kind` | Synthetic injected context (plugin, goal, skill catalog, subagent report, …): counted separately, excluded from user work and semantic evidence |
+| `assistant/attempt` | Counted as an attempt that committed no visible reply; never materialized as an assistant message, and its token usage is reported unavailable rather than estimated |
+| `assistant/message` | Carries its step usage; usage is deduplicated per `(turn, step)` so a stream field cannot double-count |
+| `surfaceOp: "append"` | Normal surface growth |
+| `surfaceOp: {op: "replace", startSeq, endSeq}` | Compacted conversation leaves the semantic summary; historical tool and token event statistics are retained |
+| `session/end-seed` with `data.inherited: true` | Records the fork cut; untagged markers establish nothing |
+| Unknown event type | Counted in `coverage.unknown_record_types` and reported, never silently ignored |
 
 ## npm download history
 

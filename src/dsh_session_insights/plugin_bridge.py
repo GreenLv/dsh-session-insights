@@ -83,7 +83,10 @@ def render_report(report: dict[str, Any], output: Path, *, locale: str) -> dict[
 def prepare_semantic(options: dict[str, Any], snapshots: list[dict[str, Any]]) -> dict[str, Any]:
     workdir = Path(str(options["workdir"])).expanduser().resolve()
     argv = ["prepare", "--workdir", str(workdir)]
-    for name in ("days", "since", "until", "project", "privacy", "analysis_privacy", "analysis_depth", "locale"):
+    # `now` must travel with the request: without it the semantic window falls
+    # back to wall-clock time and selects a different session set than the
+    # deterministic report path, which honours the caller's `now`.
+    for name in ("days", "since", "until", "now", "project", "privacy", "analysis_privacy", "analysis_depth", "locale"):
         if options.get(name) is not None:
             argv.extend(["--" + name.replace("_", "-"), str(options[name])])
     parsed = semantic.make_parser().parse_args(argv)

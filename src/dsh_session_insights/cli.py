@@ -118,17 +118,35 @@ def uninstall(home: Path) -> None:
 def doctor(home: Path) -> tuple[bool, dict[str, object]]:
     skill_root, tool_root = _safe_roots(home)
     python_path = tool_root / "venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    # Report the generations this reader will actually select, so a home whose
+    # sessions are versioned (or unreadable) is visible without running a report.
+    discovery_coverage: dict[str, object] = {
+        "unreadable_files": 0,
+        "malformed_lines": 0,
+        "unknown_record_types": analyzer.Counter(),
+    }
+    logs = analyzer.discover_dsh_session_logs(home / "sessions", discovery_coverage)
     checks = {
         "python_3_11_plus": sys.version_info >= (3, 11),
         "zstandard_available": analyzer.get_zstandard() is not None,
         "dsh_home": str(home),
         "sessions_root_exists": (home / "sessions").is_dir(),
+        "session_logs_found": len(logs),
+        "session_log_generations": dict(
+            sorted(
+                {
+                    f"v{version}": sum(1 for item in logs if item.version == version)
+                    for version in {item.version for item in logs}
+                }.items()
+            )
+        ),
         "skill_managed": _read_marker(skill_root) is not None,
         "runtime_managed": _read_marker(tool_root) is not None,
         "managed_python_exists": python_path.is_file(),
         "skill_definition_exists": (skill_root / "SKILL.md").is_file(),
     }
-    passed = all(value for key, value in checks.items() if key not in {"dsh_home", "sessions_root_exists"})
+    informational = {"dsh_home", "sessions_root_exists", "session_logs_found", "session_log_generations"}
+    passed = all(value for key, value in checks.items() if key not in informational)
     return passed, checks
 
 

@@ -1,9 +1,11 @@
-{"agentPreset":"standard","createdAt":1786423200000,"cwd":"/synthetic/workspace/project-a","id":"synthetic-fixture-001","type":"session","version":0}
-{"data":{"turn":1},"time":1786423200000,"type":"turn/start"}
-{"data":{"content":[{"text":"Implement the synthetic fixture and report evidence.","type":"text"}]},"time":1786423200000,"type":"user/message"}
-{"data":{"message":{"content":[{"text":"Implemented the bounded synthetic change.","type":"text"}],"role":"assistant","source":{"kind":"model","model":"synthetic-model","provider":"synthetic-provider"}},"step":1,"turn":1,"usage":{"cacheReadTokens":300,"inputTokens":120,"outputTokens":40,"reasoningTokens":20}},"time":1786423200000,"type":"assistant/message"}
-{"data":{"arguments":"{\"command\": \"python -m unittest\"}","callId":"fixture-call-1","name":"bash","step":1,"turn":1},"time":1786423200000,"type":"tool/call"}
-{"data":{"callId":"fixture-call-1","message":{"content":[{"content":[{"text":"Ran synthetic tests: OK","type":"text"}],"isError":false,"toolCallId":"fixture-call-1","type":"tool-result"}],"source":{"callId":"fixture-call-1","kind":"tool"}},"step":1,"turn":1},"time":1786423200000,"type":"tool/result"}
-{"data":{"content":[{"text":"Keep the change narrow.","type":"text"}]},"time":1786423200000,"type":"user/message"}
-{"data":{"source":{"kind":"provider"},"title":"Synthetic fixture task"},"time":1786423200000,"type":"session/title"}
-{"data":{"reason":{"kind":"completed"},"turn":1},"time":1786423203000,"type":"turn/end"}
+{"agentPreset":"standard","createdAt":1786423200000,"cwd":"/synthetic/workspace/project-a","delegationDepth":0,"id":"synthetic-fixture-001","type":"session","version":0}
+{"data":{"turn":1},"seq":0,"time":1786423200000,"type":"turn/start"}
+{"data":{"step":1,"turn":1},"seq":1,"time":1786423200000,"type":"step/start"}
+{"data":{"content":[{"text":"Implement the synthetic fixture and report evidence.","type":"text"}],"id":"fixture-msg-user-1","role":"user","source":{"kind":"user"}},"seq":2,"surfaceOp":"append","time":1786423200000,"type":"user/message"}
+{"data":{"message":{"content":[{"text":"Implemented the bounded synthetic change.","type":"text"},{"arguments":"{\"command\": \"python -m unittest\"}","id":"fixture-call-1","name":"bash","type":"tool-call"}],"id":"fixture-msg-assistant-1","role":"assistant","source":{"kind":"model","model":"synthetic-model","provider":"synthetic-provider"}},"step":1,"turn":1,"usage":{"cacheReadTokens":300,"inputTokens":120,"outputTokens":40,"reasoningTokens":20}},"seq":3,"surfaceOp":"append","time":1786423200000,"type":"assistant/message"}
+{"data":{"arguments":"{\"command\": \"python -m unittest\"}","callId":"fixture-call-1","name":"bash","step":1,"turn":1},"seq":4,"time":1786423200000,"type":"tool/call"}
+{"data":{"message":{"content":[{"content":[{"text":"Ran synthetic tests: OK","type":"text"}],"isError":false,"toolCallId":"fixture-call-1","type":"tool-result"}],"id":"fixture-msg-tool-1","role":"user","source":{"callId":"fixture-call-1","kind":"tool"}},"step":1,"turn":1},"seq":5,"surfaceOp":"append","time":1786423200000,"type":"tool/result"}
+{"data":{"content":[{"text":"Keep the change narrow.","type":"text"}],"id":"fixture-msg-user-2","role":"user","source":{"kind":"user"}},"seq":6,"surfaceOp":"append","time":1786423200000,"type":"user/message"}
+{"data":{"step":1,"turn":1},"seq":7,"time":1786423201000,"type":"step/end"}
+{"data":{"messageSeqs":[2,6],"source":{"kind":"provider","model":{"model":"synthetic-model","provider":"synthetic-provider"},"provider":"synthetic-title"},"title":"Synthetic fixture task"},"seq":8,"time":1786423202000,"type":"session/title"}
+{"data":{"reason":{"kind":"completed"},"turn":1},"seq":9,"time":1786423203000,"type":"turn/end"}

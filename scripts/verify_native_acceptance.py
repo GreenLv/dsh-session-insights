@@ -32,10 +32,41 @@ def privacy_sentinel_hits(text: str) -> list[str]:
     return [name for name, pattern in PRIVACY_SENTINELS.items() if pattern.search(text)]
 
 
+def selected_session_logs(session_root: Path) -> list[Path]:
+    """Pick the highest canonical generation per session directory.
+
+    Mirrors the analyzer's selection so the readback inspects the same bytes the
+    product reads: `session.jsonl[.zstd]` is generation 0, `session.vN.jsonl[.zstd]`
+    is generation N, and only one generation per session directory is current.
+    """
+    canonical = re.compile(r"^session(?:\.v([1-9][0-9]*))?\.jsonl(?:\.zstd)?$")
+    selected: list[Path] = []
+    if not session_root.is_dir():
+        return selected
+    for session_dir in sorted(path for path in session_root.glob("*/*") if path.is_dir()):
+        generations: list[tuple[int, Path]] = []
+        for entry in sorted(session_dir.iterdir()):
+            if not entry.is_file():
+                continue
+            match = canonical.match(entry.name)
+            if match is None:
+                continue
+            generations.append((int(match.group(1) or 0), entry))
+        if generations:
+            selected.append(max(generations, key=lambda item: item[0])[1])
+    return selected
+
+
+def read_session_log(path: Path) -> str:
+    if path.name.endswith(".zstd"):
+        return zstandard.ZstdDecompressor().stream_reader(path.open("rb")).read().decode("utf-8")
+    return path.read_text(encoding="utf-8")
+
+
 def skill_calls(session_root: Path) -> set[str]:
     found: set[str] = set()
-    for path in session_root.rglob("session.jsonl.zstd"):
-        raw = zstandard.ZstdDecompressor().stream_reader(path.open("rb")).read().decode("utf-8")
+    for path in selected_session_logs(session_root):
+        raw = read_session_log(path)
         for line in raw.splitlines():
             record = json.loads(line)
             if record.get("type") != "tool/call":
@@ -96,7 +127,12 @@ def verify(root: Path) -> dict[str, object]:
             errors.append("metrics semantics were not fully skipped")
     if "fallback_report" in artifacts and read_json(artifacts["fallback_report"]).get("semantic_analysis", {}).get("status") != "fallback":
         errors.append("fallback report is not fallback")
-    unexpected = [path for path in (home / "sessions").rglob("*") if path.is_file() and path.name != "session.jsonl.zstd"]
+    canonical = re.compile(r"^session(?:\.v[1-9][0-9]*)?\.jsonl(?:\.zstd)?$")
+    unexpected = [
+        path
+        for path in (home / "sessions").rglob("*")
+        if path.is_file() and not canonical.match(path.name) and path.name != "session.lock"
+    ]
     if unexpected:
         errors.append("non-session artifact found under sessions")
     calls = skill_calls(home / "sessions")

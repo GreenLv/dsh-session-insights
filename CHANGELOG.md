@@ -4,6 +4,20 @@
 
 Public releases are listed newest first.
 
+## 0.3.1 - 2026-09-11
+
+Fix session-log compatibility with DSH 0.1.5-rc.2: upgraded sessions now appear in reports, and injected context no longer inflates human-work counts.
+
+### Fixed
+
+- Read compressed or plaintext generations 0–3 and select the latest generation per session, without omitting new sessions or counting migration copies twice. Unreadable, encoding-ambiguous, and newer-than-supported generations are diagnosed rather than silently replaced with old logs.
+- Separate human prompts from injected context, count system messages and attempts with no delivered reply, and retain historical tool and token accounting.
+- Apply consecutive message replacements in current conversation order, so shadowed semantic evidence is removed even when endpoint sequence numbers run backwards. Query snapshots use their header's format version.
+- Use the caller's time window for both semantic and deterministic reports; a corrupt zstd file no longer aborts the entire analysis.
+- Make synthetic logs conform to DSH framing and migration contracts, with an upstream contract verifier and V3 regression coverage.
+
+The declared minimum DSH version remains `0.1.0-rc.8`. This change targets `0.1.5-rc.2`; see the [acceptance record](docs/acceptance/v0.1.5-rc.2-compatibility.md) for native and CI verification scope.
+
 ## 0.3.0 - 2026-08-25
 
 0.3.0 polishes the dashboard's layout (consistent cards, aligned filter toolbar, scroll-aware chip navigation), adds Skill usage and plugin/MCP usage views, measures active time in hours, and records per-session skill calls in the deterministic analyzers.

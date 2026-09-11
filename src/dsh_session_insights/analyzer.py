@@ -24,46 +24,116 @@ from urllib.parse import urlsplit, urlunsplit
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.2.2"
+ANALYZER_VERSION = "0.2.3"
 FAILURE_RULE_VERSION = "5.0.0"
-DETERMINISTIC_CACHE_VERSION = 1
+# Bumped whenever the selected log generation or the parse rules that feed a
+# cached session change, so a stale cache cannot mask a generation upgrade.
+DETERMINISTIC_CACHE_VERSION = 2
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
-DSH_KNOWN_RECORD_TYPES = {
+
+# Session-log generations understood by this reader. Native V3 is the current
+# generation; earlier generations stay readable for backward compatibility.
+# Reference: @deepseek-ai/dsh-session SESSION_FORMAT_VERSION = 3
+# (dsh 0.1.5-rc.2).
+DSH_SESSION_FORMAT_VERSION = 3
+# Canonical basename grammar shared by every generation-addressed artifact:
+# `session.jsonl` is generation 0, `session.vN.jsonl` is generation N >= 1.
+# Uppercase, leading-zero, `.v0`, and temporary names are not canonical and
+# never identify a committed generation.
+DSH_SESSION_LOG_RE = re.compile(r"^session(?:\.v([1-9][0-9]*))?\.jsonl$")
+# Physical encodings this reader accepts, keyed by their filename suffix.
+DSH_LOG_COMPRESSION_SUFFIXES = (("zstd", ".zstd"), ("none", ""))
+
+# Event-type vocabulary, split by the generation that introduced it.
+#
+# `DSH_BASE_RECORD_TYPES` covers the durable envelope and the pre-V3 vocabulary
+# that older logs still use. `DSH_V3_RECORD_TYPES` is the native V3 addition:
+# the surface system prompt, attempts that committed no message, the compaction
+# lifecycle, and the PTC/workflow/team registries. Reference: the published
+# KNOWN_SESSION_EVENT_TYPES set in @deepseek-ai/dsh-session (dsh 0.1.5-rc.2).
+DSH_BASE_RECORD_TYPES = {
     "session",
-    "permission/preset",
-    "sandbox/mode",
-    "approval/policy",
-    "session/end-seed",
+    "agent-preset/selected",
     "agent/inbox/spliced",
-    "turn/start",
-    "turn/end",
-    "step/start",
-    "step/end",
-    "user/message",
-    "assistant/message",
-    "assistant/chunk",
-    "tool/call",
-    "tool/result",
-    "request/header",
-    "request/context",
     "approval/asked",
     "approval/decided",
+    "approval/policy",
+    "assistant/message",
+    "command/done",
+    "command/run",
+    "goal/change",
     "llm/retry",
     "llm/retry-started",
-    "todo/write",
+    "permission/preset",
+    "plan/mode",
+    "request/context",
+    "request/header",
+    "sandbox/mode",
+    "session/end-seed",
     "session/title",
     "session/title-llm-request",
-    "plan/mode",
-    "command/run",
-    "command/done",
-    "agent-preset/selected",
+    "step/end",
+    "step/start",
     "subagent/descriptor",
-    "goal/change",
+    "todo/write",
+    "tool/call",
+    "tool/result",
+    "turn/end",
+    "turn/start",
+    "user/message",
     "web/deepseek-search-llm-request",
+}
+DSH_V3_RECORD_TYPES = {
+    "assistant/attempt",
+    "compaction/end",
+    "compaction/prune",
+    "compaction/start",
+    "compaction/summary",
+    "deliverables/presented",
+    "feedback/message-delete",
+    "feedback/message-put",
+    "feedback/record",
+    "hook/invoked",
+    "hook/result",
+    "model/selection",
+    "schedule/change",
+    "session-log-deepseek/delivery-accepted",
+    "subagent/catalog",
+    "subagent/model-selection-policy",
+    "system/message",
+    "team/member",
+    "team/message/delivered",
+    "team/message/queued",
+    "team/task",
+    "tool-workflow/agent-end",
+    "tool-workflow/agent-start",
+    "tool-workflow/run-end",
+    "tool-workflow/run-start",
+    "tool/ptc-dispatch",
+    "tool/ptc-dispatch-start",
+}
+# Retired names kept readable so pre-V3 logs keep parsing: the legacy assistant
+# stream records retired by native V3, and the pre-PTC tool vocabulary renamed
+# to `tool/ptc-dispatch*` at the V2 -> V3 edge.
+DSH_LEGACY_RECORD_TYPES = {
+    "assistant/chunk",
     "reasoning-chunks",
     "tool-call-chunks",
     "text-chunks",
+    "tool/code-dispatch",
+    "tool/code-dispatch-start",
 }
+DSH_KNOWN_RECORD_TYPES = DSH_BASE_RECORD_TYPES | DSH_V3_RECORD_TYPES | DSH_LEGACY_RECORD_TYPES
+
+# The four message-producing event types. Only these may carry `surfaceOp`,
+# and only these project to an LLM message.
+DSH_SURFACE_RECORD_TYPES = {"system/message", "user/message", "assistant/message", "tool/result"}
+
+# `user/message.data.source.kind` values that mark a direct human prompt. The
+# source union is merge-extensible, so every other kind (plugin, goal,
+# agent-instructions, skill-catalog, subagent-report, ...) is synthetic
+# injected context and must not count as user work.
+DSH_HUMAN_SOURCE_KIND = "user"
 DSH_SENSITIVE_BLOCK_RE = re.compile(
     r"<(?P<tag>skill_content|system-reminder|available_skills)\b[^>]*>"
     r"(?:.*?</(?P=tag)>|.*)",
@@ -473,6 +543,7 @@ def parse_coverage_state() -> dict[str, Any]:
         "malformed_lines": 0,
         "partial_sessions": 0,
         "unknown_record_types": Counter(),
+        "surface_replacements": 0,
     }
 
 
@@ -482,6 +553,7 @@ def cached_parse_delta(coverage: dict[str, Any]) -> dict[str, Any]:
         "unreadable_files": int(coverage["unreadable_files"]),
         "malformed_lines": int(coverage["malformed_lines"]),
         "unknown_record_types": Counter(coverage["unknown_record_types"]),
+        "surface_replacements": int(coverage.get("surface_replacements", 0)),
     }
 
 
@@ -840,6 +912,139 @@ def session_source_root(config: AnalysisConfig) -> Path:
     return config.dsh_home
 
 
+def parse_dsh_generation_filename(filename: str, compression: str = "zstd") -> int | None:
+    """Read the Session format generation named by one canonical log filename.
+
+    Mirrors the upstream grammar: `session.jsonl[.zstd]` is generation 0 and
+    `session.vN.jsonl[.zstd]` is generation N >= 1. Temporary, uppercase,
+    leading-zero, `.v0`, and opposite-encoding names are not canonical and
+    return `None`, so an in-flight write is never mistaken for a committed
+    generation.
+    """
+    suffix = dict(DSH_LOG_COMPRESSION_SUFFIXES).get(compression)
+    if suffix is None:
+        raise ValueError(f"unsupported DSH log compression: {compression}")
+    if not filename.endswith(suffix):
+        return None
+    stem = filename[: len(filename) - len(suffix)]
+    match = DSH_SESSION_LOG_RE.match(stem)
+    if match is None:
+        return None
+    if match.group(1) is None:
+        return 0
+    version = int(match.group(1))
+    return version if version <= sys.maxsize else None
+
+
+@dataclass(frozen=True)
+class DshSessionLog:
+    """One selected generation for one logical DSH session."""
+
+    path: Path
+    version: int
+    workspace_key: str
+    session_id: str
+    compression: str = "zstd"
+
+
+def discover_dsh_session_logs(sessions_root: Path, coverage: dict[str, Any]) -> list[DshSessionLog]:
+    """Select exactly one log generation per logical session directory.
+
+    Mirrors the upstream resolver: only immediate children of the sessions root
+    are project directories, only immediate children of those are session
+    directories, and the highest canonical generation version inside a session
+    directory wins. Selection never consults file mtime and never sums
+    generations, so a migrated session is counted once and a temporary or
+    noncanonical artifact is never selected.
+
+    A session whose newest generation is newer than this reader, corrupt, or
+    stored under the opposite encoding is diagnosed and skipped rather than
+    silently reported from an older generation.
+    """
+    entries = coverage.setdefault("generation_diagnostics", {})
+    readable: list[DshSessionLog] = []
+    if not sessions_root.is_dir():
+        return readable
+    try:
+        projects = sorted(entry for entry in sessions_root.iterdir() if entry.is_dir())
+    except OSError:
+        coverage["unreadable_files"] += 1
+        return readable
+    for project in projects:
+        try:
+            session_dirs = sorted(entry for entry in project.iterdir() if entry.is_dir())
+        except OSError:
+            coverage["unreadable_files"] += 1
+            continue
+        for session_dir in session_dirs:
+            try:
+                names = sorted(entry.name for entry in session_dir.iterdir() if entry.is_file())
+            except OSError:
+                coverage["unreadable_files"] += 1
+                continue
+            # A DSH_HOME is configured for exactly one physical encoding, so a
+            # directory holding both is ambiguous and reported rather than
+            # guessed at.
+            by_compression: dict[str, list[tuple[int, str]]] = {}
+            for compression, _ in DSH_LOG_COMPRESSION_SUFFIXES:
+                for name in names:
+                    version = parse_dsh_generation_filename(name, compression)
+                    if version is not None:
+                        by_compression.setdefault(compression, []).append((version, name))
+            if len(by_compression) > 1:
+                entries["encoding_mismatch"] = entries.get("encoding_mismatch", 0) + 1
+                continue
+            if not by_compression:
+                continue
+            compression, generations = next(iter(by_compression.items()))
+            version, name = max(generations, key=lambda item: item[0])
+            if version > DSH_SESSION_FORMAT_VERSION:
+                entries["newer_generation"] = entries.get("newer_generation", 0) + 1
+                continue
+            if version >= 1:
+                entries["versioned_generations"] = entries.get("versioned_generations", 0) + 1
+            else:
+                entries["legacy_generations"] = entries.get("legacy_generations", 0) + 1
+            if compression != "zstd":
+                entries["plaintext_generations"] = entries.get("plaintext_generations", 0) + 1
+            if len(generations) > 1:
+                entries["coexisting_generations"] = entries.get("coexisting_generations", 0) + 1
+            readable.append(
+                DshSessionLog(
+                    path=session_dir / name,
+                    version=version,
+                    workspace_key=project.name,
+                    session_id=session_dir.name,
+                    compression=compression,
+                )
+            )
+    readable.sort(key=lambda item: (item.workspace_key, item.session_id, item.version))
+    return readable
+
+
+def detect_legacy_flat_session_logs(sessions_root: Path, coverage: dict[str, Any]) -> int:
+    """Count pre-directory session artifacts that this reader refuses to select.
+
+    Upstream rejects a flat `<project>/<session-id>.jsonl[.zstd]` layout, which
+    predates the per-session directory. Counting it keeps an unreadable old
+    deployment visible instead of silently reporting fewer sessions.
+    """
+    if not sessions_root.is_dir():
+        return 0
+    suffixes = (".jsonl.zstd", ".jsonl")
+    found = 0
+    try:
+        for project in sessions_root.iterdir():
+            if not project.is_dir():
+                continue
+            for entry in project.iterdir():
+                if entry.is_file() and entry.name.endswith(suffixes) and entry.name != "session.jsonl":
+                    found += 1
+    except OSError:
+        coverage["unreadable_files"] += 1
+    return found
+
+
 def new_session(meta: dict[str, Any], timestamp: datetime, path: Path, config: AnalysisConfig) -> dict[str, Any]:
     cwd = str(meta.get("cwd") or "unknown")
     rollout_id = str(meta.get("id") or path.stem)
@@ -949,6 +1154,7 @@ def add_semantic_message(
     config: AnalysisConfig,
     *,
     record_identity: str = "",
+    seq: int | None = None,
 ) -> None:
     """Capture bounded, sanitized conversation text only for semantic preparation."""
     if not config.semantic_capture or config.metrics_only or config.privacy_mode == "metrics":
@@ -969,8 +1175,67 @@ def add_semantic_message(
             "role": role,
             "text": cleaned,
             "record_identity": record_identity,
+            "seq": seq,
+            "digest": digest,
         }
     )
+
+
+def shadow_semantic_messages(session: dict[str, Any], shadowed_seqs: set[int]) -> None:
+    """Drop semantic evidence that a later surface replacement shadowed.
+
+    `surfaceOp: {op: 'replace', startSeq, endSeq}` means the replacing node
+    covers those surface nodes; the model-visible surface no longer contains
+    them. Event statistics stay historical (tool execution is still counted),
+    but shadowed conversation text must not re-enter the semantic summary as if
+    it were still live.
+    """
+    retained = []
+    removed = 0
+    for message in session["semantic_messages"]:
+        seq = message.get("seq")
+        if isinstance(seq, int) and not isinstance(seq, bool) and seq in shadowed_seqs:
+            digest = message.get("digest")
+            if isinstance(digest, str):
+                session["semantic_message_digests"].discard(digest)
+            removed += 1
+            continue
+        retained.append(message)
+    if removed:
+        session["semantic_messages"] = retained
+        session["semantic_shadowed_messages"] += removed
+
+
+def surface_shadow_range(surface_op: Any) -> tuple[int, int] | None:
+    """Return the inclusive shadowed sequence range of a replacement surfaceOp."""
+    if not isinstance(surface_op, dict):
+        return None
+    if surface_op.get("op") != "replace":
+        return None
+    start = surface_op.get("startSeq")
+    end = surface_op.get("endSeq")
+    if not isinstance(start, int) or not isinstance(end, int) or isinstance(start, bool) or isinstance(end, bool):
+        return None
+    if start < 0 or end < 0:
+        return None
+    return start, end
+
+
+def dsh_user_message_is_human(data: dict[str, Any]) -> bool:
+    """Whether a `user/message` is a direct human prompt rather than injected context.
+
+    Native DSH projects a direct human prompt, synthetic `agent.inject()`
+    context, and entered goal rounds into the same user-role event; `source`
+    is what separates them. The source union is merge-extensible, so only the
+    documented human kind counts as human and every other (or absent, as in
+    pre-V3 logs that carry no source) value is treated as synthetic context
+    unless it is genuinely absent from a legacy record.
+    """
+    source = data.get("source")
+    if not isinstance(source, dict):
+        # Pre-V3 logs predate the source field; keep their prompts as user work.
+        return True
+    return str(source.get("kind") or "") == DSH_HUMAN_SOURCE_KIND
 
 
 def tool_evidence_summary(value: Any, call: dict[str, Any], analysis: dict[str, Any], config: AnalysisConfig) -> str:
@@ -1003,6 +1268,7 @@ def add_semantic_tool_evidence(
     config: AnalysisConfig,
     *,
     record_identity: str,
+    seq: int | None = None,
 ) -> None:
     if (
         not config.semantic_capture
@@ -1026,6 +1292,8 @@ def add_semantic_tool_evidence(
             "role": "tool",
             "text": summary,
             "record_identity": record_identity,
+            "seq": seq,
+            "digest": digest,
             "tool_facts": {
                 "tool": call.get("tool", "unknown"),
                 "outcome": analysis.get("outcome", "unknown"),
@@ -1066,6 +1334,8 @@ def process_event(
     payload: dict[str, Any],
     config: AnalysisConfig,
     record_timestamp: datetime | None = None,
+    *,
+    seq: int | None = None,
 ) -> None:
     event_type = str(payload.get("type") or "")
     turn_id = payload.get("turn_id")
@@ -1109,7 +1379,7 @@ def process_event(
             add_excerpt_candidate(session, "prompt", cleaned, config)
         elif session["user_messages"] <= 4:
             add_excerpt_candidate(session, "follow_up", cleaned, config)
-        add_semantic_message(session, "user", cleaned, config, record_identity=str(turn_id or ""))
+        add_semantic_message(session, "user", cleaned, config, record_identity=str(turn_id or ""), seq=seq)
     elif event_type == "agent_message":
         session["assistant_messages"] += 1
         add_semantic_message(
@@ -1118,6 +1388,7 @@ def process_event(
             message_text(payload),
             config,
             record_identity=str(turn_id or ""),
+            seq=seq,
         )
         if record_timestamp is not None:
             last_user = session.get("last_user_at")
@@ -1200,6 +1471,7 @@ def process_call_output(
     config: AnalysisConfig,
     *,
     cause_override: str | None = None,
+    seq: int | None = None,
 ) -> None:
     call_id = str(payload.get("call_id") or "")
     call = session["calls"].get(
@@ -1262,6 +1534,7 @@ def process_call_output(
         analysis,
         config,
         record_identity=call_id or f"sequence-{call.get('sequence', 0)}",
+        seq=seq,
     )
 
 
@@ -1299,7 +1572,22 @@ def get_zstandard() -> Any:
     return _zstandard_module
 
 
+def dsh_log_compression(path: Path) -> str:
+    """Physical encoding of one selected generation, from its filename suffix."""
+    return "zstd" if path.name.endswith(".zstd") else "none"
+
+
 def read_dsh_jsonl_lines(path: Path) -> list[str] | None:
+    """Read one selected generation, or `None` when it cannot be decoded.
+
+    A corrupt generation is reported by the caller as an unreadable file. It is
+    never silently replaced by an older generation.
+    """
+    if dsh_log_compression(path) == "none":
+        try:
+            return path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return None
     zstandard = get_zstandard()
     try:
         with path.open("rb") as handle:
@@ -1307,8 +1595,12 @@ def read_dsh_jsonl_lines(path: Path) -> list[str] | None:
         return raw.decode("utf-8", errors="replace").splitlines()
     except OSError:
         return None
+    except zstandard.ZstdError:
+        # The decompressor's C extension reports as module `zstd`, so a corrupt
+        # frame must be caught by type rather than by its module name.
+        return None
     except Exception as exc:
-        if exc.__class__.__module__.startswith("zstandard"):
+        if exc.__class__.__module__ in {"zstandard", "zstd"}:
             return None
         raise
 
@@ -1459,7 +1751,49 @@ def new_dsh_session(
     session = new_session(meta, timestamp, path, config)
     session["workspace_key"] = workspace_key
     session["session_header_records"] = 1
+    session["log_generation_version"] = header.get("version")
+    session["surface_seqs"] = []
+    # Native V3 conversation accounting. `system_messages` and
+    # `injected_user_messages` are deliberately kept out of user work, and
+    # `assistant_attempts` counts settlements that committed no visible reply.
+    session["system_messages"] = 0
+    session["injected_user_messages"] = 0
+    session["injected_source_kinds"] = Counter()
+    session["assistant_attempts"] = 0
+    session["assistant_attempts_with_usage"] = 0
+    session["compaction_events"] = 0
+    session["compaction_shadowed_events"] = 0
+    session["semantic_shadowed_messages"] = 0
+    session["inherited_event_count"] = 0
     return session
+
+
+def apply_dsh_surface_shadow(session: dict[str, Any], record: dict[str, Any], coverage: dict[str, Any]) -> None:
+    """Fold replacement endpoints in live surface order, never numeric order."""
+    if record.get("type") not in DSH_SURFACE_RECORD_TYPES:
+        return
+    seq = record.get("seq")
+    if not isinstance(seq, int) or isinstance(seq, bool):
+        return
+    surface = session["surface_seqs"]
+    span = surface_shadow_range(record.get("surfaceOp"))
+    if span is None:
+        surface.append(seq)
+        return
+    start_seq, end_seq = span
+    try:
+        start, end = surface.index(start_seq), surface.index(end_seq)
+    except ValueError:
+        coverage["malformed_lines"] += 1
+        return
+    if end < start:
+        coverage["malformed_lines"] += 1
+        return
+    shadowed = set(surface[start:end + 1])
+    shadow_semantic_messages(session, shadowed)
+    surface[start:end + 1] = [seq]
+    session["compaction_shadowed_events"] += len(shadowed)
+    coverage["surface_replacements"] = coverage.get("surface_replacements", 0) + 1
 
 
 def process_dsh_record(
@@ -1468,6 +1802,8 @@ def process_dsh_record(
     data: dict[str, Any],
     config: AnalysisConfig,
     record_timestamp: datetime | None,
+    *,
+    seq: int | None = None,
 ) -> None:
     if record_type == "turn/start":
         turn = data.get("turn")
@@ -1496,13 +1832,56 @@ def process_dsh_record(
             else:
                 session["task_complete"] += 1
         return
+    if record_type == "session/end-seed":
+        # Only a tagged `inherited: true` marker establishes the fork cut; its
+        # sequence IS the inherited event count. Untagged markers establish
+        # nothing.
+        if data.get("inherited") is True and seq is not None:
+            session["inherited_event_count"] = seq
+        return
     if record_type == "user/message":
+        if not dsh_user_message_is_human(data):
+            # Synthetic `agent.inject()` context, goal rounds, skill catalogs
+            # and the like share the user role but are not user work: they must
+            # not inflate user metrics, seed the first prompt, or enter the
+            # semantic user-request evidence.
+            source = data.get("source")
+            kind = str(source.get("kind") or "unknown") if isinstance(source, dict) else "unknown"
+            session["injected_user_messages"] += 1
+            session["injected_source_kinds"][kind] += 1
+            return
         payload: dict[str, Any] = {"type": "user_message"}
         if isinstance(data.get("content"), list):
             payload["content"] = data["content"]
         elif isinstance(data.get("message"), str):
             payload["message"] = data["message"]
-        process_event(session, payload, config, record_timestamp)
+        process_event(session, payload, config, record_timestamp, seq=seq)
+        return
+    if record_type == "system/message":
+        # The rendered system prompt is surface content, never user work. Only
+        # its presence is counted; its text is never captured as evidence and
+        # must not leak into excerpts, titles, or semantic material.
+        session["system_messages"] += 1
+        return
+    if record_type == "assistant/attempt":
+        # One model attempt that committed no surface message: a failed,
+        # retried, cancelled, or stream-error settlement. It is counted as an
+        # attempt and never fabricated into a visible assistant reply.
+        session["assistant_attempts"] += 1
+        stream = data.get("stream")
+        # A stream record is `{type: 'chunk', time, chunk: {...}}`; the payload
+        # kind lives one level down, so testing the outer record alone would
+        # never find a usage sample.
+        if isinstance(stream, list) and any(
+            isinstance(record, dict)
+            and isinstance(record.get("chunk"), dict)
+            and str(record["chunk"].get("type") or "") == "usage"
+            for record in stream
+        ):
+            session["assistant_attempts_with_usage"] += 1
+        return
+    if record_type in {"compaction/start", "compaction/summary", "compaction/end", "compaction/prune"}:
+        session["compaction_events"] += 1
         return
     if record_type == "assistant/message":
         process_event(session, {"type": "agent_message"}, config, record_timestamp)
@@ -1514,6 +1893,7 @@ def process_dsh_record(
                 dsh_content_text(message),
                 config,
                 record_identity=f"{data.get('turn', '')}:{data.get('step', '')}",
+                seq=seq,
             )
         usage = data.get("usage")
         if not isinstance(usage, dict) and isinstance(message, dict):
@@ -1590,6 +1970,7 @@ def process_dsh_record(
             {"call_id": call_id, "output": analysis_input},
             config,
             cause_override=cause_override,
+            seq=seq,
         )
         return
     if record_type == "request/header":
@@ -1710,6 +2091,9 @@ def parse_dsh_session_records(
             coverage["unknown_record_types"][record_type or "<missing>"] += 1
             continue
         record_timestamp = parse_dsh_timestamp(record.get("time"))
+        record_seq = record.get("seq")
+        if not isinstance(record_seq, int) or isinstance(record_seq, bool):
+            record_seq = None
         if session is None:
             if record_type != "session":
                 if len(buffered) < 50:
@@ -1739,7 +2123,13 @@ def parse_dsh_session_records(
                     session["observed_end"] = max(session["observed_end"], pending_time)
                 pending_data = pending.get("data")
                 if isinstance(pending_data, dict):
-                    process_dsh_record(session, pending["type"], pending_data, config, pending_time)
+                    pending_seq = pending.get("seq")
+                    if not isinstance(pending_seq, int) or isinstance(pending_seq, bool):
+                        pending_seq = None
+                    apply_dsh_surface_shadow(session, pending, coverage)
+                    process_dsh_record(
+                        session, pending["type"], pending_data, config, pending_time, seq=pending_seq
+                    )
             buffered.clear()
             continue
         if record_type == "session":
@@ -1752,7 +2142,8 @@ def parse_dsh_session_records(
         if record_timestamp is not None:
             session["observed_start"] = min(session["observed_start"], record_timestamp)
             session["observed_end"] = max(session["observed_end"], record_timestamp)
-        process_dsh_record(session, record_type, data, config, record_timestamp)
+        apply_dsh_surface_shadow(session, record, coverage)
+        process_dsh_record(session, record_type, data, config, record_timestamp, seq=record_seq)
     if session is None:
         coverage["missing_metadata"] += 1
         return None
@@ -1846,6 +2237,15 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "active_minutes": safe_round(session["duration_ms"] / 60000, 1),
         "user_messages": session["user_messages"],
         "assistant_messages": session["assistant_messages"],
+        "log_generation_version": session.get("log_generation_version"),
+        "system_messages": session.get("system_messages", 0),
+        "injected_user_messages": session.get("injected_user_messages", 0),
+        "injected_source_kinds": dict(sorted(session.get("injected_source_kinds", {}).items())),
+        "assistant_attempts": session.get("assistant_attempts", 0),
+        "compaction_events": session.get("compaction_events", 0),
+        "compaction_shadowed_events": session.get("compaction_shadowed_events", 0),
+        "semantic_shadowed_messages": session.get("semantic_shadowed_messages", 0),
+        "inherited_event_count": session.get("inherited_event_count", 0),
         "median_prompt_chars": int(statistics.median(session["prompt_lengths"])) if session["prompt_lengths"] else 0,
         "correction_messages": session["correction_messages"],
         "clarification_requests": session["clarification_requests"],
@@ -2529,13 +2929,10 @@ def build_report(
     session_snapshots: Iterable[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | tuple[dict[str, Any], list[dict[str, Any]]]:
     snapshots = list(session_snapshots) if session_snapshots is not None else None
-    if snapshots is None:
-        get_zstandard()
     sessions_root = session_source_root(config) / "sessions"
-    paths = sorted(sessions_root.rglob("session.jsonl.zstd")) if snapshots is None and sessions_root.is_dir() else []
     parse_file = parse_dsh_session_file
     coverage: dict[str, Any] = {
-        "files_scanned": len(paths) if snapshots is None else len(snapshots),
+        "files_scanned": len(snapshots) if snapshots is not None else 0,
         "sessions_analyzed": 0,
         "skipped_outside_window": 0,
         "skipped_project": 0,
@@ -2545,9 +2942,23 @@ def build_report(
         "partial_sessions": 0,
         "unknown_record_types": Counter(),
         "deterministic_cache": {"enabled": config.deterministic_cache, "hits": 0, "misses": 0, "invalidations": 0, "disabled": 0, "write_errors": 0},
+        "generation_diagnostics": {},
+        "surface_replacements": 0,
         "since": config.since.isoformat().replace("+00:00", "Z"),
         "until": config.until.isoformat().replace("+00:00", "Z"),
     }
+    generations: list[DshSessionLog] = []
+    paths: list[Path] = []
+    if snapshots is None:
+        generations = discover_dsh_session_logs(sessions_root, coverage)
+        paths = [generation.path for generation in generations]
+        coverage["files_scanned"] = len(paths)
+        # zstandard is only needed when a selected generation is compressed.
+        if any(generation.compression == "zstd" for generation in generations):
+            get_zstandard()
+        legacy_flat = detect_legacy_flat_session_logs(sessions_root, coverage)
+        if legacy_flat:
+            coverage["generation_diagnostics"]["legacy_flat_artifacts"] = legacy_flat
     sessions: list[dict[str, Any]] = []
     if snapshots is None:
         for path in paths:
@@ -2610,6 +3021,14 @@ def build_report(
     }
     totals["llm_retries"] = sum(session["llm_retries"] for session in sessions)
     totals["denied_approvals"] = sum(session["denied_approvals"] for session in sessions)
+    # Native V3 conversation accounting. Injected user-role context and the
+    # rendered system prompt are reported separately so they can never be read
+    # as user work, and attempts are reported so a failed settlement is visible
+    # without being mistaken for a delivered reply.
+    totals["system_messages"] = sum(session.get("system_messages", 0) for session in sessions)
+    totals["injected_user_messages"] = sum(session.get("injected_user_messages", 0) for session in sessions)
+    totals["assistant_attempts"] = sum(session.get("assistant_attempts", 0) for session in sessions)
+    totals["compaction_events"] = sum(session.get("compaction_events", 0) for session in sessions)
 
     project_map: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for session in sessions:
@@ -2825,13 +3244,43 @@ def build_report(
     def warning(zh: str, en: str) -> None:
         warnings.append(en if config.locale == "en" else zh)
     if not paths and snapshots is None:
-        warning("在解析后的 DSH_HOME 下未找到 DSH 会话文件（session.jsonl.zstd）。", "No DSH session files (session.jsonl.zstd) were found under the resolved DSH_HOME.")
+        warning("在解析后的 DSH_HOME 下未找到 DSH 会话文件（session.jsonl.zstd 或 session.vN.jsonl.zstd）。", "No DSH session files (session.jsonl.zstd or session.vN.jsonl.zstd) were found under the resolved DSH_HOME.")
+    generation = coverage.get("generation_diagnostics") or {}
+    if generation.get("newer_generation"):
+        warning(
+            f"有 {generation['newer_generation']} 个会话的最新日志代际高于本分析器支持的 V{DSH_SESSION_FORMAT_VERSION}；这些会话已跳过，未按旧代际降级统计。",
+            f"{generation['newer_generation']} sessions store a log generation newer than the supported V{DSH_SESSION_FORMAT_VERSION}; they were skipped rather than silently reported from an older generation.",
+        )
+    if generation.get("encoding_mismatch"):
+        warning(
+            f"有 {generation['encoding_mismatch']} 个会话目录使用了与分析器配置不一致的压缩编码；这些会话未读取。",
+            f"{generation['encoding_mismatch']} session directories use a compression encoding that does not match the analyzer configuration; they were not read.",
+        )
+    if generation.get("legacy_flat_artifacts"):
+        warning(
+            f"发现 {generation['legacy_flat_artifacts']} 个旧式扁平会话文件（不在会话子目录内）；它们不会被读取。",
+            f"{generation['legacy_flat_artifacts']} legacy flat session artifacts (outside a session directory) were found; they are not read.",
+        )
     if 0 < len(sessions) < 5:
         warning("有效会话少于 5 个；请将行为结论视为小样本快照。", "Fewer than five sessions are in scope; treat behavioral conclusions as a small-sample snapshot.")
     if coverage["malformed_lines"] or coverage["unknown_record_types"] or coverage["unreadable_files"]:
         warning("存在损坏行、未知记录类型或不可读文件；形成明确结论前请先检查覆盖情况。", "Malformed lines, unknown record types, or unreadable files were observed; inspect coverage before drawing firm conclusions.")
     if coverage["partial_sessions"]:
         warning(f"有 {coverage['partial_sessions']} 个 rollout 含未结束任务标记；这不自动等于整个任务族失败。", f"{coverage['partial_sessions']} rollouts contain unfinished-task markers; this does not automatically mean their task families failed.")
+    shadowed = sum(session.get("semantic_shadowed_messages", 0) for session in sessions)
+    if shadowed:
+        warning(
+            f"有 {shadowed} 条会话文本被后续表面替换（压缩）遮蔽，已从语义摘要移除；工具与 Token 事件统计仍按历史保留。",
+            f"{shadowed} conversation texts were shadowed by a later surface replacement (compaction) and were removed from the semantic summary; tool and token event statistics remain historical.",
+        )
+    attempts = totals.get("assistant_attempts", 0)
+    if attempts:
+        covered = sum(session.get("assistant_attempts_with_usage", 0) for session in sessions)
+        if covered < attempts:
+            warning(
+                f"有 {attempts} 次未生成可见回复的模型尝试被计数，其中 {covered} 次带有可证明的用量；其余尝试的 Token 用量不可得，未做估算。",
+                f"{attempts} model attempts committed no visible reply; {covered} carry provable usage. Token usage for the remaining attempts is unavailable and was not estimated.",
+            )
     if coverage["heuristic_role_rollouts"] or coverage["unknown_system_rollouts"]:
         warning("部分 rollout 使用启发式角色分类或未映射到已知角色；已保守降级并记录 classification_basis。", "Some rollouts use heuristic role classification or do not map to a known role; they were conservatively downgraded with classification_basis recorded.")
     if coverage["deterministic_cache"].get("write_errors"):
@@ -2863,6 +3312,15 @@ def build_report(
                 "uncached+cacheRead+cacheWrite+output; not billing or quota"
             ),
             "cached_input_tokens": "measured but not equivalent to free or ordinary input",
+            "attempts": (
+                "assistant/attempt events record settlements that committed no visible reply; "
+                "they are counted as attempts and never materialized as assistant messages, "
+                "and their token usage is reported as unavailable rather than estimated"
+            ),
+            "injected_context": (
+                "user/message carries both direct human prompts and synthetic injected context; "
+                "only source.kind == 'user' counts as user work, and system/message is never captured as evidence"
+            ),
             "timing": "wall time measured where timestamps exist; active/tool/wait/reviewer fields are proxies unless noted",
             "causality": "savings and recommendations require measured, proxy, or inferred labels",
             "failure_rule_version": FAILURE_RULE_VERSION,

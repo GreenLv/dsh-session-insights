@@ -39,7 +39,7 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 需要 DeepSeek Harness 和 Python 3.11 或更高版本。
 
-**DSH 兼容性：** 插件声明的最低 DSH 版本为 `0.1.0-rc.8`。已核对 `0.1.2-rc.1` 的相关接口，未发现需要修改的兼容性问题；该版本的完整宿主原生验收尚未完成。
+**DSH 兼容性：** 最低 `0.1.0-rc.8`；`0.1.5-rc.2` 已完成 macOS 原生流程验证。其他平台的验证范围见 [DSH 兼容性](#dsh-兼容性)。
 
 先把已发布 Bundle 安装到 DSH profile，再启动该 profile：
 
@@ -161,13 +161,53 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 ## 当前范围与限制
 
-- 原生输入来自可信 DSH `sessionQuery` 服务；兼容 CLI 仍读取 `$DSH_HOME/sessions` 下的 `session.jsonl.zstd`。
+- 原生输入来自可信 DSH `sessionQuery` 服务；兼容 CLI 读取 `$DSH_HOME/sessions` 下的当前会话日志代际：第 0 代为 `session.jsonl.zstd`，第 N 代为 `session.vN.jsonl.zstd`，未启用压缩的 DSH_HOME 则为对应的明文 `.jsonl` 形式。
 - 输出遵循 [`dsh-session-insights/1`](docs/schema/report-v1.schema.json)。
 - token 以 `(turn, step)` 去重；这是使用量口径，不是账单或配额口径。
 - Dashboard 与语义提示契约基于同一报告 schema 支持 `zh-CN` 和 `en`。
 - 报告只能根据现有证据推断模式，不能证明意图、质量、任务验收或安全性。
 
-精确包身份、CI、macOS 原生验收和限定的 Windows 原生验收记录在 [v0.2.0 发布验收记录](docs/acceptance/v0.2.0-candidate.md)中。Windows 尚未原生验证确定性斜杠命令分发和英文 DOM 渲染。v0.1 CLI/Skill 的历史证据保留在 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。
+精确包身份、CI、macOS 原生验收和限定的 Windows 原生验收记录在 [v0.2.0 发布验收记录](docs/acceptance/v0.2.0-candidate.md)中。Windows 尚未原生验证确定性斜杠命令分发和英文 DOM 渲染。v0.1 CLI/Skill 的历史证据保留在 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。本次兼容性证据及平台边界记录在 [0.1.5-rc.2 验收记录](docs/acceptance/v0.1.5-rc.2-compatibility.md)中。
+
+## DSH 兼容性
+
+插件声明的最低 DSH 版本为 `0.1.0-rc.8`。
+
+| 范围 | DSH 版本 | 状态 |
+| --- | --- | --- |
+| 声明最低版本 | `0.1.0-rc.8` | 支持下限；本次改动未重新验证 |
+| 源码与自动化测试审查 | `0.1.5-rc.2` | 已按本机安装的包完成核对与适配；本机测试通过 |
+| 宿主原生验收 | `0.1.5-rc.2` | macOS 隔离宿主：确定性、完整语义、metrics 跳过、fallback 与 Skill 发现通过 |
+
+`0.3.1` 支持第 0–3 代会话日志，保留原有安装入口。本次没有改变平台专属启动器或宿主接口，因此不重复 Windows/Linux 的完整原生模型流程；现有三平台 CI 检查共用代码与路径行为，不能代替这些平台的原生验收。最低版本未在本次重新原生验证，未来 DSH 版本也不视为已验证。
+
+## 会话日志代际
+
+同一个逻辑会话可以保留多个不可变日志代际。读取方只选取其中一个，依据规范文件名而非文件修改时间。
+
+| 情况 | 行为 |
+| --- | --- |
+| 同一会话目录存在多个规范代际 | 选取版本最高者；该会话只统计一次，迁移后的会话不会被重复相加 |
+| 仅有第 0 代（`session.jsonl[.zstd]`） | 照旧读取，旧版 DSH_HOME 保持兼容 |
+| 非规范名称（临时文件、大写、前导零、`.v0`、`session.lock`） | 永不选取；写入中的文件不会被误认为已提交代际 |
+| 高于本读取方支持的代际 | 记录诊断并跳过，同时给出警告；**不会**静默按旧代际输出报告 |
+| 当前代际损坏或无法解压 | 记为不可读文件；**不会**回退到旧代际 |
+| 同一目录混用两种压缩编码 | 记为歧义并跳过该会话 |
+| 多个工程目录声称同一会话 ID | 各会话目录独立计数 |
+
+工具和用量统计保留历史事件；语义证据则排除已被替换的消息。DSH 根据事件日志维护模型可见的有序对话（surface），替换操作以该对话中的位置为准，不能按事件序号大小推断。
+
+| 事件 | 行为 |
+| --- | --- |
+| `system/message` | 记为系统内容；绝不算作用户工作，不进入摘录，不泄露到标题或语义证据 |
+| `source.kind == "user"` 的 `user/message` | 真人直接输入：计入用户工作，可作为标题来源 |
+| 其他 `source.kind` 的 `user/message` | 合成注入上下文（plugin、goal、skill 目录、子代理报告等）：单独计数，排除在用户工作与语义证据之外 |
+| `assistant/attempt` | 记为未产出可见回复的模型尝试；不会伪造成 assistant 消息，其 Token 用量如实标记为不可得而非估算 |
+| `assistant/message` | 携带该步用量；用量按 `(turn, step)` 去重，stream 字段不会造成重复相加 |
+| `surfaceOp: "append"` | 表面正常增长 |
+| `surfaceOp: {op: "replace", startSeq, endSeq}` | 被压缩的对话退出语义摘要；历史工具与 Token 事件统计保留 |
+| 带 `data.inherited: true` 的 `session/end-seed` | 记录继承切点；未带标记的结束标记不建立切点 |
+| 未知事件类型 | 计入 `coverage.unknown_record_types` 并给出报告，绝不静默忽略 |
 
 ## npm 下载量历史
 

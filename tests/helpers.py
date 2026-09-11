@@ -48,9 +48,25 @@ def records(index: int = 1, *, cwd: str | None = "/workspace/project-a", secret:
     ]
 
 
+def compress_dsh_generation(lines: list[str]) -> bytes:
+    """Encode one session generation with DSH's frame layout.
+
+    DSH asserts that the first Zstandard frame is independently decodable and
+    holds exactly the header record, so the header line gets its own frame and
+    every event row follows in a second one. A single-frame file is not a log a
+    real host will open.
+    """
+    compressor = zstandard.ZstdCompressor(level=3, write_checksum=True)
+    header, events = lines[0], lines[1:]
+    encoded = compressor.compress((header + "\n").encode("utf-8"))
+    if events:
+        encoded += compressor.compress(("\n".join(events) + "\n").encode("utf-8"))
+    return encoded
+
+
 def write_session(home: Path, index: int = 1, *, cwd: str | None = "/workspace/project-a", workspace: str = "--workspace-project-a--", secret: bool = True) -> Path:
     path = session_path(home, index, workspace=workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = "\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in records(index, cwd=cwd, secret=secret)).encode("utf-8")
-    path.write_bytes(zstandard.ZstdCompressor(level=3, write_checksum=True).compress(payload))
+    lines = [json.dumps(item, ensure_ascii=False, sort_keys=True) for item in records(index, cwd=cwd, secret=secret)]
+    path.write_bytes(compress_dsh_generation(lines))
     return path
