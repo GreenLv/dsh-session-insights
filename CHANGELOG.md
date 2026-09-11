@@ -4,6 +4,17 @@
 
 Public releases are listed newest first.
 
+## 0.3.2 - 2026-09-11
+
+Align the published package metadata with the verified DSH support baseline.
+
+### Changed
+
+- Declare DSH `0.1.5-rc.2` consistently in top-level `engines.dsh`, Bundle metadata, and all DSH peer dependencies, so plugin markets and installers no longer advertise the retired `0.1.0-rc.8` threshold.
+- Add a regression check that keeps market-facing metadata and both README support statements on the same exact verified range.
+
+This metadata-only release does not change runtime behavior. The source, CI, and macOS native workflow evidence from `0.3.1` remains the applicable behavior evidence; package, installation, publication, and market readback use the new `0.3.2` artifact identity.
+
 ## 0.3.1 - 2026-09-11
 
 Fix session-log compatibility with DSH 0.1.5-rc.2: upgraded sessions now appear in reports, and injected context no longer inflates human-work counts.

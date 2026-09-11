@@ -173,7 +173,7 @@ Exact package, CI, native macOS, and focused native Windows evidence is kept in 
 
 We support only the explicitly verified minimum baseline or the latest DSH version after verification. We do not maintain historical DSH releases, promise compatibility across intervening versions, or treat a new release as supported before validation. Users on older hosts should upgrade to the verified baseline.
 
-The current support baseline is `0.1.5-rc.2`. The published plugin still declares `0.1.0-rc.8` as its installation threshold; that metadata does not promise ongoing support for the older host.
+The package declares `0.1.5-rc.2` as its current DSH requirement. This exact range is also what DSH plugin markets display and enforce during installation.
 
 | Scope | DSH version | Status |
 | --- | --- | --- |
@@ -181,7 +181,7 @@ The current support baseline is `0.1.5-rc.2`. The published plugin still declare
 | Source and automated-test review | `0.1.5-rc.2` | Reviewed and adapted against the installed packages; passing locally |
 | Native host acceptance | `0.1.5-rc.2` | macOS isolated host: deterministic, full semantic, metrics skip, fallback, and Skill discovery passed |
 
-`0.3.1` supports session-log generations 0–3 through the existing installation paths. This change does not alter platform-specific launchers or host interfaces, so the full Windows/Linux native model workflows are not repeated. The existing three-platform CI checks shared code and paths; it does not establish native acceptance on those platforms. These results apply to the named DSH version and verification scope. Historical acceptance records remain release evidence, not continuing support commitments.
+`0.3.2` retains the generation 0–3 session-log support introduced in `0.3.1`. The metadata-only update does not alter platform-specific launchers or host interfaces, so the full Windows/Linux native model workflows are not repeated. The existing three-platform CI checks shared code and paths; it does not establish native acceptance on those platforms. These results apply to the named DSH version and verification scope. Historical acceptance records remain release evidence, not continuing support commitments.
 
 ## Session log generations
 

@@ -1,0 +1,55 @@
+{
+  "schema": "repository-reader-review/v1",
+  "status": "passed",
+  "audience": {
+    "role": "DSH users deciding whether the published Bundle supports their host",
+    "prior_knowledge": "careful_upgrader"
+  },
+  "documents": [
+    {"path": "README.md", "role": "readme", "language": "en", "sha256": "7c82ea83bfade6057edc9793ad4658dd74bd8cab1947f7336c56b98ff75d3066"},
+    {"path": "README.zh-CN.md", "role": "readme", "language": "zh-CN", "sha256": "fffd17b183391423018eefeeb54e910b3a853c92dcb144710639949df343cde2"},
+    {"path": "CHANGELOG.md", "role": "changelog", "language": "en", "sha256": "be4b6a8891082e4d699993e55f66f7dcd9fecb6ce89a6c9d2930ddb7ca86b6a1"},
+    {"path": "CHANGELOG.zh-CN.md", "role": "changelog", "language": "zh-CN", "sha256": "d15b531951a9cbec5edd6215602a52ed9fa8feb3f5a642d1d4a859e80f49f3ba"},
+    {"path": "docs/release-notes/v0.3.2.md", "role": "release_notes", "language": "default", "sha256": "af6b8c6ae6e4f4d4818f3d722ddf4256839c931fa3a76dc90e3ad8dd314c80eb"}
+  ],
+  "document_set_sha256": "d36cb85f62e70cfef4cd4f937bddb0f9a8a5e06865fe89a9f57474254fb1645a",
+  "method": {"kind": "cold_read", "implementation_context_used": false, "claim_ledger_used": false},
+  "checks": [
+    {
+      "id": "document_role", "required": true, "status": "passed",
+      "evidence_paths": ["README.md", "README.zh-CN.md", "CHANGELOG.md", "CHANGELOG.zh-CN.md", "docs/release-notes/v0.3.2.md"],
+      "note": "The READMEs state the current support contract, changelogs preserve the version delta, and release notes explain the upgrade effect."
+    },
+    {
+      "id": "reader_outcome", "required": true, "status": "passed",
+      "evidence_paths": ["README.md", "README.zh-CN.md", "CHANGELOG.md", "CHANGELOG.zh-CN.md", "docs/release-notes/v0.3.2.md"],
+      "note": "Readers can identify the exact supported DSH version, understand why the market card changes, and see that no runtime migration is required."
+    },
+    {
+      "id": "term_onboarding", "required": true, "status": "passed",
+      "evidence_paths": ["README.md", "README.zh-CN.md", "CHANGELOG.md", "CHANGELOG.zh-CN.md", "docs/release-notes/v0.3.2.md"],
+      "note": "Market metadata is introduced through its visible card and installation effect before package-field details are named."
+    },
+    {
+      "id": "evidence_boundary", "required": true, "status": "passed",
+      "evidence_paths": ["README.md", "README.zh-CN.md", "CHANGELOG.md", "CHANGELOG.zh-CN.md", "docs/release-notes/v0.3.2.md"],
+      "note": "The documents separate reused runtime evidence from new package, publication, installation, and market-readback evidence."
+    },
+    {
+      "id": "density_and_order", "required": true, "status": "passed",
+      "evidence_paths": ["README.md", "README.zh-CN.md", "CHANGELOG.md", "CHANGELOG.zh-CN.md", "docs/release-notes/v0.3.2.md"],
+      "note": "The short patch release leads with the visible compatibility correction and keeps detailed prior runtime behavior in linked history."
+    },
+    {
+      "id": "language_independence", "required": true, "status": "passed",
+      "evidence_paths": ["README.md", "README.zh-CN.md", "CHANGELOG.md", "CHANGELOG.zh-CN.md", "docs/release-notes/v0.3.2.md"],
+      "note": "English and Chinese independently state the same exact DSH range, metadata effect, evidence reuse, and pending public refresh."
+    }
+  ],
+  "findings": [],
+  "limitations": [
+    "Cold reader review is not package, registry, GitHub Release, installation, or market readback proof.",
+    "Runtime evidence is reused only because packaged JavaScript and Python behavior is unchanged; the new artifact still requires package and install checks.",
+    "The market card can be verified only after npm publication and catalog refresh."
+  ]
+}
