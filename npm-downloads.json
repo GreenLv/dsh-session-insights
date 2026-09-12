@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
   "renderer_version": 3,
-  "generated_at": "2026-09-11T09:04:25.010Z",
-  "data_through": "2026-09-10",
+  "generated_at": "2026-09-12T08:46:46.593Z",
+  "data_through": "2026-09-11",
   "period": {
     "start": "2026-08-22",
-    "end": "2026-09-10"
+    "end": "2026-09-11"
   },
   "title": "dsh-session-insights npm download history",
   "project": "dsh-session-insights",
@@ -16,7 +16,7 @@
       "label": "dsh-session-insights",
       "color": "#2563eb",
       "start": "2026-08-22",
-      "total": 605,
+      "total": 642,
       "downloads": [
         {
           "day": "2026-08-22",
@@ -115,8 +115,13 @@
         },
         {
           "day": "2026-09-10",
+          "downloads": 37,
+          "cumulative": 642
+        },
+        {
+          "day": "2026-09-11",
           "downloads": 0,
-          "cumulative": 605
+          "cumulative": 642
         }
       ]
     }
@@ -219,24 +224,29 @@
     },
     {
       "day": "2026-09-10",
+      "downloads": 37,
+      "cumulative": 642
+    },
+    {
+      "day": "2026-09-11",
       "downloads": 0,
-      "cumulative": 605
+      "cumulative": 642
     }
   ],
   "sources": [
     {
       "package": "dsh-session-insights",
       "start": "2026-08-22",
-      "end": "2026-09-10",
-      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-09-10/dsh-session-insights",
-      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-09-10/dsh-session-insights"
+      "end": "2026-09-11",
+      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-09-11/dsh-session-insights",
+      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-09-11/dsh-session-insights"
     }
   ],
-  "observation_through": "2026-09-10",
+  "observation_through": "2026-09-11",
   "settlement": {
     "mode": "latest-available-day",
     "latest_day_status": "provisional",
-    "stable_through": "2026-09-08",
+    "stable_through": "2026-09-09",
     "minimum_age_days": 2,
     "minimum_observation_span_hours": 12
   },

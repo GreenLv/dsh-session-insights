@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" role="img" aria-labelledby="chart-title chart-desc" data-renderer-version="3">
   <title id="chart-title">dsh-session-insights npm download growth</title>
-  <desc id="chart-desc">dsh-session-insights npm download growth. All available daily history · 2026-08-22 → 2026-09-10 · 20 daily points · date labels sampled · latest day may be revised. Download counts measure registry requests, not unique users or confirmed installations.</desc>
+  <desc id="chart-desc">dsh-session-insights npm download growth. All available daily history · 2026-08-22 → 2026-09-11 · 21 daily points · date labels sampled · latest day may be revised. Download counts measure registry requests, not unique users or confirmed installations.</desc>
   <defs>
     <linearGradient id="growth-fill" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#14b8a6" stop-opacity="0.24"/>
@@ -32,20 +32,20 @@
   <rect width="100%" height="100%" rx="18" fill="#f8fafc"/>
   <rect x="18" y="18" width="924" height="504" rx="16" fill="#ffffff" filter="url(#soft-shadow)"/>
   <text x="84" y="50" class="title">dsh-session-insights npm download growth</text>
-  <text x="84" y="72" class="subtitle">All available daily history · 2026-08-22 → 2026-09-10 · 20 daily points · date labels sampled · latest day may be revised</text>
+  <text x="84" y="72" class="subtitle">All available daily history · 2026-08-22 → 2026-09-11 · 21 daily points · date labels sampled · latest day may be revised</text>
   <text x="924" y="38" text-anchor="end" class="metric-label">Total downloads</text>
-  <text x="924" y="70" text-anchor="end" class="metric-value">605</text>
-  <g transform="translate(84,102)"><circle cx="5" cy="-4" r="5" fill="#2563eb"/><text x="18" y="0" class="package-role">Package</text><text x="18" y="23" class="package-name">dsh-session-insights</text><text x="244" y="23" text-anchor="end" class="package-total">605</text></g>
+  <text x="924" y="70" text-anchor="end" class="metric-value">642</text>
+  <g transform="translate(84,102)"><circle cx="5" cy="-4" r="5" fill="#2563eb"/><text x="18" y="0" class="package-role">Package</text><text x="18" y="23" class="package-name">dsh-session-insights</text><text x="244" y="23" text-anchor="end" class="package-total">642</text></g>
   <text x="84" y="160" class="axis-title">Cumulative downloads</text>
   <line x1="84" y1="436" x2="924" y2="436" class="grid"/><text x="70" y="440" text-anchor="end" class="axis">0</text><line x1="84" y1="371" x2="924" y2="371" class="grid"/><text x="70" y="375" text-anchor="end" class="axis">163</text><line x1="84" y1="306" x2="924" y2="306" class="grid"/><text x="70" y="310" text-anchor="end" class="axis">325</text><line x1="84" y1="241" x2="924" y2="241" class="grid"/><text x="70" y="245" text-anchor="end" class="axis">488</text><line x1="84" y1="176" x2="924" y2="176" class="grid"/><text x="70" y="180" text-anchor="end" class="axis">650</text>
-  <polygon points="84.00,436 84.00,386.40 128.21,381.20 172.42,373.20 216.63,310.80 260.84,295.20 305.05,282.40 349.26,273.20 393.47,264.80 437.68,255.20 481.89,251.60 526.11,244.40 570.32,237.20 614.53,237.20 658.74,226.40 702.95,214.00 747.16,205.60 791.37,205.60 835.58,205.60 879.79,194.00 924.00,194.00 924.00,436" fill="url(#growth-fill)"/>
-  <polyline points="84.00,386.40 128.21,381.20 172.42,373.20 216.63,310.80 260.84,295.20 305.05,282.40 349.26,273.20 393.47,264.80 437.68,255.20 481.89,251.60 526.11,244.40 570.32,237.20 614.53,237.20 658.74,226.40 702.95,214.00 747.16,205.60 791.37,205.60 835.58,205.60 879.79,194.00 924.00,194.00" fill="none" stroke="#0f766e" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <polygon points="84.00,436 84.00,386.40 126.00,381.20 168.00,373.20 210.00,310.80 252.00,295.20 294.00,282.40 336.00,273.20 378.00,264.80 420.00,255.20 462.00,251.60 504.00,244.40 546.00,237.20 588.00,237.20 630.00,226.40 672.00,214.00 714.00,205.60 756.00,205.60 798.00,205.60 840.00,194.00 882.00,179.20 924.00,179.20 924.00,436" fill="url(#growth-fill)"/>
+  <polyline points="84.00,386.40 126.00,381.20 168.00,373.20 210.00,310.80 252.00,295.20 294.00,282.40 336.00,273.20 378.00,264.80 420.00,255.20 462.00,251.60 504.00,244.40 546.00,237.20 588.00,237.20 630.00,226.40 672.00,214.00 714.00,205.60 756.00,205.60 798.00,205.60 840.00,194.00 882.00,179.20 924.00,179.20" fill="none" stroke="#0f766e" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
   
-  <circle cx="924" cy="194" r="5" fill="#ffffff" stroke="#0f766e" stroke-width="3"/>
+  <circle cx="924" cy="179.2" r="5" fill="#ffffff" stroke="#0f766e" stroke-width="3"/>
   <g class="endpoint-badge" data-position="below">
-    <rect x="879.50" y="206.00" width="36.50" height="22" rx="6" class="endpoint-backdrop"/>
-    <text x="909.00" y="221.00" text-anchor="end" class="endpoint">605</text>
+    <rect x="879.50" y="191.20" width="36.50" height="22" rx="6" class="endpoint-backdrop"/>
+    <text x="909.00" y="206.20" text-anchor="end" class="endpoint">642</text>
   </g>
-  <text x="128.21" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-23">08-23</text><text x="216.63" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-25">08-25</text><text x="305.05" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-27">08-27</text><text x="393.47" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-29">08-29</text><text x="481.89" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-31">08-31</text><text x="570.32" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-02">09-02</text><text x="658.74" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-04">09-04</text><text x="747.16" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-06">09-06</text><text x="835.58" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-08">09-08</text><text x="924.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-10">09-10</text>
+  <text x="84.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-22">08-22</text><text x="168.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-24">08-24</text><text x="252.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-26">08-26</text><text x="336.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-28">08-28</text><text x="420.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-08-30">08-30</text><text x="504.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-01">09-01</text><text x="588.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-03">09-03</text><text x="672.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-05">09-05</text><text x="756.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-07">09-07</text><text x="840.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-09">09-09</text><text x="924.00" y="464" text-anchor="middle" class="axis x-axis-tick" data-day="2026-09-11">09-11</text>
   <text x="84" y="496" class="subtitle">Source: npm Downloads API · Download counts measure registry requests, not unique users or confirmed installations.</text>
 </svg>
