@@ -74,6 +74,21 @@ npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 
 - 在 [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/) 查看公开目录条目。
 - 其他已核验的社区条目统一记录在[分发状态表](docs/distribution.md)。
 
+## 权限与依赖
+
+Bundle 以 DSH 进程的操作系统权限运行。安装前请了解以下能力；所列路径说明预期用途，不构成操作系统沙箱。
+
+| 能力 | 使用范围 |
+|---|---|
+| 会话与文件 | 通过 `sessionQuery` 读取筛选后的会话快照，在 `$DSH_HOME/insights/runs` 下写入 HTML/JSON、分析批次和模型输出，在 `$DSH_HOME/insights/cache` 下读写语义缓存。校验失败的已提交模型输出文件会被删除。原始快照经标准输入传给 Python，不生成中间快照文件。 |
+| 本地命令 | 探测 Python 3.11+，并以参数数组启动随包提供的 Python 模块，不使用 Shell。可用 `DSH_SESSION_INSIGHTS_PYTHON` 指定解释器；请确保解释器及其模块搜索路径可信。 |
+| 环境与凭据 | 读取 `DSH_HOME`、`HOME`、`DSH_SESSION_INSIGHTS_PYTHON` 和 `PYTHONPATH`；Python 子进程继承宿主环境，其中可能含有密钥。插件无需单独的 API Key，也不调用操作系统凭据库。会话正文仍可能含有秘密，脱敏不能保证内容适合公开。 |
+| 网络与模型 | 确定性分析可离线运行。默认语义流程把经过清洗、限制范围的证据交给当前 DSH agent 及其配置的模型提供方，使用该提供方的凭据、数据处理规则和计费方式。添加 `--deterministic` 可跳过此阶段。 |
+
+Bundle 需要 Node.js 20+（若 DSH 要求更高则以宿主要求为准）、Python 3.11+，以及 DSH 的 `commands`、`tools` 和 `sessionQuery` 服务，不会自动安装 Python 或依赖。可选磁盘 CLI 读取压缩日志需要 `zstandard>=0.23,<1`；`jsonschema>=4.23,<5` 仅供开发测试使用，不是 Bundle 运行依赖。服务缺失、找不到解释器或 Python 命令失败时，本次操作会报错停止。无效语义输出会被拒绝；显式回退会保留确定性报告并记录降级原因。
+
+可选 CLI 还会读取磁盘会话日志，并可写入用户指定的输出或工作目录。其 bootstrap 安装器会调用 pip，写入受管理的 skill/runtime 目录，与 Bundle 安装是两条独立路径。具体路径、失败边界和 DSH STORE 审核状态见[安全策略](SECURITY.md)。
+
 ## 三档隐私模式
 
 确定性报告完全离线运行。原生插件把 `sessionQuery` 返回的完整快照经 stdin 流式交给 Python，不会在运行目录复制原始 transcript。你可以决定报告和可选模型阶段允许保留多少会话内容：

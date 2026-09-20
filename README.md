@@ -74,6 +74,21 @@ The npm package has no install or build lifecycle script. The registry command i
 - Find the public directory entry on [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/).
 - Other verified community listings are recorded in [the distribution ledger](docs/distribution.md).
 
+## Permissions and dependencies
+
+The Bundle runs with the DSH process's operating-system permissions. Review these capabilities before installation; the paths below describe intended use, not an OS sandbox.
+
+| Capability | Scope |
+|---|---|
+| Session and file access | Reads selected session snapshots through `sessionQuery`; writes HTML/JSON, batch inputs and model outputs under `$DSH_HOME/insights/runs`, and semantic caches under `$DSH_HOME/insights/cache`. Invalid submitted model-output files are removed. Raw snapshots pass to Python over stdin without an intermediate snapshot file. |
+| Local commands | Probes for Python 3.11+ and starts the bundled Python modules with argument arrays, without a shell. `DSH_SESSION_INSIGHTS_PYTHON` can select the executable. Trust that interpreter and its import paths. |
+| Environment and credentials | Reads `DSH_HOME`, `HOME`, `DSH_SESSION_INSIGHTS_PYTHON` and `PYTHONPATH`; Python children inherit the host environment, which may contain secrets. The plugin does not require its own API key or call an OS credential store. Session content itself may contain secrets; redaction is not a disclosure guarantee. |
+| Network and models | Deterministic analysis runs offline. The default semantic workflow gives bounded, sanitized evidence to the current DSH agent and its configured model provider, with that provider's credentials, data handling and costs. Use `--deterministic` to skip it. |
+
+The Bundle requires Node.js 20+ (or the host DSH's stricter requirement), Python 3.11+, and DSH's `commands`, `tools` and `sessionQuery` services. It does not install Python or dependencies automatically. The optional on-disk CLI requires `zstandard>=0.23,<1` for compressed logs. `jsonschema>=4.23,<5` is a development/test dependency, not a Bundle runtime requirement. Missing services, an unavailable interpreter or failed Python commands stop the requested operation. Invalid semantic output is rejected; an explicit fallback preserves a deterministic report with the degradation recorded.
+
+The optional CLI also reads session logs from disk and can write to a user-selected output/work directory. Its bootstrap installer uses pip and writes managed skill/runtime directories; it is separate from Bundle installation. See [Security Policy](SECURITY.md) for those paths, failure boundaries and DSH STORE review status.
+
 ## Privacy modes
 
 Deterministic reports run offline. In native plugin mode, complete raw snapshots are streamed from `sessionQuery` to Python over stdin and are not copied into the run directory. Choose how much session content the report and optional model stage may retain:
