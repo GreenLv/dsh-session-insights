@@ -1,5 +1,16 @@
 # Distribution status
 
+## Published v0.4.0 destinations
+
+Read back on 2026-09-20:
+
+- [npm 0.4.0](https://www.npmjs.com/package/dsh-session-insights/v/0.4.0) is public and `latest` resolves to `0.4.0`.
+- [GitHub Release v0.4.0](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.4.0) and its annotated tag point to `395bb4c308f053c494074e252950c63599fa4fce`. The bilingual notes and all three downloaded assets match the frozen release files.
+- The npm and GitHub tarballs match byte for byte: SHA-256 `a95c79096ffafdd3acdf9ad161c98a69f1ac39485e96b3c1641ac2635672b34a`.
+- A [Chinese update](https://github.com/AI-Scarlett/DSH-Store/issues/965#issuecomment-5750277537) describes the runtime changes in STORE issue #965. STORE recheck and real DSH host acceptance remain pending.
+
+The [release receipt](acceptance/v0.4.0-release-receipt.json) records the public identities. This entry was added after publication; it does not change the released package. Earlier sections describe their named release dates.
+
 ## Published v0.3.0 destinations
 
 1. [GitHub Release `v0.3.0`](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.3.0) is published as a non-draft, non-prerelease release (read back 2026-08-25); the tag points at commit `d6065402`.
