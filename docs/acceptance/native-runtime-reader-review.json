@@ -1,0 +1,118 @@
+{
+  "schema": "repository-reader-review/v1",
+  "status": "passed",
+  "audience": {
+    "role": "Plugin users evaluating the native runtime migration",
+    "prior_knowledge": "careful_upgrader"
+  },
+  "documents": [
+    {
+      "path": "README.md",
+      "role": "readme",
+      "language": "en",
+      "sha256": "2b20932f7fe72979ec721db61ba73ebec357cb215f65b53a5fa56638b0c3a96f"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "role": "readme",
+      "language": "zh-CN",
+      "sha256": "cf2d80328eea1a9260c0cba68d8a81b72e1f12d3e4079c82b8e19e8ea369d376"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "role": "changelog",
+      "language": "en",
+      "sha256": "a6b644e45f2a9e52ebd9f4d5971c35f00d77c00a68fc4695d2c2c5d0ce978786"
+    },
+    {
+      "path": "CHANGELOG.zh-CN.md",
+      "role": "changelog",
+      "language": "zh-CN",
+      "sha256": "1b854cd6d91a1642ed93b1a2981dbe047e887709a8f707aec37ec4045d4c938d"
+    }
+  ],
+  "document_set_sha256": "76369aa4f8d2320b76d2ee3748ce1e7076d536573e3184976548745d9b2ecdee",
+  "method": {
+    "kind": "cold_read",
+    "implementation_context_used": false,
+    "claim_ledger_used": false
+  },
+  "checks": [
+    {
+      "id": "document_role",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md"
+      ],
+      "note": "READMEs explain source installation and runtime permissions; unreleased changelogs state migration and resume changes without claiming publication."
+    },
+    {
+      "id": "reader_outcome",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md"
+      ],
+      "note": "Both editions distinguish the Node source candidate from the published Python package, and explain outputs, retention and cleanup."
+    },
+    {
+      "id": "term_onboarding",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md"
+      ],
+      "note": "Worker environment, marked run directory and optional CLI are explained through their effect on credentials, files and installation."
+    },
+    {
+      "id": "evidence_boundary",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md"
+      ],
+      "note": "The new candidate does not inherit old native acceptance. STORE approval, profile migration and npm publication remain unclaimed."
+    },
+    {
+      "id": "density_and_order",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md"
+      ],
+      "note": "First-use commands remain early; permissions, input bounds and cleanup are grouped before advanced workflows."
+    },
+    {
+      "id": "language_independence",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md"
+      ],
+      "note": "Both languages independently describe Python removal, path guards, explicit cleanup, no shared native cache and legacy resume limits."
+    }
+  ],
+  "findings": [],
+  "limitations": [
+    "Real DSH host and provider acceptance, installed-profile migration, npm release and STORE approval are not established by source and fixture tests."
+  ]
+}

@@ -72,7 +72,7 @@ test('Windows project filters require native path syntax', () => {
   assert.equal(_test.normalizeProjectInput('/path/to/project', 'darwin'), '/path/to/project')
 })
 
-test('registers one command and the six workflow tools', () => {
+test('registers one command and the workflow and cleanup tools', () => {
   const commands = []
   const tools = []
   apply({
@@ -88,13 +88,8 @@ test('registers one command and the six workflow tools', () => {
     'session_insights_get_aggregate',
     'session_insights_submit_aggregate',
     'session_insights_finalize',
+    'session_insights_cleanup',
   ])
-})
-
-test('bridge uses a versioned JSONL envelope', () => {
-  const lines = _test.bridgeLines('report', { days: 7 }, [{ session: { id: 'one' }, events: [] }])
-  assert.equal(lines[0].schema, 'dsh-session-insights/bridge-1')
-  assert.equal(lines[1].kind, 'session')
 })
 
 test('orchestration message uses a supported ContextForm and bounded repair contract', () => {
@@ -151,16 +146,19 @@ test('repeated runs accept nonexistent descendants below an aliased DSH home', a
   }
 })
 
-test('cancellation terminates the Python child promptly', async () => {
+test('cancellation terminates native analysis promptly', async () => {
   const controller = new AbortController()
+  const data = syntheticSessions(1)
+  const snapshot = [...data.snapshots.values()][0]
+  snapshot.events = Array.from({ length: 100000 }, (_, seq) => ({ seq, type: 'tool/call', data: { callId: String(seq), name: 'bash', arguments: 'test' } }))
   const started = Date.now()
-  const running = _test.runPython(['-c', 'import time; time.sleep(30)'], { signal: controller.signal })
-  setTimeout(() => controller.abort(), 50)
+  const running = _test.analyze([snapshot], { now: Date.now() }, controller.signal)
+  setTimeout(() => controller.abort(), 10)
   await assert.rejects(running, /session insights cancelled/)
-  assert.ok(Date.now() - started < 5000, 'cancelled child did not terminate promptly')
+  assert.ok(Date.now() - started < 5000)
 })
 
-test('invalid semantic output is removed before deterministic fallback', async () => {
+test('invalid semantic output is never persisted before deterministic fallback', async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'dsh-session-insights-fallback-'))
   const previous = process.env.DSH_HOME
   process.env.DSH_HOME = temporary
@@ -183,7 +181,7 @@ test('invalid semantic output is removed before deterministic fallback', async (
   }
 })
 
-test('deterministic slash command streams sessionQuery data into a report', async () => {
+test('deterministic slash command analyzes sessionQuery data into a report', async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'dsh-session-insights-node-'))
   const previous = process.env.DSH_HOME
   process.env.DSH_HOME = temporary

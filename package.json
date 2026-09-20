@@ -9,7 +9,7 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "plugin/lib/index.js",
+    "plugin/lib/*.js",
     "src/dsh_session_insights/__init__.py",
     "src/dsh_session_insights/__main__.py",
     "src/dsh_session_insights/analyzer.py",
@@ -24,7 +24,8 @@
     "cordis.patch.yml",
     "README.md",
     "README.zh-CN.md",
-    "LICENSE"
+    "LICENSE",
+    "SECURITY.md"
   ],
   "engines": {
     "node": ">=20",
