@@ -1,8 +1,8 @@
-# Native runtime migration — source candidate
+# Native runtime migration — 0.4.0
 
-This candidate replaces the Bundle's Python bridge with Node.js snapshot analysis and semantic validation. It has not been published as a new npm version or installed into a user's DSH Profile. The existing exact DSH peer baseline is unchanged. Historical native acceptance of the Python implementation does not establish acceptance of this new runtime.
+Version 0.4.0 replaces the Bundle's Python bridge with Node.js snapshot analysis and semantic validation. These checks cover the source and packaged runtime; no user DSH Profile was modified. The existing exact DSH peer baseline is unchanged. Historical native acceptance of the Python implementation does not establish acceptance of this new runtime.
 
-本候选将 Bundle 的 Python bridge 替换为 Node.js 快照分析和语义校验，尚未作为新 npm 版本发布，也未安装到用户 DSH Profile。DSH 精确 peer 基线保持不变；旧 Python 实现的宿主验收不覆盖新运行时。
+0.4.0 将 Bundle 的 Python bridge 替换为 Node.js 快照分析和语义校验。本记录覆盖源码和打包后的运行时，未修改用户 DSH Profile。DSH 精确 peer 基线保持不变；旧 Python 实现的宿主验收不覆盖新运行时。
 
 ## Implementation and boundaries
 
@@ -33,6 +33,6 @@ Local macOS checks on 2026-09-20 passed:
 
 ## Remaining external acceptance
 
-A real DSH host must still exercise registration, slash-command dispatch, cancellation and a configured model's full semantic round trip against the new package bytes. Windows/Linux CI is portable test evidence, not an interactive native-host acceptance claim. No host restart, installed-profile migration, provider call, new package release or STORE approval is claimed here.
+A real DSH host must still exercise registration, slash-command dispatch, cancellation and a configured model's full semantic round trip against the new package bytes. Windows/Linux CI is portable test evidence, not an interactive native-host acceptance claim. No host restart, installed-profile migration, provider call or STORE approval is claimed here.
 
-仍需在真实 DSH 宿主中验证新包的注册、斜杠命令分发、取消及配置模型的完整语义往返。Windows/Linux CI 只证明测试覆盖；本记录不声称已完成宿主重启、已安装 Profile 迁移、提供方调用、新包发布或商城准入。
+仍需在真实 DSH 宿主中验证新包的注册、斜杠命令分发、取消及配置模型的完整语义往返。Windows/Linux CI 只证明测试覆盖；本记录不声称已完成宿主重启、已安装 Profile 迁移、提供方调用或商城准入。

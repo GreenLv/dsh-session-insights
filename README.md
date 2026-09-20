@@ -37,9 +37,9 @@ The HTML file contains its own styles and data, so you can keep it locally and o
 
 ## Install the Bundle
 
-The source-checkout Bundle requires DeepSeek Harness and Node.js 20+ (or the host's stricter Node requirement), without Python. This native migration is not yet published to npm; the published `0.3.2` Bundle still requires Python 3.11+. Use the reviewed source-checkout installation below to try the new implementation.
+The `0.4.0` Bundle requires DeepSeek Harness and Node.js 20+ (or the host's stricter Node requirement), without Python. The optional file-log CLI still requires Python 3.11+.
 
-**DSH compatibility:** The current verified support baseline is `0.1.5-rc.2` (macOS native workflows). See [DSH compatibility](#dsh-compatibility) for other-platform scope.
+**DSH compatibility:** The package targets `0.1.5-rc.2`. Automated tests cover the new runtime; native-host acceptance is pending. See [DSH compatibility](#dsh-compatibility).
 
 Install the published Bundle into a DSH profile, then start that profile:
 
@@ -76,7 +76,7 @@ The npm package has no install or build lifecycle script. The registry command i
 
 ## Permissions and dependencies
 
-The source-checkout Bundle analyzes `sessionQuery` snapshots in a Node.js worker. It does not start Python or a shell, and the worker receives an empty environment and no inherited Node startup arguments. `DSH_SESSION_INSIGHTS_PYTHON`, `PYTHONPATH` and Python startup files no longer affect native analysis. The optional Python CLI remains a separate workflow.
+The Bundle analyzes `sessionQuery` snapshots in a Node.js worker. It does not start Python or a shell, and the worker receives an empty environment and no inherited Node startup arguments. `DSH_SESSION_INSIGHTS_PYTHON`, `PYTHONPATH` and Python startup files no longer affect native analysis. The optional Python CLI remains a separate workflow.
 
 | Capability | Scope |
 |---|---|
@@ -85,7 +85,7 @@ The source-checkout Bundle analyzes `sessionQuery` snapshots in a Node.js worker
 | Environment and credentials | The host uses `DSH_HOME` or the OS home directory to locate storage. No interpreter discovery, environment forwarding, separate API key or credential-store calls are used by native analysis. Session content can still contain secrets; redaction is not a disclosure guarantee. |
 | Network and models | Deterministic analysis runs offline. The default semantic workflow sends bounded, sanitized evidence through the current DSH agent to its configured model provider, with that provider's data handling and costs. Use `--deterministic` to skip it. |
 
-The source Bundle requires Node.js 20+ (or the host DSH's stricter requirement) and DSH's `commands`, `tools` and `sessionQuery` services. Native analysis has no additional npm runtime dependencies. Missing services, worker failure, unsafe paths or invalid semantic output stop the affected operation. Model output is validated before writing; a rejected replacement preserves any previously valid result. Explicit fallback produces a deterministic report marked as degraded.
+The Bundle requires Node.js 20+ (or the host DSH's stricter requirement) and DSH's `commands`, `tools` and `sessionQuery` services. Native analysis has no additional npm runtime dependencies. Missing services, worker failure, unsafe paths or invalid semantic output stop the affected operation. Model output is validated before writing; a rejected replacement preserves any previously valid result. Explicit fallback produces a deterministic report marked as degraded.
 
 A run accepts at most 2,000 selected snapshots and 64 MiB of serialized snapshot input. Reduce `--days` or filter `--project` when that limit is exceeded. Existing Python runs cannot be resumed by the native implementation: finish them through the CLI or start a new run. Native runs retain their own validated outputs for resumption, but do not reuse a cross-run semantic cache. Deterministic summary wording has been refreshed; the report schema and dashboard remain shared with the CLI.
 
@@ -97,11 +97,11 @@ The optional CLI still requires Python 3.11+ and `zstandard>=0.23,<1` for compre
 
 ## Privacy modes
 
-Deterministic reports run offline. In source-checkout native mode, complete raw snapshots are analyzed in memory and are not copied into the run directory. Choose how much session content the report and optional model stage may retain:
+Deterministic reports run offline. In native mode, complete raw snapshots are analyzed in memory and are not copied into the run directory. Choose how much session content the report and optional model stage may retain:
 
 | Mode | Report content | Semantic analysis |
 |---|---|---|
-| `redacted` (default) | Keeps bounded excerpts after anonymizing identity and paths and filtering secrets | Uses bounded, redacted evidence only when you explicitly run the semantic workflow |
+| `redacted` (default) | Keeps bounded excerpts after anonymizing identity and paths and filtering secrets | Uses bounded, redacted evidence in the default semantic workflow; `--deterministic` skips it |
 | `metrics` | Omits excerpts and keeps aggregate measurements | Disabled; no semantic batches are created |
 | `local` | Keeps bounded local paths and text after secret filtering | Explicit opt-in for a trusted local destination and configured model provider |
 
@@ -198,13 +198,11 @@ The package declares `0.1.5-rc.2` as its current DSH requirement. This exact ran
 
 | Scope | DSH version | Status |
 | --- | --- | --- |
-| Current support baseline | `0.1.5-rc.2` | Verified within the scopes below |
-| Source and automated-test review | `0.1.5-rc.2` | Reviewed and adapted against the installed packages; passing locally |
-| Native host acceptance | `0.1.5-rc.2` | macOS isolated host: deterministic, full semantic, metrics skip, fallback, and Skill discovery passed |
+| Package target | `0.1.5-rc.2` | Exact dependency requirement retained from 0.3.2 |
+| Source and automated tests | `0.1.5-rc.2` | New Node runtime covered by macOS, Linux and Windows CI |
+| Native host acceptance of 0.4.0 | `0.1.5-rc.2` | Pending |
 
-`0.3.2` retains the generation 0–3 session-log support introduced in `0.3.1`. The metadata-only update does not alter platform-specific launchers or host interfaces, so the full Windows/Linux native model workflows are not repeated. The existing three-platform CI checks shared code and paths; it does not establish native acceptance on those platforms. These results apply to the named DSH version and verification scope. Historical acceptance records remain release evidence, not continuing support commitments.
-
-The unreleased Node.js migration changes the execution path. The native host acceptance above belongs to the released Python implementation and does not establish acceptance of this candidate. See [native migration checks](docs/acceptance/native-runtime-migration.md) for the new test scope and remaining host checks.
+`0.4.0` retains generation 0–3 session-log support and replaces the native Python bridge with Node.js. The earlier macOS native workflow results apply to the Python implementation in `0.3.1`/`0.3.2`. See [native migration checks](docs/acceptance/native-runtime-migration.md) for the new runtime's test scope and remaining host checks.
 
 ## Session log generations
 

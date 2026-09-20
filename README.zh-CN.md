@@ -37,9 +37,9 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 ## 安装 Bundle
 
-源码版 Bundle 需要 DeepSeek Harness 和 Node.js 20+（或宿主要求的更高版本），无需 Python。这次原生迁移尚未发布到 npm；已发布的 `0.3.2` Bundle 仍需要 Python 3.11+。试用新实现请使用下方的已审查源码安装方式。
+`0.4.0` Bundle 需要 DeepSeek Harness 和 Node.js 20+（或宿主要求的更高版本），无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。
 
-**DSH 兼容性：** 当前已验证的支持基线为 `0.1.5-rc.2`（macOS 原生流程）。其他平台的验证范围见 [DSH 兼容性](#dsh-兼容性)。
+**DSH 兼容性：** 软件包要求 `0.1.5-rc.2`。新运行时已通过自动化测试，宿主原生验收待完成。详见 [DSH 兼容性](#dsh-兼容性)。
 
 先把已发布 Bundle 安装到 DSH profile，再启动该 profile：
 
@@ -76,7 +76,7 @@ npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 
 
 ## 权限与依赖
 
-源码版 Bundle 在 Node.js worker 中分析 `sessionQuery` 快照，不再启动 Python 或 Shell。worker 使用空环境，也不继承 Node 启动参数；`DSH_SESSION_INSIGHTS_PYTHON`、`PYTHONPATH` 和 Python 启动文件不再影响原生分析。可选 Python CLI 仍作为独立流程保留。
+Bundle 在 Node.js worker 中分析 `sessionQuery` 快照，不再启动 Python 或 Shell。worker 使用空环境，也不继承 Node 启动参数；`DSH_SESSION_INSIGHTS_PYTHON`、`PYTHONPATH` 和 Python 启动文件不再影响原生分析。可选 Python CLI 仍作为独立流程保留。
 
 | 能力 | 使用范围 |
 |---|---|
@@ -85,7 +85,7 @@ npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 
 | 环境与凭据 | 宿主仅用 `DSH_HOME` 或操作系统用户目录定位存储。原生分析不探测解释器、不转发环境变量、不需要独立 API Key，也不调用凭据库。会话内容仍可能含有秘密，脱敏不能保证适合公开。 |
 | 网络与模型 | 确定性分析可离线运行。默认语义流程经当前 DSH agent 把清洗并限制范围的证据交给配置的模型提供方，遵循该提供方的数据处理规则和计费方式。添加 `--deterministic` 可跳过此阶段。 |
 
-源码版 Bundle 需要 Node.js 20+（若 DSH 要求更高则以宿主为准），以及 DSH 的 `commands`、`tools` 和 `sessionQuery` 服务，无额外 npm 运行依赖。服务缺失、worker 失败、不安全路径或无效语义输出都会使相关操作停止。模型输出先在内存校验再写入；无效的替换请求不会覆盖已有合法结果。显式回退会生成标记为降级的确定性报告。
+Bundle 需要 Node.js 20+（若 DSH 要求更高则以宿主为准），以及 DSH 的 `commands`、`tools` 和 `sessionQuery` 服务，无额外 npm 运行依赖。服务缺失、worker 失败、不安全路径或无效语义输出都会使相关操作停止。模型输出先在内存校验再写入；无效的替换请求不会覆盖已有合法结果。显式回退会生成标记为降级的确定性报告。
 
 每次最多分析 2,000 个选中快照，序列化输入上限为 64 MiB；超出时请缩短 `--days` 或按 `--project` 筛选。原生实现不能恢复旧 Python 运行目录，请通过 CLI 完成旧运行或重新生成。新运行保留自身已验证输出供恢复使用，不再跨运行复用语义缓存。确定性摘要措辞已更新，报告 schema 和 Dashboard 仍与 CLI 共用。
 
@@ -97,11 +97,11 @@ npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 
 
 ## 三档隐私模式
 
-确定性报告完全离线运行。源码版原生插件在内存中分析 `sessionQuery` 返回的完整快照，不会在运行目录复制原始 transcript。你可以决定报告和可选模型阶段允许保留多少会话内容：
+确定性报告完全离线运行。原生插件在内存中分析 `sessionQuery` 返回的完整快照，不会在运行目录复制原始 transcript。你可以决定报告和可选模型阶段允许保留多少会话内容：
 
 | 模式 | 报告内容 | 语义分析 |
 |---|---|---|
-| `redacted`（默认） | 匿名化身份和路径、过滤密钥后，保留有界摘录 | 只有显式运行语义流程时，才使用有界且已脱敏的证据 |
+| `redacted`（默认） | 匿名化身份和路径、过滤密钥后，保留有界摘录 | 默认语义流程使用有界且已脱敏的证据；`--deterministic` 跳过该阶段 |
 | `metrics` | 不保留摘录，只输出聚合测量 | 完全禁用，不生成语义批次 |
 | `local` | 过滤密钥后保留有界的本地路径和文本 | 需要显式启用，只应面向可信的本地输出位置和模型提供方 |
 
@@ -198,13 +198,11 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 | 范围 | DSH 版本 | 状态 |
 | --- | --- | --- |
-| 当前支持基线 | `0.1.5-rc.2` | 已按下列范围完成验证 |
-| 源码与自动化测试审查 | `0.1.5-rc.2` | 已按本机安装的包完成核对与适配；本机测试通过 |
-| 宿主原生验收 | `0.1.5-rc.2` | macOS 隔离宿主：确定性、完整语义、metrics 跳过、fallback 与 Skill 发现通过 |
+| 软件包目标 | `0.1.5-rc.2` | 沿用 0.3.2 的精确依赖要求 |
+| 源码与自动化测试 | `0.1.5-rc.2` | 新 Node 运行时通过 macOS、Linux、Windows CI |
+| 0.4.0 宿主原生验收 | `0.1.5-rc.2` | 待完成 |
 
-`0.3.2` 保留 `0.3.1` 引入的第 0–3 代会话日志支持。本次仅更新元数据，没有改变平台专属启动器或宿主接口，因此不重复 Windows/Linux 的完整原生模型流程；现有三平台 CI 检查共用代码与路径行为，不能代替这些平台的原生验收。这些结果仅适用于表中所列的 DSH 版本和验证范围。历史验收记录保留为当时的发布证据，不代表持续支持承诺。
-
-尚未发布的 Node.js 迁移改变了执行路径。上表的宿主原生验收属于已发布的 Python 实现，不构成新候选的验收。新测试范围和待完成宿主检查见[原生迁移验证记录](docs/acceptance/native-runtime-migration.md)。
+`0.4.0` 保留第 0–3 代会话日志支持，将原生 Python bridge 替换为 Node.js。此前 macOS 原生流程的结果适用于 `0.3.1`/`0.3.2` 的 Python 实现。新运行时的测试范围和待验证项目见[原生迁移检查](docs/acceptance/native-runtime-migration.md)。
 
 ## 会话日志代际
 

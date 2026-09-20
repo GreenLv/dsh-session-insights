@@ -5,7 +5,7 @@ import test from "node:test";
 const expectedRange = "0.1.5-rc.2";
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
-test("market-facing DSH metadata matches the verified support range", () => {
+test("market-facing DSH metadata matches the declared target range", () => {
   assert.equal(packageJson.engines?.dsh, expectedRange);
   assert.equal(packageJson.dsh?.engines?.dsh, expectedRange);
 
@@ -22,6 +22,8 @@ test("both README support summaries match the market range", async () => {
     readFile(new URL("../README.md", import.meta.url), "utf8"),
     readFile(new URL("../README.zh-CN.md", import.meta.url), "utf8"),
   ]);
-  assert.match(english, /current verified support baseline is `0\.1\.5-rc\.2`/);
-  assert.match(chinese, /当前已验证的支持基线为 `0\.1\.5-rc\.2`/);
+  assert.match(english, /The package targets `0\.1\.5-rc\.2`/);
+  assert.match(english, /native-host acceptance is pending/);
+  assert.match(chinese, /软件包要求 `0\.1\.5-rc\.2`/);
+  assert.match(chinese, /宿主原生验收待完成/);
 });

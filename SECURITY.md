@@ -10,9 +10,9 @@ Do not open a public issue for a suspected secret leak, unsafe installer behavio
 
 Never attach real DSH sessions, reports, caches, credentials, or semantic work directories. State the affected version, platform, DSH version, privacy mode, and a minimal synthetic reproduction.
 
-## Native runtime permissions (unreleased source checkout)
+## Native runtime permissions (0.4.0)
 
-The source-checkout Bundle uses a Node.js worker for cancellable snapshot analysis. It does not launch Python, a shell or another executable. The worker receives an empty environment and an empty `execArgv`; interpreter discovery, inherited `PYTHONPATH`, Python startup hooks and forwarding of host credentials have been removed from the native path. The host still runs with DSH's OS permissions; a worker is not an OS security sandbox.
+The Bundle uses a Node.js worker for cancellable snapshot analysis. It does not launch Python, a shell or another executable. The worker receives an empty environment and an empty `execArgv`; interpreter discovery, inherited `PYTHONPATH`, Python startup hooks and forwarding of host credentials have been removed from the native path. The host still runs with DSH's OS permissions; a worker is not an OS security sandbox.
 
 - **Files and sessions:** reads selected `sessionQuery` snapshots in memory. Reports, bounded semantic evidence and validated outputs live in marked direct children of `$DSH_HOME/insights/runs`. The configured home may be an alias, but links below it, hard-linked files and special files are rejected on every artifact operation. Batch identifiers must occur in the run manifest. Artifacts use bounded reads and atomic replacement; new POSIX directories/files use `0700`/`0600`. Windows permissions follow the parent ACL, so use a private DSH home. These checks do not defend against an actively hostile process with the same OS account changing ancestors between filesystem calls.
 - **Credentials:** native analysis needs no separate API key and does not call an OS credential store. The host reads `DSH_HOME` or uses the OS home directory; the analysis worker receives no host environment. Session text may contain credentials. Redaction is defense in depth, not a guarantee that arbitrary input is safe to disclose.
@@ -21,7 +21,7 @@ The source-checkout Bundle uses a Node.js worker for cancellable snapshot analys
 
 ## Dependencies and failures
 
-The source Bundle requires Node.js 20+ or the host DSH's stricter requirement, and DSH's `commands`, `tools` and `sessionQuery` services. Exact DSH peers remain in `package.json`. There are no additional npm runtime dependencies or install/build lifecycle scripts. Published `0.3.2` artifacts still use Python; this checkout is not a new package release.
+The Bundle requires Node.js 20+ or the host DSH's stricter requirement, and DSH's `commands`, `tools` and `sessionQuery` services. Exact DSH peers remain in `package.json`. There are no additional npm runtime dependencies or install/build lifecycle scripts. The optional Python CLI is maintained separately from the native Bundle.
 
 Missing services, worker failure, unsafe filesystem targets and oversized input stop the affected operation. The native selection limit is 2,000 snapshots / 64 MiB serialized input; reduce the time window or filter by project rather than silently dropping sessions. JSON artifact reads and submitted model payloads are capped at 16 MiB. Model outputs are validated in memory before writing, including evidence ownership, enum values, privacy and prohibited completion fields. A rejected replacement preserves the prior validated output. Structured tool failures cannot be overridden by success-looking output text. Explicit fallback keeps a deterministic report marked as degraded. Failures may leave a marked partial run that can be previewed and cleaned up.
 
@@ -36,6 +36,6 @@ These capabilities are separate from native Bundle installation:
 
 ## DSH STORE review
 
-[Issue #965](https://github.com/AI-Scarlett/DSH-Store/issues/965) reports file, command and credential permission signals. File access remains necessary. The unreleased native implementation removes Python child processes and environment forwarding; the optional Python CLI remains in the repository. The STORE's [source scanner](https://github.com/AI-Scarlett/DSH-Store/blob/079faa9233570d671e0d83d688edfa2407a0d7c6/src/automation-source-policy.mjs) also treats `process.env` and credential-related keywords as credential signals; a signal alone does not establish credential theft.
+[Issue #965](https://github.com/AI-Scarlett/DSH-Store/issues/965) reports file, command and credential permission signals. File access remains necessary. The 0.4.0 native implementation removes Python child processes and environment forwarding; the optional Python CLI remains in the repository. The STORE's [source scanner](https://github.com/AI-Scarlett/DSH-Store/blob/079faa9233570d671e0d83d688edfa2407a0d7c6/src/automation-source-policy.mjs) also treats `process.env` and credential-related keywords as credential signals; a signal alone does not establish credential theft.
 
 At the policy revision reviewed on 2026-09-20, [automatic approval](https://github.com/AI-Scarlett/DSH-Store/blob/079faa9233570d671e0d83d688edfa2407a0d7c6/registry/automation-policy.json) rejects these signals. Native hardening reduces real runtime capabilities but does not grant automatic approval; repository-wide scanning can still match the retained CLI, development scripts and credential-redaction vocabulary. The plugin may remain blocked until the STORE accepts a reviewed installation path or changes its policy. Source checks and CI do not establish STORE approval, installation in a real DSH Profile, or native runtime acceptance.

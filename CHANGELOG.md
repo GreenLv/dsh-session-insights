@@ -4,12 +4,16 @@
 
 Public releases are listed newest first.
 
-## Unreleased
+## 0.4.0 - 2026-09-20
+
+The native Bundle now generates reports without Python and adds explicit run cleanup.
+
+### Changed
 
 - Move native Bundle analysis and semantic validation to Node.js; remove Python interpreter discovery, subprocess execution and inherited Python environment/import paths. The optional Python CLI remains available.
 - Restrict native artifacts to marked run directories, reject linked paths and validate model output before writing. Explicit structured failures now take precedence over success-looking output text.
 - Add preview-first cleanup for a single run. Native runs keep validated outputs for resume but no longer write a shared semantic cache; old Python runs must be finished through the CLI or restarted.
-- Keep the report schema and dashboard, with refreshed deterministic summaries. Add legacy/V3 Python–JavaScript metric comparisons, full semantic-flow tests and adversarial storage checks. Native DSH acceptance and a package release remain pending.
+- Keep the report schema and dashboard, with refreshed deterministic summaries. Add legacy/V3 Python–JavaScript metric comparisons, full semantic-flow tests and adversarial storage checks. Native DSH acceptance remains pending.
 
 ## 0.3.2 - 2026-09-11
 
