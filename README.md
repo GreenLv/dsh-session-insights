@@ -41,14 +41,14 @@ The `0.5.0` Bundle requires DSH `0.1.7-rc.2` and Node.js `^22.19.0 || >=24.0.0`,
 
 **DSH compatibility:** The package targets `0.1.7-rc.2` only. Contract and service tests cover synthetic V4 input. Consult the acceptance record for artifact-specific host, model, platform and browser results. See [DSH compatibility](#dsh-compatibility).
 
-Once 0.5.0 is published, install the matching Bundle into your DSH profile:
+Install the matching 0.5.0 Bundle into your DSH profile:
 
 ```bash
 dsh plugin --profile web add dsh-session-insights@0.5.0
 dsh web
 ```
 
-Before registry publication, use the reviewed tarball in a separate profile. To install from a reviewed source checkout instead:
+To install from a reviewed source checkout instead:
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
@@ -188,7 +188,7 @@ Each model-produced JSON file is validated before it can enter the final report.
 - The Dashboard and semantic prompt contract support `zh-CN` and `en` from the same report schema.
 - Reports infer patterns from available evidence; they do not prove intent, quality, task acceptance, or security.
 
-Historical 0.2.0 package, CI, native macOS, and focused native Windows evidence is kept in the [v0.2.0 release acceptance record](docs/acceptance/v0.2.0-candidate.md). Deterministic slash dispatch and rendered English DOM remain unverified natively on Windows. The historical v0.1 CLI/Skill evidence remains in the [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md). Historical released-runtime compatibility evidence and its platform limits are recorded in the [0.1.5-rc.2 acceptance record](docs/acceptance/v0.1.5-rc.2-compatibility.md).
+Historical 0.2.0 package, CI, native macOS, and focused native Windows evidence is kept in the [v0.2.0 release acceptance record](docs/acceptance/v0.2.0-candidate.md). Those historical results do not describe the current release. The historical v0.1 CLI/Skill evidence remains in the [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md). Historical released-runtime compatibility evidence and its platform limits are recorded in the [0.1.5-rc.2 acceptance record](docs/acceptance/v0.1.5-rc.2-compatibility.md).
 
 ## DSH compatibility
 
@@ -200,7 +200,7 @@ Start a new analysis run after upgrading: earlier manifests and caches have a di
 
 Tool workload includes recorded programmatic tool calling (PTC) inner calls. The JSON `tool_execution` fields separate outer transport calls, inner executions, failures and unsettled inner calls; each recorded failed call outcome is counted once. If both an inner call and its outer program fail, both outcomes remain visible; the report does not infer whether they share one root cause. Permission denials are distinct from failed verification commands. Developer tool-registration messages and scheduled injections do not count as human requests.
 
-See the [rc.2 candidate acceptance record](docs/acceptance/v0.5.0-rc2-candidate.md) for exact checks, artifact identity and pending native/model/platform work. Historical acceptance records apply only to their named implementations.
+See the [0.5.0 release acceptance](docs/acceptance/v0.5.0-release.md) for the exact artifact, CI, macOS model workflow, Windows deterministic host checks and human bilingual browser checks. The [frozen candidate record](docs/acceptance/v0.5.0-rc2-candidate.md) retains the source review matrix. Historical acceptance records apply only to their named implementations.
 
 ## Session log generations
 

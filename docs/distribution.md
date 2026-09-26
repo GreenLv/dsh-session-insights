@@ -1,5 +1,12 @@
 # Distribution status
 
+## Published 0.5.0 (2026-09-26)
+
+The [GitHub Release](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.5.0) and [npm 0.5.0](https://www.npmjs.com/package/dsh-session-insights/v/0.5.0) publish the same accepted artifact for DSH `0.1.7-rc.2` only. Source tag: `607ecae2edaa0b145126a1c4cd8b3352c4a6bc5a`; artifact SHA-256: `1b969c46de0c526e79b3283322ebaa340676d8eaee0792b4ba6cd906c150e8d2`.
+
+See the [release acceptance](acceptance/v0.5.0-release.md) and [public receipt](acceptance/v0.5.0-release-receipt.json). Existing directory entries were not resubmitted or revalidated by this release; registry publication does not prove marketplace ingestion or approval.
+
+
 ## Published v0.4.0 destinations
 
 Read back on 2026-09-20:

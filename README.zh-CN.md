@@ -41,14 +41,14 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 **DSH 兼容性：** 软件包仅要求 `0.1.7-rc.2`。契约与服务测试覆盖合成 V4 输入；具体制品的宿主、模型、平台与页面验收结果分别记录。详见 [DSH 兼容性](#dsh-兼容性)。
 
-0.5.0 发布后，把匹配的 Bundle 安装到 DSH profile，再启动该 profile：
+把 0.5.0 Bundle 安装到 DSH profile，再启动该 profile：
 
 ```bash
 dsh plugin --profile web add dsh-session-insights@0.5.0
 dsh web
 ```
 
-registry 发布前的测试请使用审查过的 tarball，并选择独立 Profile。如需从已审查的源码安装：
+如需从已审查的源码安装：
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
@@ -188,7 +188,7 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 - Dashboard 与语义提示契约基于同一报告 schema 支持 `zh-CN` 和 `en`。
 - 报告只能根据现有证据推断模式，不能证明意图、质量、任务验收或安全性。
 
-历史 0.2.0 包身份、CI、macOS 原生验收和限定的 Windows 原生验收记录在 [v0.2.0 发布验收记录](docs/acceptance/v0.2.0-candidate.md)中。Windows 尚未原生验证确定性斜杠命令分发和英文 DOM 渲染。v0.1 CLI/Skill 的历史证据保留在 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。已发布运行时的历史兼容性证据及平台边界记录在 [0.1.5-rc.2 验收记录](docs/acceptance/v0.1.5-rc.2-compatibility.md)中。
+历史 0.2.0 包身份、CI、macOS 原生验收和限定的 Windows 原生验收记录在 [v0.2.0 发布验收记录](docs/acceptance/v0.2.0-candidate.md)中。这些历史结果不代表当前版本。v0.1 CLI/Skill 的历史证据保留在 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。已发布运行时的历史兼容性证据及平台边界记录在 [0.1.5-rc.2 验收记录](docs/acceptance/v0.1.5-rc.2-compatibility.md)中。
 
 ## DSH 兼容性
 
@@ -200,7 +200,7 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 工具工作量包含日志记录的程序化工具调用（PTC）内层调用。JSON 的 `tool_execution` 分别记录外层运输调用、内层执行、失败和未结束调用；每个失败调用结果计一次。若内层调用和外层程序都失败，则保留两个结果，不据此推断它们是否源于同一个原因。权限拒绝不算验证命令执行失败。developer 工具注册消息和定时注入不计人工请求。
 
-精确检查、制品身份及尚待完成的原生、模型和平台验证见 [rc.2 候选验收记录](docs/acceptance/v0.5.0-rc2-candidate.md)。历史验收只适用于各自注明的实现。
+精确制品、CI、macOS 模型流程、Windows 确定性宿主检查及中英文页面人工检查见 [0.5.0 发布验收记录](docs/acceptance/v0.5.0-release.md)。[冻结候选记录](docs/acceptance/v0.5.0-rc2-candidate.md)保留源码审查矩阵。历史验收只适用于各自注明的实现。
 
 ## 会话日志代际
 

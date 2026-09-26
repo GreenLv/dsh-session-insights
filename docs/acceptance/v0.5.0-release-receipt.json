@@ -1,0 +1,121 @@
+{
+  "schema": "release-receipt/v2",
+  "status": "passed",
+  "release_profile": "package",
+  "repository": {
+    "url": "https://github.com/GreenLv/dsh-session-insights",
+    "commit": "607ecae2edaa0b145126a1c4cd8b3352c4a6bc5a"
+  },
+  "version": "0.5.0",
+  "tag": "v0.5.0",
+  "artifact": {
+    "filename": "dsh-session-insights-0.5.0.tgz",
+    "sha256": "1b969c46de0c526e79b3283322ebaa340676d8eaee0792b4ba6cd906c150e8d2",
+    "size_bytes": 136679
+  },
+  "channels": [
+    {
+      "id": "source_tag",
+      "kind": "source_tag",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/tree/v0.5.0",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.5.0",
+        "commit": "607ecae2edaa0b145126a1c4cd8b3352c4a6bc5a",
+        "artifact_sha256": null
+      },
+      "observed": {
+        "version": "0.5.0",
+        "commit": "607ecae2edaa0b145126a1c4cd8b3352c4a6bc5a",
+        "artifact_sha256": null
+      }
+    },
+    {
+      "id": "package_registry",
+      "kind": "package_registry",
+      "required": true,
+      "status": "verified",
+      "url": "https://registry.npmjs.org/dsh-session-insights",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.5.0",
+        "commit": "607ecae2edaa0b145126a1c4cd8b3352c4a6bc5a",
+        "artifact_sha256": "1b969c46de0c526e79b3283322ebaa340676d8eaee0792b4ba6cd906c150e8d2"
+      },
+      "observed": {
+        "version": "0.5.0",
+        "commit": "607ecae2edaa0b145126a1c4cd8b3352c4a6bc5a",
+        "artifact_sha256": "1b969c46de0c526e79b3283322ebaa340676d8eaee0792b4ba6cd906c150e8d2"
+      }
+    },
+    {
+      "id": "repository_release",
+      "kind": "repository_release",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.5.0",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.5.0",
+        "commit": "607ecae2edaa0b145126a1c4cd8b3352c4a6bc5a",
+        "artifact_sha256": "1b969c46de0c526e79b3283322ebaa340676d8eaee0792b4ba6cd906c150e8d2"
+      },
+      "observed": {
+        "version": "0.5.0",
+        "commit": "607ecae2edaa0b145126a1c4cd8b3352c4a6bc5a",
+        "artifact_sha256": "1b969c46de0c526e79b3283322ebaa340676d8eaee0792b4ba6cd906c150e8d2"
+      }
+    },
+    {
+      "id": "public_readback",
+      "kind": "public_readback",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.5.0",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.5.0",
+        "commit": "607ecae2edaa0b145126a1c4cd8b3352c4a6bc5a",
+        "artifact_sha256": "1b969c46de0c526e79b3283322ebaa340676d8eaee0792b4ba6cd906c150e8d2"
+      },
+      "observed": {
+        "version": "0.5.0",
+        "commit": "607ecae2edaa0b145126a1c4cd8b3352c4a6bc5a",
+        "artifact_sha256": "1b969c46de0c526e79b3283322ebaa340676d8eaee0792b4ba6cd906c150e8d2"
+      }
+    }
+  ],
+  "assets": [
+    {
+      "filename": "artifact-manifest.json",
+      "sha256": "9f2e8beca6569ad09b806fac7bd46b791ce7a67c8a43247d3b9ed126f4cb62b6",
+      "size_bytes": 5138,
+      "role": "manifest"
+    },
+    {
+      "filename": "dsh-session-insights-0.5.0.tgz",
+      "sha256": "1b969c46de0c526e79b3283322ebaa340676d8eaee0792b4ba6cd906c150e8d2",
+      "size_bytes": 136679,
+      "role": "artifact"
+    },
+    {
+      "filename": "release-acceptance.md",
+      "sha256": "f1dcec5635c0ab1c1a00bd4f00eb1dee879e8083a66cb39a16600933479af244",
+      "size_bytes": 4361,
+      "role": "native_annex"
+    },
+    {
+      "filename": "SHA256SUMS.txt",
+      "sha256": "3265ea7623fa975ff61dadea121d0fbfcff55a1d6f69f12855ecd4ce986797b2",
+      "size_bytes": 274,
+      "role": "checksum"
+    }
+  ],
+  "run": {
+    "started_at": "2026-09-26T13:43:15+08:00",
+    "finished_at": "2026-09-26T05:50:39.508309+00:00"
+  },
+  "unperformed_actions": []
+}

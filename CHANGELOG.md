@@ -4,7 +4,7 @@
 
 Public releases are listed newest first.
 
-## 0.5.0 - Unreleased
+## 0.5.0 - 2026-09-26
 
 Target DSH `0.1.7-rc.2` exclusively and start new V4 analysis runs after upgrading.
 
@@ -13,7 +13,7 @@ Target DSH `0.1.7-rc.2` exclusively and start new V4 analysis runs after upgradi
 - Read V4 only in both native snapshots and the optional Python CLI. Migrate older raw logs upstream; old analysis manifests and caches cannot resume.
 - Use producer-owned notice messages and cancellable query observations; release observations before analysis and wait for owned work during unload.
 - Track developer surface replacements, PTC inner calls and permission-blocked results without treating injected context as human work or approval text as execution evidence.
-- Align npm and Python versions at 0.5.0. Local synthetic contract/service checks are separate from pending real-model and native-platform acceptance; see the [candidate record](docs/acceptance/v0.5.0-rc2-candidate.md).
+- Align npm and Python versions at 0.5.0. Source/CI checks, macOS model workflow, Windows deterministic host acceptance and human bilingual browser checks are separately recorded in the [release acceptance](docs/acceptance/v0.5.0-release.md).
 
 ## 0.4.0 - 2026-09-20
 
