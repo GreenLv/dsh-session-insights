@@ -1,3 +1,5 @@
+import { readFileSync as readCanonical } from 'node:fs'
+const canonicalRows = readCanonical(new URL('../tests/fixtures/synthetic-session.jsonl', import.meta.url),'utf8').trim().split('\n').map(JSON.parse)
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -29,83 +31,16 @@ import { _test, apply } from '../plugin/lib/index.js'
 
 function fixture() {
   const now = Date.now(),
-    snapshots = Array.from({ length: 3 }, (_, i) => ({
-      session: {
-        id: `native-${i}`,
-        createdAt: now - 1000,
-        cwd: '/workspace/example',
-        version: 3,
-      },
-      events: [
-        { seq: 0, type: 'turn/start', time: now - 1000, data: { turn: 1 } },
-        {
-          seq: 1,
-          type: 'user/message',
-          time: now - 900,
-          data: {
-            source: { kind: 'user' },
-            content: [
-              {
-                type: 'text',
-                text: `Implement feature ${i} in /private/example/file.`,
-              },
-            ],
-          },
-        },
-        {
-          seq: 2,
-          type: 'tool/call',
-          time: now - 800,
-          data: { callId: 'test', name: 'bash', arguments: 'npm test' },
-        },
-        {
-          seq: 3,
-          type: 'tool/result',
-          time: now - 700,
-          data: {
-            message: {
-              source: { callId: 'test' },
-              content: [
-                {
-                  type: 'tool-result',
-                  isError: false,
-                  content: [
-                    { type: 'text', text: 'Ran 4 tests. Command completed' },
-                  ],
-                },
-              ],
-            },
-          },
-        },
-        {
-          seq: 4,
-          type: 'assistant/message',
-          time: now - 600,
-          data: {
-            turn: 1,
-            step: 1,
-            message: {
-              content: [
-                { type: 'text', text: 'Implemented the requested feature.' },
-              ],
-            },
-            usage: {
-              inputTokens: 20,
-              cacheReadTokens: 30,
-              cacheWriteTokens: 4,
-              outputTokens: 10,
-              reasoningTokens: 3,
-            },
-          },
-        },
-        {
-          seq: 5,
-          type: 'turn/end',
-          time: now - 500,
-          data: { turn: 1, reason: { kind: 'completed' } },
-        },
-      ],
-    }))
+    snapshots = Array.from({length: 3}, (_, i) => {
+      const rows = JSON.parse(JSON.stringify(canonicalRows))
+      const {type, ...session} = rows[0]
+      Object.assign(session, {id: `native-${i}`, createdAt: now-1000, cwd:'/workspace/example'})
+      rows[3].data.content[0].text = `Implement feature ${i} in /private/example/file.`
+      rows[4].data.usage = {inputTokens:20,cacheReadTokens:30,cacheWriteTokens:4,outputTokens:10,reasoningTokens:3}
+      rows[4].data.message.content[0].text = 'Implemented the requested feature.'
+      rows[9].data.title = rows[3].data.content[0].text
+      return {session, inheritedEventCount: 0, events: rows.slice(1)}
+    })
   return {
     snapshots,
     options: {
@@ -484,68 +419,29 @@ test('source events preserve historical counts while only live surface text ente
   scope(({ store, run }) => {
     const f = fixture(),
       s = f.snapshots[0]
-    s.events.unshift({
-      seq: 10,
-      type: 'system/message',
-      data: {
-        message: { content: [{ type: 'text', text: 'SYSTEM-ONLY-SENTINEL' }] },
-      },
-    })
-    s.events.push({
-      seq: 11,
-      type: 'user/message',
-      data: {
-        source: { kind: 'plugin' },
-        content: [{ type: 'text', text: 'INJECTED-SENTINEL' }],
-      },
-    })
-    s.events.push({
-      seq: 12,
-      type: 'assistant/message',
-      surfaceOp: { op: 'replace', startSeq: 4, endSeq: 4 },
-      data: {
-        turn: 2,
-        step: 1,
-        message: { content: [{ type: 'text', text: 'Replacement summary.' }] },
-      },
-    })
+    const message = (id, role, kind, text) => ({id,role,source:{kind},content:[{type:'text',text}]})
+    s.events.push({seq:10,type:'system/message',surfaceOp:'append',data:{message:message('sys','system','system-prompt','SYSTEM-ONLY-SENTINEL')}})
+    s.events.push({seq:11,type:'user/message',surfaceOp:'append',data:message('inj','user','session-insights','INJECTED-SENTINEL')})
+    s.events.push({seq:12,type:'user/message',surfaceOp:{op:'replace',startSeq:3,endSeq:3},sourceEventSeqs:[3],data:message('replacement','user','compact-checkpoint','Replacement summary.')})
     const built = buildReport([s], f.options),
       row = built.report.session_summaries[0]
     assert.equal(row.system_messages, 1)
-    assert.equal(row.injected_user_messages, 1)
-    assert.equal(row.user_messages, 1)
-    assert.equal(row.assistant_messages, 2)
+    assert.equal(row.injected_user_messages, 2)
+    assert.equal(row.user_messages, 2)
+    assert.equal(row.assistant_messages, 1)
     assert.equal(row.semantic_shadowed_messages, 1)
     prepareSemantic(store, run, built)
     const json = JSON.stringify(store.read(run, 'semantic-evidence.json'))
     assert.ok(!json.includes('SYSTEM-ONLY-SENTINEL'))
     assert.ok(!json.includes('INJECTED-SENTINEL'))
     assert.ok(!json.includes('Implemented the requested feature.'))
-    assert.ok(json.includes('Replacement summary.'))
+    assert.ok(!json.includes('Replacement summary.'))
   }))
 
 test('token samples deduplicate stream updates and include cache writes without doubling reasoning', () => {
   const f = fixture(),
     s = f.snapshots[0]
-  s.events.push({
-    seq: 20,
-    type: 'assistant/chunk',
-    data: {
-      turn: 1,
-      step: 1,
-      chunk: {
-        type: 'usage',
-        usage: { inputTokens: 9999, outputTokens: 9999 },
-      },
-    },
-  })
-  s.events.push({
-    seq: 21,
-    type: 'assistant/attempt',
-    data: {
-      stream: [{ chunk: { type: 'usage', usage: { inputTokens: 9999 } } }],
-    },
-  })
+  s.events.push({seq:10,type:'assistant/attempt',data:{stream:[{chunk:{type:'usage',usage:{inputTokens:9999}}}]}})
   const r = buildReport([s], f.options).report
   assert.equal(r.totals.tokens.total_tokens, 64)
   assert.equal(r.totals.tokens.reasoning_output_tokens, 3)
@@ -602,5 +498,15 @@ test('artifact names cannot select a Windows drive or alternate data stream', ()
     ]) {
       assert.throws(() => store.read(run, name), /invalid artifact name/)
       assert.throws(() => store.write(run, name, {}), /invalid artifact name/)
+    }
+  }))
+
+test('resume rejects old DSH, format and analyzer manifest identities', () =>
+  scope(({ store, run }) => {
+    prepare(store, run)
+    const original = store.read(run, 'manifest.json')
+    for (const [key, value] of [['target_dsh_version', '0.1.7-rc.1'], ['input_format_version', 3], ['analyzer_semantics', 'old'], ['native_version', 1]]) {
+      store.write(run, 'manifest.json', {...original, [key]: value})
+      assert.throws(() => prepareAggregate(store, run), /manifest|version|identity/)
     }
   }))

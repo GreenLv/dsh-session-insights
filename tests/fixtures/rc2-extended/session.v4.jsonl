@@ -1,0 +1,38 @@
+{"agentPreset":"standard","createdAt":1786423200000,"cwd":"/synthetic/workspace/project-a","delegationDepth":0,"id":"synthetic-rc2-extended","type":"session","version":4,"isSeeded":false}
+{"data":{"turn":1},"seq":0,"time":1786423200000,"type":"turn/start"}
+{"data":{"step":1,"turn":1},"seq":1,"time":1786423200000,"type":"step/start"}
+{"seq":2,"time":1786423200000,"type":"system/message","surfaceOp":"append","data":{"turn":1,"step":1,"message":{"id":"system-head","role":"system","source":{"kind":"system-prompt"},"content":[{"type":"text","text":"Synthetic system head"}]}}}
+{"data":{"content":[{"text":"Implement the synthetic fixture and report evidence.","type":"text"}],"id":"fixture-msg-user-1","role":"user","source":{"kind":"user"}},"seq":3,"surfaceOp":"append","time":1786423200000,"type":"user/message"}
+{"data":{"message":{"content":[{"text":"Implemented the bounded synthetic change.","type":"text"},{"arguments":"{\"command\": \"python -m unittest\"}","id":"fixture-call-1","name":"bash","type":"tool-call"}],"id":"fixture-msg-assistant-1","role":"assistant","source":{"kind":"model","model":"synthetic-model","provider":"synthetic-provider"}},"step":1,"turn":1,"usage":{"cacheReadTokens":300,"inputTokens":120,"outputTokens":40,"reasoningTokens":20},"stream":[]},"seq":4,"surfaceOp":"append","time":1786423200000,"type":"assistant/message"}
+{"data":{"arguments":"{\"command\": \"python -m unittest\"}","callId":"fixture-call-1","name":"bash","step":1,"turn":1},"seq":5,"time":1786423200000,"type":"tool/call"}
+{"data":{"message":{"content":[{"text":"Ran synthetic tests: OK","type":"text"}],"id":"fixture-msg-tool-1","role":"tool","source":{"callId":"fixture-call-1","kind":"tool"},"toolCallId":"fixture-call-1","isError":false},"step":1,"turn":1},"seq":6,"surfaceOp":"append","time":1786423200000,"type":"tool/result"}
+{"data":{"content":[{"text":"Keep the change narrow.","type":"text"}],"id":"fixture-msg-user-2","role":"user","source":{"kind":"user"}},"seq":7,"surfaceOp":"append","time":1786423200000,"type":"user/message"}
+{"data":{"step":1,"turn":1},"seq":8,"time":1786423201000,"type":"step/end"}
+{"data":{"messageSeqs":[3,7],"source":{"kind":"provider","model":{"model":"synthetic-model","provider":"synthetic-provider"},"provider":"synthetic-title"},"title":"Synthetic fixture task"},"seq":9,"time":1786423202000,"type":"session/title"}
+{"data":{"reason":{"kind":"completed"},"turn":1},"seq":10,"time":1786423203000,"type":"turn/end"}
+{"seq":11,"type":"turn/start","time":1786423211000,"data":{"turn":2}}
+{"seq":12,"type":"user/message","time":1786423212000,"data":{"id":"u2","role":"user","source":{"kind":"user"},"content":[{"type":"text","text":"Synthetic second task with PTC and dynamic tools."}]},"surfaceOp":"append"}
+{"seq":13,"type":"step/start","time":1786423213000,"data":{"turn":2,"step":1}}
+{"seq":14,"type":"request/header","time":1786423214000,"data":{"reason":"resume","startsSeries":true,"header":{"config":{"provider":"synthetic-provider","model":"synthetic-model"},"tools":[{"name":"run_code","description":"synthetic transport","parameters":{"type":"object"}}]}}}
+{"seq":15,"type":"developer/message","time":1786423215000,"data":{"turn":2,"step":1,"headerSeq":14,"message":{"id":"addition","role":"developer","source":{"kind":"tool-registry"},"content":[{"type":"tool-addition","toolName":"run_code"}]}},"surfaceOp":"append"}
+{"seq":16,"type":"assistant/message","time":1786423216000,"data":{"turn":2,"step":1,"stream":[],"message":{"id":"assistant2","role":"assistant","source":{"kind":"model","provider":"synthetic-provider","model":"synthetic-model"},"content":[{"type":"tool-call","id":"outer","name":"run_code","arguments":"{}"}]}},"surfaceOp":"append"}
+{"seq":17,"type":"tool/call","time":1786423217000,"data":{"turn":2,"step":1,"callId":"outer","name":"run_code","arguments":"{}"}}
+{"seq":18,"type":"tool/ptc-dispatch-start","time":1786423218000,"data":{"rootCallId":"outer","parentCallId":"outer","subCallId":"inner-a","name":"bash","arguments":"npm test"}}
+{"seq":19,"type":"tool/ptc-dispatch-start","time":1786423219000,"data":{"rootCallId":"outer","parentCallId":"outer","subCallId":"inner-b","name":"bash","arguments":"npm test"}}
+{"seq":20,"type":"tool/ptc-dispatch-start","time":1786423220000,"data":{"rootCallId":"outer","parentCallId":"outer","subCallId":"inner-pending","name":"bash","arguments":"npm test"}}
+{"seq":21,"type":"tool/ptc-dispatch","time":1786423221000,"data":{"rootCallId":"outer","parentCallId":"outer","subCallId":"inner-b","name":"bash","arguments":"npm test","isError":true,"content":[{"type":"text","text":"Synthetic execution result"}]}}
+{"seq":22,"type":"tool/ptc-dispatch","time":1786423222000,"data":{"rootCallId":"outer","parentCallId":"outer","subCallId":"inner-a","name":"bash","arguments":"npm test","isError":false,"content":[{"type":"text","text":"Synthetic execution result"}]}}
+{"seq":23,"type":"tool/result","time":1786423223000,"data":{"turn":2,"step":1,"message":{"id":"outer-result","role":"tool","source":{"kind":"tool","callId":"outer"},"toolCallId":"outer","isError":false,"content":[{"type":"text","text":"Outer caught the inner failure"}]}},"surfaceOp":"append"}
+{"seq":24,"type":"developer/message","time":1786423224000,"data":{"turn":2,"step":1,"message":{"id":"removal","role":"developer","source":{"kind":"tool-registry"},"content":[{"type":"tool-removal","toolName":"run_code"}]}},"surfaceOp":"append"}
+{"seq":25,"type":"step/end","time":1786423225000,"data":{"turn":2,"step":1}}
+{"seq":26,"type":"turn/end","time":1786423226000,"data":{"turn":2,"reason":{"kind":"completed"}}}
+{"seq":27,"type":"turn/start","time":1786423227000,"data":{"turn":3}}
+{"seq":28,"type":"step/start","time":1786423228000,"data":{"turn":3,"step":1}}
+{"seq":29,"type":"user/message","time":1786423229000,"data":{"id":"schedule-0","role":"user","source":{"kind":"schedule"},"content":[{"type":"text","text":"Synthetic injected context"}]},"surfaceOp":"append"}
+{"seq":30,"type":"user/message","time":1786423230000,"data":{"id":"schedule-1","role":"user","source":{"kind":"schedule"},"content":[{"type":"text","text":"Synthetic injected context"}]},"surfaceOp":"append"}
+{"seq":31,"type":"user/message","time":1786423231000,"data":{"id":"schedule-2","role":"user","source":{"kind":"schedule"},"content":[{"type":"text","text":"Synthetic injected context"}]},"surfaceOp":"append"}
+{"seq":32,"type":"user/message","time":1786423232000,"data":{"id":"schedule-3","role":"user","source":{"kind":"schedule"},"content":[{"type":"text","text":"Synthetic injected context"}]},"surfaceOp":"append"}
+{"seq":33,"type":"system/message","time":1786423233000,"data":{"turn":3,"step":1,"message":{"id":"system","role":"system","source":{"kind":"system-prompt"},"content":[{"type":"text","text":"SYNTHETIC PRIVATE SYSTEM BODY"}]}},"surfaceOp":"append"}
+{"seq":34,"type":"user/message","time":1786423234000,"data":{"id":"replacement","role":"user","source":{"kind":"user"},"content":[{"type":"text","text":"Synthetic current summary after replacement."}]},"surfaceOp":{"op":"replace","startSeq":3,"endSeq":33},"sourceEventSeqs":[3,4,6,7,12,15,16,23,24,[29,33]]}
+{"seq":35,"type":"step/end","time":1786423235000,"data":{"turn":3,"step":1}}
+{"seq":36,"type":"turn/end","time":1786423236000,"data":{"turn":3,"reason":{"kind":"completed"}}}

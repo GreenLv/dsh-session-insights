@@ -10,7 +10,9 @@ Do not open a public issue for a suspected secret leak, unsafe installer behavio
 
 Never attach real DSH sessions, reports, caches, credentials, or semantic work directories. State the affected version, platform, DSH version, privacy mode, and a minimal synthetic reproduction.
 
-## Native runtime permissions (0.4.0)
+## Native runtime permissions (0.5.0)
+
+Version 0.5.0 accepts only rc.2 V4 input. Raw logs remain read-only; unsupported generations require upstream migration. Query leases are released before Worker analysis, and plugin disposal cancels and awaits owned work. The 64 MiB detached-snapshot bound does not limit the host query service's peak memory while opening a large log.
 
 The Bundle uses a Node.js worker for cancellable snapshot analysis. It does not launch Python, a shell or another executable. The worker receives an empty environment and an empty `execArgv`; interpreter discovery, inherited `PYTHONPATH`, Python startup hooks and forwarding of host credentials have been removed from the native path. The host still runs with DSH's OS permissions; a worker is not an OS security sandbox.
 

@@ -1,66 +1,47 @@
 #!/usr/bin/env node
-/**
- * Validate synthetic session logs against the installed DSH packages.
- *
- * A fixture that only a tolerant reader can parse is not evidence of host
- * compatibility: DSH enforces a first Zstandard frame holding exactly the header
- * line, and exact message/event payload members. Both rules have already caught
- * fixture defects that unit tests passed over, so this check runs the real
- * upstream validators instead of a local approximation.
- *
- * Usage:
- *   node scripts/verify_session_contract.mjs <session-dir|log-file> [...]
- *   node scripts/verify_session_contract.mjs --fixture      # tests/fixtures
- *
- * The DSH runtime is located from $DSH_RUNTIME, then ~/.dsh-runtime. When no
- * runtime is present the check reports `skipped` and exits 0, so it stays usable
- * on a machine without DSH installed.
- */
-
-import { mkdtemp, readFile, readdir, rm, stat, symlink, mkdir, realpath } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+/** Exact rc.2, nonempty native V4 gate. Missing runtime/files always fail. */
+import { readFile, readdir, stat } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const NEEDED = [
-  '@deepseek-ai/dsh-session-format-catalog',
-  '@deepseek-ai/dsh-session-format-v2-to-v3',
-  '@deepseek-ai/dsh-session',
-]
-
-function runtimeRoot() {
-  const candidates = [process.env.DSH_RUNTIME, join(homedir(), '.dsh-runtime')]
-  return candidates.find((candidate) => candidate && existsSync(join(candidate, 'node_modules', '.pnpm')))
-}
-
-/** Resolve one @deepseek-ai package inside the pnpm virtual store. */
-async function locatePackage(store, name) {
-  const bare = name.slice('@deepseek-ai/'.length)
-  const entries = await readdir(store)
-  const match = entries
-    .filter((entry) => entry.startsWith(`@deepseek-ai+${bare}@`))
-    .sort()
-    .pop()
-  if (match === undefined) return undefined
-  const path = join(store, match, 'node_modules', name)
-  return existsSync(path) ? path : undefined
-}
-
-/** Import the upstream validators, resolving peers through a temporary link farm. */
-async function loadValidators(store) {
-  const farm = await mkdtemp(join(tmpdir(), 'dsh-contract-'))
-  const scope = join(farm, 'node_modules', '@deepseek-ai')
-  await mkdir(scope, { recursive: true })
-  for (const name of NEEDED) {
-    const target = await locatePackage(store, name)
-    if (target === undefined) throw new Error(`cannot locate ${name} in the DSH runtime`)
-    await symlink(await realpath(target), join(scope, name.slice('@deepseek-ai/'.length)), 'dir')
+const TARGET = '0.1.7-rc.2'
+import { createRequire } from 'node:module'
+import { createHash } from 'node:crypto'
+async function loadValidators(runtime) {
+  const require = createRequire(join(resolve(runtime), 'package.json'))
+  const identities = []
+  const modules = {}
+  for (const [key, name] of Object.entries({catalog: '@deepseek-ai/dsh-session-format-catalog', format: '@deepseek-ai/dsh-session-format-v3-to-v4', session: '@deepseek-ai/dsh-session'})) {
+    const entry = require.resolve(name)
+    const packagePath = join(dirname(entry), '..', 'package.json')
+    const metadata = JSON.parse(await readFile(packagePath, 'utf8'))
+    if (metadata.version !== TARGET) throw new Error(`${name}: expected ${TARGET}, got ${metadata.version}`)
+    identities.push({name, version: metadata.version, path: entry, sha256: createHash('sha256').update(await readFile(entry)).digest('hex')})
+    modules[key] = await import(pathToFileURL(entry).href)
   }
-  const format = await import(pathToFileURL(join(farm, 'node_modules', '@deepseek-ai', 'dsh-session-format-v2-to-v3', 'lib', 'index.js')).href)
-  const session = await import(pathToFileURL(join(farm, 'node_modules', '@deepseek-ai', 'dsh-session', 'lib', 'index.js')).href)
-  const catalog = await import(pathToFileURL(join(farm, 'node_modules', '@deepseek-ai', 'dsh-session-format-catalog', 'lib', 'index.js')).href)
-  return { farm, format, session, catalog }
+  // Verify the entire DSH dependency closure, not just the three entrypoints.
+  const checked = new Set(identities.map(i => i.path))
+  const visit = async (name, from) => {
+    const local = createRequire(from), entry = local.resolve(name)
+    if (checked.has(entry)) return
+    checked.add(entry)
+    const packagePath = join(dirname(entry), '..', 'package.json')
+    const metadata = JSON.parse(await readFile(packagePath, 'utf8'))
+    if (name.startsWith('@deepseek-ai/dsh-') && metadata.version !== TARGET) throw new Error(`${name}: mixed DSH version ${metadata.version}`)
+    identities.push({name,version:metadata.version,path:entry,sha256:createHash('sha256').update(await readFile(entry)).digest('hex')})
+    for (const dependency of Object.keys({...metadata.dependencies,...metadata.peerDependencies})) {
+      if (dependency.startsWith('@deepseek-ai/dsh-')) {
+        try {local.resolve(dependency)} catch {if(metadata.peerDependenciesMeta?.[dependency]?.optional)continue;throw new Error(`missing required ${dependency}`)}
+        await visit(dependency,packagePath)
+      }
+    }
+  }
+  for (const identity of [...identities]) {
+    checked.delete(identity.path)
+    identities.splice(identities.indexOf(identity),1)
+    await visit(identity.name,join(resolve(runtime),'package.json'))
+  }
+  return {...modules, identities}
 }
 
 /** Offsets of every Zstandard frame magic in one buffer. */
@@ -89,10 +70,11 @@ async function decodeFrames(path) {
 /** Validate one compressed generation the way DSH opens it. */
 async function verifyLog(path, validators) {
   const errors = []
-  const frames = await decodeFrames(path)
+  if (!/^session\.v4\.jsonl(?:\.zstd)?$/.test(basename(path))) throw new Error('V4 canonical filename required')
+  const frames = path.endsWith('.zstd') ? await decodeFrames(path) : [await readFile(path)]
   const headerFrame = frames[0]
   // DSH: assertZstdHeaderFrame — the first frame is exactly one header line.
-  if (headerFrame.length === 0 || headerFrame.indexOf(0x0a) !== headerFrame.length - 1) {
+  if (path.endsWith('.zstd') && (headerFrame.length === 0 || headerFrame.indexOf(0x0a) !== headerFrame.length - 1)) {
     errors.push('first frame is not exactly one header line')
   }
   const rows = Buffer.concat(frames)
@@ -124,7 +106,9 @@ async function verifyLog(path, validators) {
   // Restore through the installed catalog: the same physical dispatch and
   // adjacent migration chain persistence uses. This validates a historical
   // generation the way the host will migrate it, not merely its framing.
-  let scope = version === 3 ? 'native-v3' : `migrated-v${version}-to-v3`
+  const scope = 'native-v4'
+  if (version !== 4) return {path, errors: ['only native V4 is supported'], events: eventRows.length, scope}
+  if (!eventRows.length) errors.push('nonempty fixture required')
   try {
     const read = validators.catalog.sessionFormatCatalog.readHeader(headerRow)
     if (read.status === 'unsupported') {
@@ -142,11 +126,11 @@ async function verifyLog(path, validators) {
   } catch (error) {
     errors.push(`restore: ${error.message}`)
   }
-  // V3-only checks, kept because the catalog path may stop before them.
-  if (version === 3) {
+  // V4 admission is also checked independently of catalog restoration.
+  if (version === 4) {
     for (const [index, row] of eventRows.entries()) {
       try {
-        validators.format.assertV3RowAdmission(row)
+        validators.format.assertV4RowAdmission(row)
       } catch (error) {
         errors.push(`row ${index + 1} (${row.type}): ${error.message}`)
       }
@@ -186,46 +170,28 @@ async function collectTargets(args) {
 }
 
 async function main() {
-  const argv = process.argv.slice(2)
-  const root = resolve(import.meta.dirname, '..')
-  const args = argv.includes('--fixture')
-    ? [join(root, 'tests', 'fixtures')]
-    : argv.filter((item) => !item.startsWith('--'))
-  if (args.length === 0) {
-    console.error('usage: node scripts/verify_session_contract.mjs <session-dir|log-file> [...] | --fixture')
-    return 2
+  const argv = process.argv.slice(2), paths = []
+  let runtime = process.env.DSH_RUNTIME, expected = TARGET
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--runtime') runtime = argv[++i]
+    else if (argv[i] === '--expected-dsh-version') expected = argv[++i]
+    else if (argv[i] === '--required') continue
+    else if (argv[i] === '--fixture') paths.push(resolve(import.meta.dirname, '../tests/fixtures'))
+    else if (argv[i].startsWith('--')) throw new Error(`unknown option ${argv[i]}`)
+    else paths.push(argv[i])
   }
-  const store = runtimeRoot()
-  if (store === undefined) {
-    console.log(JSON.stringify({ status: 'skipped', reason: 'no DSH runtime found (set DSH_RUNTIME to enable)' }, null, 2))
-    return 0
+  if (!runtime || expected !== TARGET) throw new Error('explicit rc.2 runtime and exact expected version required')
+  const validators = await loadValidators(runtime)
+  const targets = await collectTargets(paths)
+  if (!targets.length) throw new Error('no fixture files; validation cannot skip')
+  const results = []
+  for (const target of targets) {
+    try { results.push(await verifyLog(target, validators)) }
+    catch (error) { results.push({path: target, errors: [error.message], events: 0}) }
   }
-  const validators = await loadValidators(join(store, 'node_modules', '.pnpm'))
-  try {
-    const targets = await collectTargets(args)
-    if (targets.length === 0) {
-      console.log(JSON.stringify({ status: 'skipped', reason: 'no canonical session log found' }, null, 2))
-      return 0
-    }
-    const results = []
-    for (const target of targets) {
-      try {
-        results.push(await verifyLog(target, validators))
-      } catch (error) {
-        results.push({ path: target, errors: [error.message], events: 0 })
-      }
-    }
-    const failed = results.filter((item) => item.errors.length > 0)
-    console.log(JSON.stringify({
-      status: failed.length === 0 ? 'pass' : 'fail',
-      runtime: store,
-      checked: results.length,
-      results,
-    }, null, 2))
-    return failed.length === 0 ? 0 : 1
-  } finally {
-    await rm(validators.farm, { recursive: true, force: true })
-  }
+  const failed = results.some(r => r.errors.length || !r.events)
+  console.log(JSON.stringify({status: failed ? 'fail' : 'pass', targetVersion: TARGET, runtime, packages: validators.identities, checked: results.length, events: results.reduce((n,r) => n+r.events,0), results}, null, 2))
+  return failed ? 1 : 0
 }
-
-process.exitCode = await main()
+try { process.exitCode = await main() }
+catch (error) { console.error(JSON.stringify({status: 'fail', error: error.message})); process.exitCode = 1 }

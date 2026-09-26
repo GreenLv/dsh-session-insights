@@ -33,6 +33,7 @@ test('npm artifact includes every native runtime module and the shared dashboard
       'analyzer',
       'semantic',
       'rules',
+      'v4',
     ])
       assert.ok(paths.has(`plugin/lib/${file}.js`), file)
     assert.ok(paths.has('src/dsh_session_insights/assets/dashboard.html'))

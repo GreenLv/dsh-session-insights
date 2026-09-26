@@ -37,18 +37,18 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 ## 安装 Bundle
 
-`0.4.0` Bundle 需要 DeepSeek Harness 和 Node.js 20+（或宿主要求的更高版本），无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。
+`0.5.0` Bundle 需要 DSH `0.1.7-rc.2` 和 Node.js `^22.19.0 || >=24.0.0`，无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。
 
-**DSH 兼容性：** 软件包要求 `0.1.5-rc.2`。新运行时已通过自动化测试，宿主原生验收待完成。详见 [DSH 兼容性](#dsh-兼容性)。
+**DSH 兼容性：** 软件包仅要求 `0.1.7-rc.2`。契约与服务测试覆盖合成 V4 输入；具体制品的宿主、模型、平台与页面验收结果分别记录。详见 [DSH 兼容性](#dsh-兼容性)。
 
-先把已发布 Bundle 安装到 DSH profile，再启动该 profile：
+0.5.0 发布后，把匹配的 Bundle 安装到 DSH profile，再启动该 profile：
 
 ```bash
-dsh plugin --profile web add dsh-session-insights
+dsh plugin --profile web add dsh-session-insights@0.5.0
 dsh web
 ```
 
-如需从已审查的源码安装：
+registry 发布前的测试请使用审查过的 tarball，并选择独立 Profile。如需从已审查的源码安装：
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
@@ -85,9 +85,9 @@ Bundle 在 Node.js worker 中分析 `sessionQuery` 快照，不再启动 Python 
 | 环境与凭据 | 宿主仅用 `DSH_HOME` 或操作系统用户目录定位存储。原生分析不探测解释器、不转发环境变量、不需要独立 API Key，也不调用凭据库。会话内容仍可能含有秘密，脱敏不能保证适合公开。 |
 | 网络与模型 | 确定性分析可离线运行。默认语义流程经当前 DSH agent 把清洗并限制范围的证据交给配置的模型提供方，遵循该提供方的数据处理规则和计费方式。添加 `--deterministic` 可跳过此阶段。 |
 
-Bundle 需要 Node.js 20+（若 DSH 要求更高则以宿主为准），以及 DSH 的 `commands`、`tools` 和 `sessionQuery` 服务，无额外 npm 运行依赖。服务缺失、worker 失败、不安全路径或无效语义输出都会使相关操作停止。模型输出先在内存校验再写入；无效的替换请求不会覆盖已有合法结果。显式回退会生成标记为降级的确定性报告。
+Bundle 需要 Node.js `^22.19.0 || >=24.0.0`，以及 DSH 的 `commands`、`tools` 和 `sessionQuery` 服务，并使用声明的 rc.2 DSH peer 依赖（含官方消息 helper）。服务缺失、worker 失败、不安全路径或无效语义输出都会使相关操作停止。模型输出先在内存校验再写入；无效的替换请求不会覆盖已有合法结果。显式回退会生成标记为降级的确定性报告。
 
-每次最多分析 2,000 个选中快照，序列化输入上限为 64 MiB；超出时请缩短 `--days` 或按 `--project` 筛选。原生实现不能恢复旧 Python 运行目录，请通过 CLI 完成旧运行或重新生成。新运行保留自身已验证输出供恢复使用，不再跨运行复用语义缓存。确定性摘要措辞已更新，报告 schema 和 Dashboard 仍与 CLI 共用。
+每次最多分析 2,000 个选中快照，序列化输入上限为 64 MiB；超出时请缩短 `--days` 或按 `--project` 筛选。旧分析运行不能按 V4 契约恢复，升级后请新建运行。新运行保留自身已验证输出供恢复使用，不再跨运行复用语义缓存。确定性摘要措辞已更新，报告 schema 和 Dashboard 仍与 CLI 共用。
 
 ### 保留与清理
 
@@ -123,7 +123,7 @@ Bundle 需要 Node.js 20+（若 DSH 要求更高则以宿主为准），以及 D
 
 ## 兼容 CLI 与 Skill 流程
 
-v0.1 的文件日志 CLI 与 Skill 继续保留，适合自动化或未挂载 Bundle 的环境：
+V4 文件日志 CLI 与 Skill 继续保留，适合自动化或未挂载 Bundle 的环境：
 
 ```bash
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
@@ -182,27 +182,25 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 ## 当前范围与限制
 
-- 原生输入来自可信 DSH `sessionQuery` 服务；兼容 CLI 读取 `$DSH_HOME/sessions` 下的当前会话日志代际：第 0 代为 `session.jsonl.zstd`，第 N 代为 `session.vN.jsonl.zstd`，未启用压缩的 DSH_HOME 则为对应的明文 `.jsonl` 形式。
+- 原生输入来自可信 DSH `sessionQuery` 服务；CLI 只读取 `$DSH_HOME/sessions` 下的 `session.v4.jsonl.zstd` 或 `session.v4.jsonl`，旧原始日志需由上游 DSH 迁移。
 - 输出遵循 [`dsh-session-insights/1`](docs/schema/report-v1.schema.json)。
 - token 以 `(turn, step)` 去重；这是使用量口径，不是账单或配额口径。
 - Dashboard 与语义提示契约基于同一报告 schema 支持 `zh-CN` 和 `en`。
 - 报告只能根据现有证据推断模式，不能证明意图、质量、任务验收或安全性。
 
-精确包身份、CI、macOS 原生验收和限定的 Windows 原生验收记录在 [v0.2.0 发布验收记录](docs/acceptance/v0.2.0-candidate.md)中。Windows 尚未原生验证确定性斜杠命令分发和英文 DOM 渲染。v0.1 CLI/Skill 的历史证据保留在 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。已发布运行时的历史兼容性证据及平台边界记录在 [0.1.5-rc.2 验收记录](docs/acceptance/v0.1.5-rc.2-compatibility.md)中。
+历史 0.2.0 包身份、CI、macOS 原生验收和限定的 Windows 原生验收记录在 [v0.2.0 发布验收记录](docs/acceptance/v0.2.0-candidate.md)中。Windows 尚未原生验证确定性斜杠命令分发和英文 DOM 渲染。v0.1 CLI/Skill 的历史证据保留在 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。已发布运行时的历史兼容性证据及平台边界记录在 [0.1.5-rc.2 验收记录](docs/acceptance/v0.1.5-rc.2-compatibility.md)中。
 
 ## DSH 兼容性
 
 默认只支持明确验证过的最低基线，或经验证的 DSH 最新版本。不再维护历史 DSH 版本，不承诺中间版本连续兼容，也不会在新版发布后自动将其视为已支持。使用旧版宿主时，请升级到已验证的基线。
 
-软件包将 `0.1.5-rc.2` 声明为当前 DSH 要求。DSH 插件市场也会显示这一精确范围，并在安装时执行该约束。
+本版只接受 DSH `0.1.7-rc.2`。原生分析读取宿主恢复后的 V4 快照；可选 Python CLI 只读取 `session.v4.jsonl` 和 `session.v4.jsonl.zstd`。旧原始日志需先由上游 DSH 迁移。当前文件损坏或存在高于 V4 的代数时，不会回退读取旧文件。
 
-| 范围 | DSH 版本 | 状态 |
-| --- | --- | --- |
-| 软件包目标 | `0.1.5-rc.2` | 沿用 0.3.2 的精确依赖要求 |
-| 源码与自动化测试 | `0.1.5-rc.2` | 新 Node 运行时通过 macOS、Linux、Windows CI |
-| 0.4.0 宿主原生验收 | `0.1.5-rc.2` | 待完成 |
+升级后请新建分析运行：旧 manifest 和缓存不符合新输入契约，不能继续 resume。已经输出的 HTML、JSON 和 Markdown 报告保留。单独安装的 CLI/Skill 需从同一版本更新；安装 Bundle 不会更新它们。
 
-`0.4.0` 保留第 0–3 代会话日志支持，将原生 Python bridge 替换为 Node.js。此前 macOS 原生流程的结果适用于 `0.3.1`/`0.3.2` 的 Python 实现。新运行时的测试范围和待验证项目见[原生迁移检查](docs/acceptance/native-runtime-migration.md)。
+工具工作量包含日志记录的程序化工具调用（PTC）内层调用。JSON 的 `tool_execution` 分别记录外层运输调用、内层执行、失败和未结束调用；每个失败调用结果计一次。若内层调用和外层程序都失败，则保留两个结果，不据此推断它们是否源于同一个原因。权限拒绝不算验证命令执行失败。developer 工具注册消息和定时注入不计人工请求。
+
+精确检查、制品身份及尚待完成的原生、模型和平台验证见 [rc.2 候选验收记录](docs/acceptance/v0.5.0-rc2-candidate.md)。历史验收只适用于各自注明的实现。
 
 ## 会话日志代际
 
@@ -211,7 +209,7 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 | 情况 | 行为 |
 | --- | --- |
 | 同一会话目录存在多个规范代际 | 选取版本最高者；该会话只统计一次，迁移后的会话不会被重复相加 |
-| 仅有第 0 代（`session.jsonl[.zstd]`） | 读取保留的日志格式；不代表支持旧版 DSH 宿主 |
+| 仅有第 0–3 代 | 拒绝分析并提示需要迁移；请使用上游 DSH 迁移 |
 | 非规范名称（临时文件、大写、前导零、`.v0`、`session.lock`） | 永不选取；写入中的文件不会被误认为已提交代际 |
 | 高于本读取方支持的代际 | 记录诊断并跳过，同时给出警告；**不会**静默按旧代际输出报告 |
 | 当前代际损坏或无法解压 | 记为不可读文件；**不会**回退到旧代际 |
@@ -230,7 +228,7 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 | `surfaceOp: "append"` | 表面正常增长 |
 | `surfaceOp: {op: "replace", startSeq, endSeq}` | 被压缩的对话退出语义摘要；历史工具与 Token 事件统计保留 |
 | 带 `data.inherited: true` 的 `session/end-seed` | 记录继承切点；未带标记的结束标记不建立切点 |
-| 未知事件类型 | 计入 `coverage.unknown_record_types` 并给出报告，绝不静默忽略 |
+| 未知事件类型 | 拒绝必需事件；明确标为可忽略的扩展保留覆盖诊断 |
 
 ## npm 下载量历史
 
@@ -242,7 +240,9 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 ```bash
 python3 -m pip install -e '.[dev]'
-python3 -m unittest discover -s tests -v
+npm ci --ignore-scripts
+npm ci --prefix tests/rc2-runtime --ignore-scripts
+DSH_RUNTIME="$PWD/tests/rc2-runtime" python3 -m unittest discover -s tests -v
 python3 scripts/build_native_rules.py --check
 npm test
 python3 scripts/build_fixture.py --check

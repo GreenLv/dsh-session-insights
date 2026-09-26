@@ -20,7 +20,8 @@ from typing import Any
 from . import analyzer as engine
 
 
-SEMANTIC_SCHEMA_VERSION = "1.0.0"
+SEMANTIC_SCHEMA_VERSION = "1.1.0"
+from .v4 import IDENTITY
 DEFAULT_LIMIT = 24
 DEFAULT_BATCH_SIZE = 6
 DEFAULT_FAMILY_CHARS = 6000
@@ -229,6 +230,9 @@ def candidate_from_family(
             "diagnostic_nonzero", "retry_classification", "completion", "role_counts",
         )
     }
+    metrics["title"] = next((item["text"] for item in evidence if item["role"] == "user"), "")
+    for key in ("title", "project"):
+        metrics[key] = engine.analysis_text(str(metrics.get(key) or ""), config, 600)
     fingerprint_payload = {
         "runtime": "dsh",
         "privacy": config.privacy_mode,
@@ -372,7 +376,7 @@ def validate_facet(facet: Any, candidate: dict[str, Any], privacy: str) -> list[
 
 def load_manifest(workdir: Path) -> dict[str, Any]:
     manifest = read_json(workdir / "manifest.json")
-    if manifest.get("semantic_schema_version") != SEMANTIC_SCHEMA_VERSION:
+    if manifest.get("semantic_schema_version") != SEMANTIC_SCHEMA_VERSION or any(manifest.get(k) != v for k, v in IDENTITY.items()):
         raise ValueError("semantic schema version 不匹配")
     return manifest
 
@@ -545,6 +549,7 @@ def command_prepare(args: argparse.Namespace) -> int:
     write_json(workdir / "semantic-evidence.json", {"candidates": candidates})
     write_json(workdir / "cache-hits.json", {"facets": cached_facets})
     manifest = {
+        **IDENTITY,
         "semantic_schema_version": SEMANTIC_SCHEMA_VERSION,
         "auto_created": auto_created,
         "runtime": "dsh",

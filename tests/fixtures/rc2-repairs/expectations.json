@@ -1,0 +1,157 @@
+[
+  {
+    "name": "optional-isError",
+    "expected": {
+      "failures": 0,
+      "permission": 0,
+      "success": 1
+    }
+  },
+  {
+    "name": "custom-source-metadata",
+    "expected": {
+      "failures": 0,
+      "permission": 0,
+      "success": 1
+    }
+  },
+  {
+    "name": "nested-seed",
+    "expected": {
+      "failures": 0,
+      "permission": 0,
+      "success": 0,
+      "cut": 11
+    }
+  },
+  {
+    "name": "outer-own-failure",
+    "expected": {
+      "failures": 1,
+      "permission": 0,
+      "success": 1,
+      "verificationFailures": 0,
+      "pending": 0
+    }
+  },
+  {
+    "name": "inner-fail-caught",
+    "expected": {
+      "failures": 1,
+      "permission": 0,
+      "success": 0,
+      "verificationFailures": 1,
+      "pending": 0
+    }
+  },
+  {
+    "name": "propagated-failure",
+    "expected": {
+      "failures": 2,
+      "permission": 0,
+      "success": 0,
+      "verificationFailures": 1,
+      "pending": 0
+    }
+  },
+  {
+    "name": "human-denied",
+    "expected": {
+      "failures": 1,
+      "permission": 1,
+      "success": 0,
+      "verificationFailures": 0,
+      "pending": 0
+    }
+  },
+  {
+    "name": "human-allowed",
+    "expected": {
+      "failures": 0,
+      "permission": 0,
+      "success": 1,
+      "verificationFailures": 0,
+      "pending": 0
+    }
+  },
+  {
+    "name": "auto-denied",
+    "expected": {
+      "failures": 1,
+      "permission": 1,
+      "success": 0,
+      "verificationFailures": 0,
+      "pending": 0
+    }
+  },
+  {
+    "name": "no-call-id",
+    "expected": {
+      "failures": 1,
+      "permission": 0,
+      "success": 0,
+      "verificationFailures": 1,
+      "pending": 0
+    }
+  },
+  {
+    "name": "duplicate-denied",
+    "expected": {
+      "failures": 1,
+      "permission": 1,
+      "success": 0,
+      "verificationFailures": 0,
+      "pending": 0
+    }
+  },
+  {
+    "name": "permission-text-only",
+    "expected": {
+      "failures": 1,
+      "permission": 0,
+      "success": 0,
+      "verificationFailures": 1,
+      "pending": 0
+    }
+  },
+  {
+    "name": "inherited-denied",
+    "expected": {
+      "failures": 1,
+      "permission": 1,
+      "success": 0,
+      "verificationFailures": 0,
+      "pending": 0
+    }
+  },
+  {
+    "name": "nested-pending",
+    "expected": {
+      "failures": 0,
+      "permission": 0,
+      "success": 1,
+      "verificationFailures": 0,
+      "pending": 1
+    }
+  },
+  {
+    "name": "nested-complete",
+    "expected": {
+      "failures": 0,
+      "permission": 0,
+      "success": 2,
+      "verificationFailures": 0,
+      "pending": 0
+    }
+  },
+  {
+    "name": "auto-denied-duplicate",
+    "expected": {
+      "failures": 1,
+      "permission": 1,
+      "success": 0,
+      "verificationFailures": 0,
+      "pending": 0
+    }
+  }
+]

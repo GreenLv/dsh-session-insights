@@ -1,3 +1,3 @@
 """Local-first workflow retrospectives for DeepSeek Harness."""
 
-__version__ = "0.3.1"
+__version__ = "0.5.0"

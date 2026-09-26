@@ -1,3 +1,4 @@
+import { INPUT_IDENTITY } from './v4.js'
 import { readFileSync } from 'node:fs'
 import { hash, sanitize, secretErrors, analysisInternals } from './analyzer.js'
 import rules from './rules.js'
@@ -177,6 +178,7 @@ function candidate(family, sessions, options) {
       'role_counts',
     ].map((k) => [k, family[k]]),
   )
+  metrics.title = evidence.find(e => e.role === 'user')?.text || ''
   // Model-input privacy also applies to the title/project summary, independently
   // of the report's (possibly local-content) privacy setting.
   for (const key of ['title', 'project'])
@@ -207,7 +209,8 @@ export function loadManifest(store, run) {
   const m = store.read(run, 'manifest.json')
   if (
     m.semantic_schema_version !== VERSION ||
-    m.native_version !== 1 ||
+    m.native_version !== 2 ||
+    Object.entries(INPUT_IDENTITY).some(([k,v]) => m[k] !== v) ||
     !['local', 'redacted', 'metrics'].includes(m.privacy) ||
     !['en', 'zh-CN'].includes(m.locale) ||
     !strings(m.batch_ids) ||
@@ -253,7 +256,8 @@ export function prepareSemantic(store, run, built) {
   store.write(run, 'base-report.json', report)
   store.write(run, 'semantic-evidence.json', { candidates })
   const manifest = {
-    native_version: 1,
+    native_version: 2,
+    ...INPUT_IDENTITY,
     semantic_schema_version: VERSION,
     privacy: options.privacy,
     analysis_privacy:

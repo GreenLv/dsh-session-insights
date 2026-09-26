@@ -1564,6 +1564,12 @@
         const values = isEnglish
           ? [unit(row.turns, "turn"), unit(number.format(row.active_minutes), "minute"), unit(row.tool_calls, "tool call"), unit(row.patches, "patch", "patches"), unit(row.subagents, "subagent")]
           : [`${row.turns} 轮`, `${number.format(row.active_minutes)} 分钟`, `${row.tool_calls} 次工具调用`, `${row.patches} 个补丁`, `${row.subagents} 个子代理`];
+        if (row.tool_execution) {
+          const execution = row.tool_execution;
+          values.push(isEnglish
+            ? `Outer ${execution.outer_calls}; PTC inner ${execution.inner_calls}; pending ${execution.inner_incomplete}`
+            : `外层 ${execution.outer_calls}；PTC 内层 ${execution.inner_calls}；未结束 ${execution.inner_incomplete}`);
+        }
         for (const value of values) {
           const span = document.createElement("span");
           span.textContent = value;

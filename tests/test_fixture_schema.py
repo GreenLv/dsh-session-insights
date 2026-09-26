@@ -25,9 +25,9 @@ class FixtureAndSchemaTests(unittest.TestCase):
     def test_fixture_report_validates_against_schema_v1(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
-            target = home / "sessions" / "--synthetic-workspace-project-a--" / "session-synthetic-fixture" / "session.jsonl.zstd"
+            target = home / "sessions" / "--synthetic-workspace-project-a--" / "session-synthetic-fixture" / "session.v4.jsonl.zstd"
             target.parent.mkdir(parents=True)
-            target.write_bytes((ROOT / "tests" / "fixtures" / "session.jsonl.zstd").read_bytes())
+            target.write_bytes((ROOT / "tests" / "fixtures" / "session.v4.jsonl.zstd").read_bytes())
             report = analyzer.build_report(analyzer.AnalysisConfig(
                 dsh_home=home,
                 since=datetime(2026, 8, 1, tzinfo=timezone.utc),

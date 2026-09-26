@@ -1,4 +1,4 @@
-"""Native V3 session-format regression coverage.
+"""Native V4 session-format regression coverage.
 
 These tests fix the behavior table for versioned session logs:
 
@@ -38,10 +38,10 @@ WORKSPACE = "--workspace-project-a--"
 CWD = "/workspace/project-a"
 
 
-def v3_header(session_id: str) -> dict:
+def v4_header(session_id: str) -> dict:
     return {
         "type": "session",
-        "version": 3,
+        "version": 4,
         "id": session_id,
         "createdAt": STAMP,
         "cwd": CWD,
@@ -96,8 +96,8 @@ TOOL_NAME = "bash"
 TOOL_ARGUMENTS = "{}"
 
 
-def v3_events(prefix: str = "v3") -> list[dict]:
-    """One native V3 conversation with the full surface vocabulary."""
+def v4_events(prefix: str = "v4") -> list[dict]:
+    """One native V4 conversation with the full surface vocabulary."""
     return [
         event(0, "turn/start", {"turn": 1}),
         event(1, "step/start", {"turn": 1, "step": 1}),
@@ -110,7 +110,7 @@ def v3_events(prefix: str = "v3") -> list[dict]:
                 "message": message(
                     "msg-system-1",
                     "system",
-                    {"kind": "plugin", "plugin": "@deepseek-ai/dsh-system-prompt"},
+                    {"kind": "system-prompt"},
                     "SECRET-SYSTEM-PROMPT",
                 ),
             },
@@ -160,11 +160,9 @@ def v3_events(prefix: str = "v3") -> list[dict]:
                 "step": 1,
                 "message": {
                     "id": "msg-tool-1",
-                    "role": "user",
+                    "role": "tool", "toolCallId": TOOL_CALL_ID, "isError": False,
                     "source": {"kind": "tool", "callId": TOOL_CALL_ID},
-                    "content": [
-                        {"type": "tool-result", "toolCallId": TOOL_CALL_ID, "isError": False, "content": [text_block("ok")]}
-                    ],
+                    "content": [text_block("ok")],
                 },
             },
             surface_op="append",
@@ -216,19 +214,34 @@ def v3_events(prefix: str = "v3") -> list[dict]:
     ]
 
 
-def write_v3_session(
+def write_v4_session(
     home: Path,
     *,
-    session_id: str = "session-v3-001",
+    session_id: str = "session-v4-001",
     events: list[dict] | None = None,
     header: dict | None = None,
-    filename: str = "session.v3.jsonl.zstd",
+    filename: str = "session.v4.jsonl.zstd",
     compression: str = "zstd",
     workspace: str = WORKSPACE,
 ) -> Path:
     session_dir = home / "sessions" / workspace / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
-    records = [header or v3_header(session_id), *(v3_events() if events is None else events)]
+    records = [header or v4_header(session_id), *(v4_events() if events is None else events)]
+    surface = []
+    for row in records[1:]:
+        if row['type'] == 'session/end-seed' and row['data'].get('inherited'): records[0]['isSeeded'] = True
+        if row['type'] == 'tool/result':
+            m = row['data']['message']
+            if m.get('content') and m['content'][0].get('type') == 'tool-result':
+                block = m['content'][0]
+                m.update(role='tool',toolCallId=block['toolCallId'],isError=block['isError'],content=block['content'])
+        op = row.get('surfaceOp')
+        if op == 'append': surface.append(row['seq'])
+        elif isinstance(op,dict):
+            start,end = surface.index(op['startSeq']),surface.index(op['endSeq'])
+            row['sourceEventSeqs'] = surface[start:end+1]
+            surface[start:end+1] = [row['seq']]
+
     lines = [json.dumps(item, ensure_ascii=False) for item in records]
     path = session_dir / filename
     if compression == "zstd":
@@ -253,7 +266,7 @@ def first_frame_plaintext(data: bytes) -> bytes:
     return zstandard.ZstdDecompressor().decompressobj().decompress(data[offsets[0] : end])
 
 
-def write_v0_session(home: Path, *, session_id: str = "session-v3-001", prompt: str = "Legacy prompt") -> Path:
+def write_v0_session(home: Path, *, session_id: str = "session-v4-001", prompt: str = "Legacy prompt") -> Path:
     """One generation-0 log shaped the way an older DSH release wrote it.
 
     A real generation-0 header carries `agentPreset` and no `isSeeded`, its
@@ -295,7 +308,7 @@ def write_v0_session(home: Path, *, session_id: str = "session-v3-001", prompt: 
     return path
 
 
-class SessionFormatV3Tests(unittest.TestCase):
+class SessionFormatV4Tests(unittest.TestCase):
     def config(self, home: Path, **overrides) -> analyzer.AnalysisConfig:
         values = dict(
             dsh_home=home,
@@ -314,10 +327,10 @@ class SessionFormatV3Tests(unittest.TestCase):
 
     # --- discovery and generation selection -------------------------------
 
-    def test_v3_only_session_is_discovered_with_real_metrics(self):
+    def test_v4_only_session_is_discovered_with_real_metrics(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
-            write_v3_session(home)
+            write_v4_session(home)
             report = self.build(home)
             self.assertEqual(report["totals"]["sessions"], 1)
             self.assertEqual(report["totals"]["turns"], 1)
@@ -325,12 +338,12 @@ class SessionFormatV3Tests(unittest.TestCase):
             self.assertEqual(report["totals"]["tokens"]["cached_input_tokens"], 300)
             self.assertEqual(report["coverage"]["generation_diagnostics"]["versioned_generations"], 1)
             self.assertEqual(report["coverage"]["unknown_record_types"], {})
-            self.assertEqual(report["rollout_summaries"][0]["log_generation_version"], 3)
+            self.assertEqual(report["rollout_summaries"][0]["log_generation_version"], 4)
 
-    def test_plaintext_v3_session_is_discovered(self):
+    def test_plaintext_v4_session_is_discovered(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
-            write_v3_session(home, filename="session.v3.jsonl", compression="none")
+            write_v4_session(home, filename="session.v4.jsonl", compression="none")
             coverage = {
                 "unreadable_files": 0,
                 "malformed_lines": 0,
@@ -338,36 +351,35 @@ class SessionFormatV3Tests(unittest.TestCase):
             }
             found = analyzer.discover_dsh_session_logs(home / "sessions", coverage)
             self.assertEqual(len(found), 1)
-            self.assertEqual(found[0].version, 3)
+            self.assertEqual(found[0].version, 4)
             self.assertTrue(found[0].path.name.endswith(".jsonl"))
 
     def test_coexisting_generations_select_highest_and_count_once(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             write_v0_session(home, prompt="LEGACY-ONLY-PROMPT")
-            write_v3_session(home)
+            write_v4_session(home)
             report = self.build(home)
             self.assertEqual(report["totals"]["sessions"], 1)
             self.assertEqual(report["coverage"]["generation_diagnostics"]["coexisting_generations"], 1)
-            # The V3 generation wins: its prompt is present, the legacy one is not.
+            # The V4 generation wins: its prompt is present, the legacy one is not.
             self.assertNotIn("LEGACY-ONLY-PROMPT", json.dumps(report, ensure_ascii=False))
-            self.assertEqual(report["rollout_summaries"][0]["log_generation_version"], 3)
+            self.assertEqual(report["rollout_summaries"][0]["log_generation_version"], 4)
 
-    def test_legacy_only_session_still_reads(self):
+    def test_legacy_only_session_requires_migration(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             write_v0_session(home)
             report = self.build(home)
-            self.assertEqual(report["totals"]["sessions"], 1)
-            self.assertEqual(report["coverage"]["generation_diagnostics"]["legacy_generations"], 1)
-            self.assertEqual(report["rollout_summaries"][0]["log_generation_version"], 0)
+            self.assertEqual(report["totals"]["sessions"], 0)
+            self.assertEqual(report["coverage"]["generation_diagnostics"]["migration_required"], 1)
 
     def test_corrupt_current_generation_is_reported_not_silently_downgraded(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             write_v0_session(home)
-            session_dir = home / "sessions" / WORKSPACE / "session-v3-001"
-            (session_dir / "session.v3.jsonl.zstd").write_bytes(b"not a zstd frame")
+            session_dir = home / "sessions" / WORKSPACE / "session-v4-001"
+            (session_dir / "session.v4.jsonl.zstd").write_bytes(b"not a zstd frame")
             report = self.build(home)
             # The newer generation is selected but unreadable: no legacy report.
             self.assertEqual(report["totals"]["sessions"], 0)
@@ -378,24 +390,24 @@ class SessionFormatV3Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             write_v0_session(home)
-            write_v3_session(home, filename="session.v9.jsonl.zstd")
+            write_v4_session(home, filename="session.v9.jsonl.zstd")
             report = self.build(home)
             self.assertEqual(report["totals"]["sessions"], 0)
             self.assertEqual(report["coverage"]["generation_diagnostics"]["newer_generation"], 1)
-            self.assertTrue(any("V3" in item for item in report["warnings"]), report["warnings"])
+            self.assertTrue(any("V4" in item for item in report["warnings"]), report["warnings"])
 
     def test_noncanonical_names_are_never_selected(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
-            write_v3_session(home, filename="session.v03.jsonl.zstd")
-            write_v3_session(home, filename="session.v0.jsonl.zstd")
+            write_v4_session(home, filename="session.v03.jsonl.zstd")
+            write_v4_session(home, filename="session.v0.jsonl.zstd")
             report = self.build(home)
             self.assertEqual(report["totals"]["sessions"], 0)
 
     def test_generation_grammar_matches_upstream(self):
         # Canonical names.
         self.assertEqual(analyzer.parse_dsh_generation_filename("session.jsonl.zstd"), 0)
-        self.assertEqual(analyzer.parse_dsh_generation_filename("session.v3.jsonl.zstd"), 3)
+        self.assertEqual(analyzer.parse_dsh_generation_filename("session.v4.jsonl.zstd"), 4)
         self.assertEqual(analyzer.parse_dsh_generation_filename("session.v12.jsonl", "none"), 12)
         self.assertEqual(analyzer.parse_dsh_generation_filename("session.jsonl", "none"), 0)
         self.assertIsNone(analyzer.parse_dsh_generation_filename("session.v12.jsonl", "zstd"))
@@ -403,20 +415,20 @@ class SessionFormatV3Tests(unittest.TestCase):
         for name in (
             "session.v03.jsonl.zstd",
             "session.v0.jsonl.zstd",
-            "session.V3.jsonl.zstd",
+            "session.V4.jsonl.zstd",
             "session.jsonl.tmp",
-            "session.v3.jsonl.zstd.tmp",
-            ".session.v3.jsonl.zstd",
-            "session-other.v3.jsonl.zstd",
+            "session.v4.jsonl.zstd.tmp",
+            ".session.v4.jsonl.zstd",
+            "session-other.v4.jsonl.zstd",
         ):
             self.assertIsNone(analyzer.parse_dsh_generation_filename(name), name)
 
-    # --- V3 event and message semantics -----------------------------------
+    # --- V4 event and message semantics -----------------------------------
 
     def test_system_message_is_not_user_work_and_never_leaked(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
-            write_v3_session(home)
+            write_v4_session(home)
             report = self.build(home)
             self.assertEqual(report["totals"]["system_messages"], 1)
             self.assertNotIn("SECRET-SYSTEM-PROMPT", json.dumps(report, ensure_ascii=False))
@@ -424,7 +436,7 @@ class SessionFormatV3Tests(unittest.TestCase):
     def test_injected_user_context_is_not_user_work(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
-            write_v3_session(home)
+            write_v4_session(home)
             report = self.build(home)
             # Only the direct human prompt counts as user work.
             self.assertEqual(report["totals"]["user_messages"], 1)
@@ -436,19 +448,19 @@ class SessionFormatV3Tests(unittest.TestCase):
     def test_injected_context_is_absent_from_semantic_evidence(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
-            write_v3_session(home)
+            write_v4_session(home)
             report, sessions = analyzer.build_report(
                 self.config(home), include_internal_sessions=True
             )
             texts = " ".join(message["text"] for message in sessions[0]["semantic_messages"])
-            self.assertIn("Implement synthetic v3 feature", texts)
+            self.assertIn("Implement synthetic v4 feature", texts)
             self.assertNotIn("AGENTS.md instructions injected", texts)
             self.assertNotIn("SECRET-SYSTEM-PROMPT", texts)
 
     def test_assistant_attempt_counted_without_fabricated_reply(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
-            write_v3_session(home)
+            write_v4_session(home)
             report = self.build(home)
             self.assertEqual(report["totals"]["assistant_attempts"], 1)
             self.assertEqual(report["totals"]["assistant_messages"], 1)
@@ -513,7 +525,7 @@ class SessionFormatV3Tests(unittest.TestCase):
                 ),
                 event(9, "turn/end", {"turn": 1, "reason": {"kind": "completed"}}),
             ]
-            write_v3_session(home, events=events)
+            write_v4_session(home, events=events)
             report, sessions = analyzer.build_report(
                 self.config(home, locale="en"), include_internal_sessions=True
             )
@@ -539,7 +551,7 @@ class SessionFormatV3Tests(unittest.TestCase):
                                   (5, "REPLACEMENT", {"op": "replace", "startSeq": 2, "endSeq": 2}),
                                   (6, "FINAL", {"op": "replace", "startSeq": 5, "endSeq": 3})]:
                 events.append(event(seq, "user/message", message(f"m{seq}", "user", {"kind": "user"}, text), surface_op=op))
-            write_v3_session(home, events=events)
+            write_v4_session(home, events=events)
             report, sessions = analyzer.build_report(self.config(home), include_internal_sessions=True)
             texts = [item["text"] for item in sessions[0]["semantic_messages"]]
             self.assertEqual(texts, ["KEEP", "FINAL"])
@@ -569,20 +581,20 @@ class SessionFormatV3Tests(unittest.TestCase):
                 )
             )
             events.append(event(3, "turn/end", {"turn": 1, "reason": {"kind": "completed"}}))
-            write_v3_session(home, events=events)
+            write_v4_session(home, events=events)
             report = self.build(home)
             self.assertEqual(report["rollout_summaries"][0]["inherited_event_count"], 1)
 
     # --- cross-flow equivalence and cache ---------------------------------
 
-    def test_file_and_snapshot_entries_agree_on_v3(self):
+    def test_file_and_snapshot_entries_agree_on_v4(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
-            write_v3_session(home)
+            write_v4_session(home)
             file_report = self.build(home)
-            header = v3_header("session-v3-001")
+            header = v4_header("session-v4-001")
             header.pop("type")
-            snapshot = {"session": header, "events": v3_events()}
+            snapshot = {"session": header, "events": v4_events()}
             snapshot_report = self.build(home, session_snapshots=[snapshot])
             for key in (
                 "sessions",
@@ -600,21 +612,16 @@ class SessionFormatV3Tests(unittest.TestCase):
     def test_cache_is_keyed_to_the_selected_generation(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
-            # Start with the legacy generation only.
             write_v0_session(home, prompt="LEGACY-GENERATION-PROMPT")
             config = self.config(home, deterministic_cache=True)
             first = analyzer.build_report(config)
-            self.assertEqual(first["rollout_summaries"][0]["log_generation_version"], 0)
-            self.assertEqual(first["coverage"]["deterministic_cache"]["misses"], 1)
-            second = analyzer.build_report(config)
-            self.assertEqual(second["coverage"]["deterministic_cache"]["hits"], 1)
-            self.assertEqual(first["totals"], second["totals"])
+            self.assertEqual(first["totals"]["sessions"], 0)
             # Publishing the current generation selects a different file for the
             # same logical session; the legacy cache entry must not be reused.
-            write_v3_session(home)
+            write_v4_session(home)
             third = analyzer.build_report(config)
             self.assertEqual(third["coverage"]["generation_diagnostics"]["coexisting_generations"], 1)
-            self.assertEqual(third["rollout_summaries"][0]["log_generation_version"], 3)
+            self.assertEqual(third["rollout_summaries"][0]["log_generation_version"], 4)
             self.assertEqual(third["coverage"]["deterministic_cache"]["hits"], 0)
             self.assertEqual(third["totals"]["turns"], 1)
             self.assertNotIn("LEGACY-GENERATION-PROMPT", json.dumps(third, ensure_ascii=False))
@@ -624,8 +631,8 @@ class SessionFormatV3Tests(unittest.TestCase):
             self.assertEqual(fourth["totals"], third["totals"])
 
     def test_cache_version_reflects_generation_aware_parsing(self):
-        self.assertEqual(analyzer.DETERMINISTIC_CACHE_VERSION, 2)
-        self.assertEqual(analyzer.DSH_SESSION_FORMAT_VERSION, 3)
+        self.assertEqual(analyzer.DETERMINISTIC_CACHE_VERSION, 3)
+        self.assertEqual(analyzer.DSH_SESSION_FORMAT_VERSION, 4)
 
     def test_written_generations_satisfy_the_header_frame_contract(self):
         """A written generation must be openable by DSH, not merely by us.
@@ -634,9 +641,9 @@ class SessionFormatV3Tests(unittest.TestCase):
         exactly one header line. A single-frame fixture is readable by a tolerant
         reader but is rejected by a real host, so the framing is pinned here.
         """
-        expected = json.dumps(v3_header("session-frame-check"), ensure_ascii=False) + "\n"
-        data = compress_dsh_generation([json.dumps(v3_header("session-frame-check"), ensure_ascii=False)]
-                                       + [json.dumps(item, ensure_ascii=False) for item in v3_events()])
+        expected = json.dumps(v4_header("session-frame-check"), ensure_ascii=False) + "\n"
+        data = compress_dsh_generation([json.dumps(v4_header("session-frame-check"), ensure_ascii=False)]
+                                       + [json.dumps(item, ensure_ascii=False) for item in v4_events()])
         first = first_frame_plaintext(data)
         self.assertEqual(first.count(b"\n"), 1, "first frame must hold exactly one line")
         self.assertTrue(first.endswith(b"\n"), "first frame must end with a newline")
@@ -645,7 +652,7 @@ class SessionFormatV3Tests(unittest.TestCase):
     def test_committed_fixture_satisfies_the_header_frame_contract(self):
         """The repository fixture is read by real hosts, so it must conform too."""
         root = Path(__file__).parents[1]
-        fixture = root / "tests" / "fixtures" / "session.jsonl.zstd"
+        fixture = root / "tests" / "fixtures" / "session.v4.jsonl.zstd"
         data = fixture.read_bytes()
         first = first_frame_plaintext(data)
         self.assertEqual(first.count(b"\n"), 1, "committed fixture first frame is not one header line")
@@ -653,8 +660,8 @@ class SessionFormatV3Tests(unittest.TestCase):
         header = json.loads(first.decode("utf-8"))
         self.assertEqual(header.get("type"), "session")
 
-    def test_written_v3_session_passes_the_installed_dsh_validators(self):
-        """Run the real upstream validators over a written V3 session.
+    def test_written_v4_session_passes_the_installed_dsh_validators(self):
+        """Run the real upstream validators over a written V4 session.
 
         Local assertions cannot tell whether a fixture is one a DSH host would
         open: message members, tool-call advertisement, the step lifecycle, and
@@ -667,9 +674,9 @@ class SessionFormatV3Tests(unittest.TestCase):
             self.skipTest("contract verifier is absent")
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
-            write_v3_session(home, session_id="session-contract-001")
+            write_v4_session(home, session_id="session-contract-001")
             completed = subprocess.run(
-                ["node", str(script), str(home / "sessions")],
+                ["node", str(script), str(home / "sessions"), "--runtime", os.environ["DSH_RUNTIME"], "--required"],
                 text=True,
                 capture_output=True,
                 check=False,
@@ -679,7 +686,7 @@ class SessionFormatV3Tests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
             result = json.loads(completed.stdout)
             self.assertEqual(result["status"], "pass", result)
-            self.assertEqual(result["results"][0]["scope"], "native-v3")
+            self.assertEqual(result["results"][0]["scope"], "native-v4")
             self.assertEqual(result["results"][0]["errors"], [])
 
     def test_public_tree_audit_recognizes_the_same_generations(self):
@@ -697,15 +704,15 @@ class SessionFormatV3Tests(unittest.TestCase):
             "session.jsonl",
             "session.jsonl.zstd",
             "session.v1.jsonl.zstd",
-            "session.v3.jsonl",
+            "session.v4.jsonl",
             "session.v12.jsonl.zstd",
         ]
         noncanonical = [
             "session.v0.jsonl.zstd",
             "session.v03.jsonl.zstd",
-            "session.V3.jsonl.zstd",
+            "session.V4.jsonl.zstd",
             "session.jsonl.tmp",
-            "session-other.v3.jsonl.zstd",
+            "session-other.v4.jsonl.zstd",
         ]
         for name in canonical:
             self.assertIsNotNone(module.SESSION_LOG_NAME_RE.match(name), name)
@@ -733,12 +740,12 @@ class SessionFormatV3Tests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         return json.loads(completed.stdout.strip().splitlines()[-1])
 
-    def v3_snapshot(self, session_id: str = "session-v3-bridge", events: list[dict] | None = None) -> dict:
-        header = v3_header(session_id)
+    def v4_snapshot(self, session_id: str = "session-v4-bridge", events: list[dict] | None = None) -> dict:
+        header = v4_header(session_id)
         header.pop("type")
-        return {"kind": "session", "snapshot": {"session": header, "events": v3_events() if events is None else events}}
+        return {"kind": "session", "snapshot": {"session": header, "events": v4_events() if events is None else events}}
 
-    def test_bridge_deterministic_report_renders_v3_metrics(self):
+    def test_bridge_deterministic_report_renders_v4_metrics(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             output = root / "insights" / "runs" / "run-1" / "report.html"
@@ -749,11 +756,11 @@ class SessionFormatV3Tests(unittest.TestCase):
                     "operation": "report",
                     "options": {"days": 30, "now": NOW, "output": str(output), "locale": "en"},
                 },
-                self.v3_snapshot(),
+                self.v4_snapshot(),
             )
             self.assertTrue(result["ok"], result)
             self.assertEqual(result["sessions"], 1)
-            # The report data, not merely the file, must carry the V3 accounting.
+            # The report data, not merely the file, must carry the V4 accounting.
             report = json.loads(output.with_suffix(".json").read_text(encoding="utf-8"))
             self.assertEqual(report["totals"]["user_messages"], 1)
             self.assertEqual(report["totals"]["injected_user_messages"], 1)
@@ -767,10 +774,10 @@ class SessionFormatV3Tests(unittest.TestCase):
             self.assertIn('<html lang="en">', html)
             self.assertIn("DSH Session Insights", html)
 
-    def test_bridge_semantic_prepare_produces_a_batch_for_v3(self):
+    def test_bridge_semantic_prepare_produces_a_batch_for_v4(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            workdir = root / "insights" / "runs" / "run-v3"
+            workdir = root / "insights" / "runs" / "run-v4"
             result = self.bridge(
                 root,
                 {
@@ -784,7 +791,7 @@ class SessionFormatV3Tests(unittest.TestCase):
                         "privacy": "redacted",
                     },
                 },
-                self.v3_snapshot(),
+                self.v4_snapshot(),
             )
             self.assertTrue(result["ok"], result)
             # `now` must be honoured so the window is caller-controlled, not wall-clock.

@@ -30,6 +30,7 @@ class SessionQueryAdapterTests(unittest.TestCase):
             write_session(home, 1)
             file_report = analyzer.build_report(self.config(home))
             snapshot_records = records(1)
+            for seq, row in enumerate(snapshot_records[1:]): row["seq"] = seq
             snapshot = {"session": {key: value for key, value in snapshot_records[0].items() if key != "type"}, "events": snapshot_records[1:]}
             stream_report = analyzer.build_report(self.config(home), session_snapshots=[snapshot])
             assert isinstance(file_report, dict) and isinstance(stream_report, dict)
@@ -45,6 +46,7 @@ class SessionQueryAdapterTests(unittest.TestCase):
                 "type": "command/run", "time": snapshot_records[-1]["time"] - 1,
                 "data": {"commandId": "command-test", "name": "session-insights", "args": " --days 30"},
             })
+            for seq, row in enumerate(snapshot_records[1:]): row["seq"] = seq
             snapshot = {"session": {key: value for key, value in snapshot_records[0].items() if key != "type"}, "events": snapshot_records[1:]}
             report = analyzer.build_report(self.config(home), session_snapshots=[snapshot])
             assert isinstance(report, dict)

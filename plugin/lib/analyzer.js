@@ -1,3 +1,4 @@
+import { validateV4 } from './v4.js'
 // Native snapshot analysis. No subprocesses, provider calls, or source-log reads.
 import { createHash } from 'node:crypto'
 import rules from './rules.js'
@@ -14,12 +15,15 @@ const ranked = (map) => [...map].sort((a, b) => b[1] - a[1])
 const dict = (map) => Object.fromEntries(map)
 const sum = (rows, key) =>
   rows.reduce((n, row) => n + (Number(row[key]) || 0), 0)
-const median = (values) => percentile(values, 0.5)
+const median = values => {
+  if (!values.length) return 0
+  const sorted = [...values].sort((a,b)=>a-b), mid = Math.floor(sorted.length/2)
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2
+}
 function percentile(values, p) {
   if (!values.length) return 0
-  const v = [...values].sort((a, b) => a - b),
-    i = (v.length - 1) * p
-  return v[Math.floor(i)] + (v[Math.ceil(i)] - v[Math.floor(i)]) * (i % 1)
+  const sorted = [...values].sort((a,b)=>a-b)
+  return sorted[Math.max(0,Math.min(sorted.length-1,Math.ceil(p*sorted.length)-1))]
 }
 const canonical = (value) =>
   JSON.stringify(value, function (key, item) {
@@ -211,7 +215,7 @@ export function analyzeTool(value, call = {}) {
     return m ? [Number(m[1])] : []
   })
   // Explicit failures dominate success-looking text in a tool's output.
-  if (outcome !== 'failure') {
+  if (outcome === 'unknown') {
     if (codes.length) {
       exit = codes.find((v) => v !== 0) ?? codes.at(-1)
       outcome = exit ? 'failure' : 'success'
@@ -385,14 +389,13 @@ export function parseSnapshot(snapshot, opts, coverage) {
     !object(snapshot.session) ||
     !Array.isArray(snapshot.events)
   ) {
-    coverage.malformed_lines++
-    return null
+    throw new Error("invalid V4 snapshot")
   }
+  const inheritedCut = validateV4(snapshot)
   const h = snapshot.session,
     time = timestamp(h.createdAt)
   if (time === null) {
-    coverage.missing_metadata++
-    return null
+    throw new Error("invalid V4 session metadata")
   }
   if (time < opts.now - opts.days * 86400000 || time > opts.now) {
     coverage.skipped_outside_window++
@@ -446,6 +449,8 @@ export function parseSnapshot(snapshot, opts, coverage) {
     meta_analysis: false,
     epoch: 0,
     session_header_records: 1,
+    ptc: new Map(), children: new Set(), permissionSeen: new Set(), deniedDecisions: new Set(),
+    tool_execution: {outer_calls: 0, inner_calls: 0, outer_failures: 0, inner_failures: 0, inner_incomplete: 0},
   }
   const analysisPrivacy =
     opts.privacy === 'metrics'
@@ -474,7 +479,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
       coverage.malformed_lines++
       continue
     }
-    const type = r.type,
+    let type = r.type,
       d = r.data,
       seq = Number.isInteger(r.seq) ? r.seq : null,
       at = timestamp(r.time)
@@ -504,6 +509,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
         'user/message',
         'assistant/message',
         'system/message',
+        'developer/message',
         'tool/result',
       ].includes(type) &&
       seq !== null
@@ -530,6 +536,38 @@ export function parseSnapshot(snapshot, opts, coverage) {
           coverage.surface_replacements++
         }
       } else s.surface.push(seq)
+    }
+    if (seq < inheritedCut) {
+      if (type === 'approval/asked') s.approvals.set(String(d.id), d)
+      if (type === 'approval/decided') {
+        const call = s.approvals.get(String(d.id))?.callId
+        if (call && ['rejected','denied'].includes(d.outcome)) s.rejected.add(String(call))
+        else if (call && ['approved','allowed'].includes(d.outcome)) s.rejected.delete(String(call))
+      }
+      if (type === 'tool/call' || type === 'tool/ptc-dispatch-start') {
+        const inner = type === 'tool/ptc-dispatch-start', id = inner ? d.subCallId : d.callId
+        const argumentText = typeof d.arguments === 'string' ? d.arguments : canonical(d.arguments)
+        const tool = sanitize(d.name, 'redacted', 100)
+        s.calls.set(id, {tool, verification:test('VERIFICATION_COMMAND_RE',argumentText), diagnostic:test('DIAGNOSTIC_COMMAND_RE',argumentText), content_dump:test('CONTENT_DUMP_COMMAND_RE',argumentText), state_change:test('STATE_CHANGE_COMMAND_RE',argumentText), git_commit:/(?:^|\s)git\s+commit/.test(argumentText)})
+        if (inner) s.ptc.set(d.subCallId,{...d,settled:false,inherited:true})
+      }
+      if (type === 'tool/ptc-dispatch' && s.ptc.has(d.subCallId)) s.ptc.get(d.subCallId).settled=true
+      continue
+    }
+    if (type === 'subagent/catalog') { s.children.add(d.childId); continue }
+    if (type === 'tool/ptc-dispatch-start' || type === 'tool/ptc-dispatch') {
+      const key = d.subCallId, prior = s.ptc.get(key)
+      if (!key || !d.rootCallId || !d.parentCallId || !d.name) throw new Error('invalid PTC identity')
+      if (type.endsWith('-start')) {
+        if (prior) throw new Error('duplicate PTC start')
+        s.ptc.set(key, {...d, settled: false})
+        s.tool_execution.inner_calls++
+        type = 'tool/call'; d = {...d, callId: key, inner: true}
+      } else {
+        if (!prior || prior.settled || prior.name !== d.name || prior.rootCallId !== d.rootCallId || prior.parentCallId !== d.parentCallId) throw new Error('unpaired PTC result')
+        prior.settled = true
+        type = 'tool/result'; d = {inner: true, error: d.error, message: {toolCallId: key, isError: d.isError, content: d.content}}
+      }
     }
     if (type === 'turn/start' && d.turn != null) {
       const key = String(d.turn)
@@ -582,13 +620,14 @@ export function parseSnapshot(snapshot, opts, coverage) {
           text: sanitize(raw, opts.privacy, 600),
         })
       message('user', raw, seq)
-    } else if (type === 'system/message') s.system_messages++
+    } else if (type === 'developer/message') continue
+    else if (type === 'system/message') s.system_messages++
     else if (type === 'assistant/attempt') {
       s.assistant_attempts++
       if (d.stream?.some((r) => r?.chunk?.type === 'usage'))
         s.assistant_attempts_with_usage++
     } else if (type.startsWith('compaction/')) s.compaction_events++
-    else if (type === 'assistant/message' || type === 'assistant/chunk') {
+    else if (type === 'assistant/message') {
       const committed = type === 'assistant/message',
         value = committed
           ? d.usage || d.message?.usage
@@ -648,13 +687,14 @@ export function parseSnapshot(snapshot, opts, coverage) {
         approval = args?.sandbox_permissions || 'default'
       count(s.fingerprints, fp)
       s.tool_calls++
+      if (!d.inner) s.tool_execution.outer_calls++
       count(s.tool_counts, name)
       for (const m of argumentText.matchAll(regex('FILE_EXTENSION_RE', true)))
         if (rules.COMMON_FILE_EXTENSIONS.includes(m[1].toLowerCase()))
           count(s.file_extensions, m[1].toLowerCase())
       if (name === 'request_user_input') s.clarification_requests++
       if (
-        ['spawn_agent', 'create_agent', 'subagent', 'workflow'].includes(name)
+        ['spawn_agent', 'create_agent', 'subagent', 'workflow', 'spawn_teammate'].includes(name)
       )
         s.subagents++
       if (/web.*(run|search|query)/i.test(name)) s.web_searches++
@@ -705,23 +745,16 @@ export function parseSnapshot(snapshot, opts, coverage) {
       }
       s.calls.set(String(d.callId || ''), call)
     } else if (type === 'tool/result') {
-      const id = String(
-          d.callId ||
-            d.toolCallId ||
-            d.message?.source?.callId ||
-            d.message?.content?.find((b) => b?.toolCallId)?.toolCallId ||
-            '',
-        ),
+      const id = d.message.toolCallId,
         call = s.calls.get(id) || { tool: 'unknown' },
         value = d.message || d
       const txt = outputText(value),
         permission =
-          test('DSH_SANDBOX_DENIED_RE', txt) ||
-          test('DSH_USER_REJECTED_RE', txt) ||
-          d.error?.code === 'FS_SANDBOX_DENIED'
+          ['FS_SANDBOX_DENIED', 'AUTO_REVIEW_DENIED'].includes(d.error?.code) || s.rejected.has(id)
       const a = analyzeTool(
         {
-          message: value,
+          isError: value.isError ?? false,
+          content: value.content,
           ...(d.error && Object.keys(d.error).length
             ? { isError: true, error: d.error }
             : {}),
@@ -730,6 +763,10 @@ export function parseSnapshot(snapshot, opts, coverage) {
         call,
       )
       if (permission && a.structured_failure) a.cause = 'permission_boundary'
+      else if (a.cause === 'permission_boundary') a.cause = 'other'
+      // Count failed call outcomes, not inferred unique causal incidents.
+      // PTC ancestry alone does not prove an outer failure duplicates an inner one.
+      if (a.structured_failure) s.tool_execution[d.inner ? 'inner_failures' : 'outer_failures']++
       if (a.structured_failure) {
         s.tool_failures++
         count(s.failure_tools, call.tool)
@@ -742,8 +779,8 @@ export function parseSnapshot(snapshot, opts, coverage) {
       if (a.text_error_signal) s.text_error_signals++
       if (a.diagnostic_nonzero) s.diagnostic_nonzero++
       if (a.cause) count(s.failure_causes, a.cause)
-      if (call.verification) {
-        if (a.outcome === 'success' && !a.text_error_signal) {
+      if (call.verification && !permission) {
+        if (a.outcome === 'success') {
           s.verification_successes++
           count(s.verification_kinds, call.tool)
         } else if (a.structured_failure || a.text_error_signal)
@@ -756,9 +793,9 @@ export function parseSnapshot(snapshot, opts, coverage) {
       if (
         a.cause === 'permission_boundary' &&
         a.structured_failure &&
-        !s.rejected.has(id)
+        !s.permissionSeen.has(id)
       )
-        s.permission_blocks++
+        { s.permission_blocks++; s.permissionSeen.add(id) }
       if (
         call.verification ||
         call.state_change ||
@@ -788,14 +825,15 @@ export function parseSnapshot(snapshot, opts, coverage) {
         )
       }
     } else if (type === 'approval/asked') s.approvals.set(String(d.id), d)
-    else if (
-      type === 'approval/decided' &&
-      ['rejected', 'denied'].includes(String(d.outcome).toLowerCase())
-    ) {
-      s.denied_approvals++
-      s.permission_blocks++
-      const call = s.approvals.get(String(d.id))?.callId
-      if (call) s.rejected.add(String(call))
+    else if (type === 'approval/decided') {
+      const outcome = String(d.outcome).toLowerCase(), call = s.approvals.get(String(d.id))?.callId
+      if (['rejected', 'denied'].includes(outcome)) {
+        if (!s.deniedDecisions.has(String(d.id))) { s.denied_approvals++; s.deniedDecisions.add(String(d.id)) }
+        if (call) {
+          s.rejected.add(String(call))
+          if (!s.permissionSeen.has(String(call))) { s.permission_blocks++; s.permissionSeen.add(String(call)) }
+        }
+      } else if (['approved', 'allowed'].includes(outcome) && call) s.rejected.delete(String(call))
     } else if (type === 'llm/retry') {
       s.llm_retries++
       count(s.failure_causes, 'llm_retry')
@@ -814,6 +852,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
         count(s.provider_models, JSON.stringify([c.provider, c.model]))
     }
   }
+  s.tool_execution.inner_incomplete = [...s.ptc.values()].filter(p => !p.settled && !p.inherited).length
   s.tokens = tokensFor(s.usage)
   s.repeated_retries =
     s.unchanged_retries + s.state_change_retries + s.polling_retries
@@ -906,7 +945,7 @@ function publicSession(s, opts) {
     rollout_id: identifier(s.rawId, opts, 'rollout'),
     task_family_id: identifier(s.family, opts, 'task'),
     rollout_file: identifier(
-      `session-query/${s.rawId}/session.jsonl`,
+      `session-query/${s.rawId}/session.v4.jsonl`,
       opts,
       'file',
     ),
@@ -938,6 +977,8 @@ function publicSession(s, opts) {
     turns: s.turn_ids.size,
     active_minutes: round(s.duration_ms / 60000, 1),
     log_generation_version: s.generation,
+    tool_execution: s.tool_execution,
+    child_sessions: s.children.size,
     injected_source_kinds: dict(s.injected_source_kinds),
     median_prompt_chars: Math.trunc(median(s.prompt_lengths)),
     failure_causes: dict(s.failure_causes),
@@ -1451,7 +1492,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.2.3-native.1',
+    analyzer_version: '0.5.0-v4-rc2.2',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),

@@ -9,3 +9,5 @@ reports/
 *.html
 !src/dsh_session_insights/assets/dashboard.html
 *.data.json
+
+node_modules/

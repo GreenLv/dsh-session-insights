@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const expectedRange = "0.1.5-rc.2";
+const expectedRange = "0.1.7-rc.2";
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
 test("market-facing DSH metadata matches the declared target range", () => {
@@ -22,8 +22,8 @@ test("both README support summaries match the market range", async () => {
     readFile(new URL("../README.md", import.meta.url), "utf8"),
     readFile(new URL("../README.zh-CN.md", import.meta.url), "utf8"),
   ]);
-  assert.match(english, /The package targets `0\.1\.5-rc\.2`/);
-  assert.match(english, /native-host acceptance is pending/);
-  assert.match(chinese, /软件包要求 `0\.1\.5-rc\.2`/);
-  assert.match(chinese, /宿主原生验收待完成/);
+  assert.match(english, /The package targets `0\.1\.7-rc\.2`/);
+  assert.match(english, /real-model and Windows acceptance remain pending/);
+  assert.match(chinese, /软件包仅要求 `0\.1\.7-rc\.2`/);
+  assert.match(chinese, /真实模型与 Windows 验收仍待完成/);
 });

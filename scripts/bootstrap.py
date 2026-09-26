@@ -11,12 +11,14 @@ import subprocess
 import sys
 import tempfile
 import uuid
+import tomllib
 from pathlib import Path
 
 
 PRODUCT = "dsh-session-insights"
 MARKER = ".dsh-session-insights-managed.json"
 REPO_ROOT = Path(__file__).resolve().parents[1]
+VERSION = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"]["version"]
 
 
 def resolve_home(value: Path | None) -> Path:
@@ -56,14 +58,14 @@ def install(home: Path) -> None:
     had_previous = tool.exists()
     try:
         (stage / MARKER).write_text(
-            json.dumps({"product": PRODUCT, "version": "0.1.0", "managed_root": "runtime", "state": "staging"}, sort_keys=True) + "\n",
+            json.dumps({"product": PRODUCT, "version": VERSION, "managed_root": "runtime", "state": "staging"}, sort_keys=True) + "\n",
             encoding="utf-8",
         )
         source_copy = stage / "source"
         shutil.copytree(
             REPO_ROOT,
             source_copy,
-            ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc", "*.egg-info", "build", "dist", ".venv"),
+            ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc", "*.egg-info", "build", "dist", ".venv", "node_modules", ".pytest_cache"),
         )
         if had_previous:
             tool.replace(backup)
@@ -76,7 +78,7 @@ def install(home: Path) -> None:
         subprocess.run([str(python), "-m", "pip", "install", "--disable-pip-version-check", str(source_copy)], check=True)
         shutil.rmtree(source_copy)
         (tool / MARKER).write_text(
-            json.dumps({"product": PRODUCT, "version": "0.1.0", "managed_root": "runtime"}, sort_keys=True) + "\n",
+            json.dumps({"product": PRODUCT, "version": VERSION, "managed_root": "runtime"}, sort_keys=True) + "\n",
             encoding="utf-8",
         )
         managed_python = tool / "venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")

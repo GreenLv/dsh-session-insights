@@ -1,3 +1,4 @@
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { resolve, sep } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { Store, MAX_JSON_BYTES } from './storage.js'
@@ -26,25 +27,12 @@ function textOutput() {
     render: (_args, value) => [{ type: 'text', text: value.text }],
   }
 }
+function publicError(error) {
+  if (String(error?.code).startsWith('SESSION_QUERY_')) return `Session query failed (${error.code}); retry the analysis after checking the selected sessions.`
+  return String(error?.message || error)
+}
 function cancelled(signal) {
   if (signal?.aborted) throw new Error('session insights cancelled')
-}
-async function abortable(operation, signal) {
-  cancelled(signal)
-  if (!signal) return operation()
-  let listener
-  try {
-    return await Promise.race([
-      Promise.resolve().then(operation),
-      new Promise((_, reject) => {
-        listener = () => reject(new Error('session insights cancelled'))
-        signal.addEventListener('abort', listener, { once: true })
-        if (signal.aborted) listener()
-      }),
-    ])
-  } finally {
-    signal.removeEventListener('abort', listener)
-  }
 }
 export function analyze(snapshots, options, signal) {
   cancelled(signal)
@@ -62,8 +50,7 @@ export function analyze(snapshots, options, signal) {
       if (settled) return
       settled = true
       signal?.removeEventListener('abort', abort)
-      void worker.terminate()
-      error ? reject(error) : resolvePromise(value)
+      worker.terminate().then(() => { error ? reject(error) : resolvePromise(value) }, reject)
     }
     const abort = () => done(new Error('session insights cancelled'))
     signal?.addEventListener('abort', abort, { once: true })
@@ -108,18 +95,20 @@ function normalizeOptions(input = {}) {
 }
 
 async function collectSnapshots(ctx, options, signal) {
-  const records = await abortable(
-    () => ctx.sessionQuery.listSessions(signal),
-    signal,
-  )
+  cancelled(signal)
+  const records = await ctx.sessionQuery.listSessions(signal)
+  cancelled(signal)
   if (!Array.isArray(records))
     throw new Error('sessionQuery returned an invalid session list')
   const cutoff = options.now - options.days * 86400000,
     snapshots = []
   let bytes = 0
+  const seen = new Set()
   for (const record of records) {
     cancelled(signal)
     const header = record?.header
+    if (seen.has(header?.id)) continue
+    seen.add(header?.id)
     if (
       !header ||
       !Number.isFinite(header.createdAt) ||
@@ -134,10 +123,22 @@ async function collectSnapshots(ctx, options, signal) {
         project = normalize(options.project)
       if (cwd !== project && !cwd.startsWith(project + sep)) continue
     }
-    const snapshot = await abortable(
-      () => ctx.sessionQuery.readSession(header.id, signal),
-      signal,
-    )
+    const observation = await ctx.sessionQuery.observeSession(header.id, {signal, projectionMode: 'none'})
+    let snapshot
+    try {
+      cancelled(signal)
+      snapshot = structuredClone({session: observation.header, events: observation.events,
+        inheritedEventCount: observation.inheritedEventCount})
+    } finally {
+      observation[Symbol.dispose]()
+    }
+    if (snapshot.session.id !== header.id) throw new Error('session identity changed; retry analysis')
+    if (snapshot.session.createdAt < cutoff || snapshot.session.createdAt > options.now) continue
+    if (options.project) {
+      const normalize = p => process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p)
+      const cwd = normalize(String(snapshot.session.cwd || '')), project = normalize(options.project)
+      if (cwd !== project && !cwd.startsWith(project + sep)) continue
+    }
     cancelled(signal)
     bytes += Buffer.byteLength(JSON.stringify(snapshot))
     if (bytes > 64 * 1024 * 1024 || snapshots.length >= 2000)
@@ -218,9 +219,7 @@ function parseCommandInput(rawInput) {
 
 function orchestrationPrompt(result, locale) {
   const zh = locale === 'zh-CN'
-  return {
-    id: `session-insights-${Date.now()}`,
-    role: 'user',
+  return createUserMessage({
     content: [
       {
         type: 'text',
@@ -230,12 +229,11 @@ function orchestrationPrompt(result, locale) {
       },
     ],
     source: {
-      kind: 'plugin',
-      plugin: name,
+      kind: name,
       form: 'notice',
       summary: 'Complete the prepared session insights run.',
     },
-  }
+  })
 }
 
 function payload(text) {
@@ -244,6 +242,19 @@ function payload(text) {
   return JSON.parse(text)
 }
 export function apply(ctx) {
+  const lifetime = new AbortController(), pending = new Set()
+  const owned = (signal, operation) => {
+    const combined = signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal
+    cancelled(combined)
+    const promise = Promise.resolve().then(() => { cancelled(combined); return operation(combined) })
+    pending.add(promise)
+    promise.then(() => pending.delete(promise), () => pending.delete(promise))
+    return promise
+  }
+  ctx.effect(() => async () => {
+    lifetime.abort()
+    await Promise.allSettled([...pending])
+  }, 'session-insights tasks')
   const register = (name, description, parameters, execute) =>
     ctx.tools.register({
       name,
@@ -252,7 +263,7 @@ export function apply(ctx) {
       output: textOutput(),
       async execute(args, exec) {
         cancelled(exec?.signal)
-        const value = await execute(args, exec?.signal)
+        const value = await owned(exec?.signal, signal => execute(args, signal))
         return { text: JSON.stringify(value, null, 2) }
       },
     })
@@ -328,20 +339,21 @@ export function apply(ctx) {
       hint: '[--days N] [--project PATH] [--privacy MODE] [--analysis-privacy MODE] [--analysis-depth LEVEL] [--locale zh-CN|en] [--deterministic] [--resume] [--no-open]',
     },
     async handler(invocation) {
+      return owned(invocation.signal, async signal => {
       try {
         const options = parseCommandInput(invocation.rawInput)
         if (options.deterministic) {
           const result = await deterministicReport(
             ctx,
             options,
-            invocation.signal,
+            signal,
           )
           return {
             kind: 'success',
             text: `Session insights report: ${result.report}`,
           }
         }
-        const result = await prepare(ctx, options, invocation.signal)
+        const result = await prepare(ctx, options, signal)
         if (result.metrics_semantic_skipped || result.selected === 0) {
           const report = finalize(
             new Store(),
@@ -363,8 +375,9 @@ export function apply(ctx) {
           text: `Session insights prepared at ${result.workdir}; semantic analysis queued in this agent.`,
         }
       } catch (error) {
-        return { kind: 'error', text: String(error?.message || error) }
+        return { kind: 'error', text: publicError(error) }
       }
+      }).catch(error => ({kind: 'error', text: publicError(error)}))
     },
   })
 }

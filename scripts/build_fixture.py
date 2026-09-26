@@ -15,7 +15,7 @@ import zstandard
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "tests" / "fixtures" / "synthetic-session.jsonl"
-TARGET = ROOT / "tests" / "fixtures" / "session.jsonl.zstd"
+TARGET = ROOT / "tests" / "fixtures" / "session.v4.jsonl.zstd"
 
 
 def compress_generation(lines: list[str]) -> bytes:

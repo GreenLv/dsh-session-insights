@@ -37,18 +37,18 @@ The HTML file contains its own styles and data, so you can keep it locally and o
 
 ## Install the Bundle
 
-The `0.4.0` Bundle requires DeepSeek Harness and Node.js 20+ (or the host's stricter Node requirement), without Python. The optional file-log CLI still requires Python 3.11+.
+The `0.5.0` Bundle requires DSH `0.1.7-rc.2` and Node.js `^22.19.0 || >=24.0.0`, without Python. The optional file-log CLI still requires Python 3.11+.
 
-**DSH compatibility:** The package targets `0.1.5-rc.2`. Automated tests cover the new runtime; native-host acceptance is pending. See [DSH compatibility](#dsh-compatibility).
+**DSH compatibility:** The package targets `0.1.7-rc.2` only. Contract and service tests cover synthetic V4 input. Consult the acceptance record for artifact-specific host, model, platform and browser results. See [DSH compatibility](#dsh-compatibility).
 
-Install the published Bundle into a DSH profile, then start that profile:
+Once 0.5.0 is published, install the matching Bundle into your DSH profile:
 
 ```bash
-dsh plugin --profile web add dsh-session-insights
+dsh plugin --profile web add dsh-session-insights@0.5.0
 dsh web
 ```
 
-To install from a reviewed source checkout instead:
+Before registry publication, use the reviewed tarball in a separate profile. To install from a reviewed source checkout instead:
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
@@ -85,9 +85,9 @@ The Bundle analyzes `sessionQuery` snapshots in a Node.js worker. It does not st
 | Environment and credentials | The host uses `DSH_HOME` or the OS home directory to locate storage. No interpreter discovery, environment forwarding, separate API key or credential-store calls are used by native analysis. Session content can still contain secrets; redaction is not a disclosure guarantee. |
 | Network and models | Deterministic analysis runs offline. The default semantic workflow sends bounded, sanitized evidence through the current DSH agent to its configured model provider, with that provider's data handling and costs. Use `--deterministic` to skip it. |
 
-The Bundle requires Node.js 20+ (or the host DSH's stricter requirement) and DSH's `commands`, `tools` and `sessionQuery` services. Native analysis has no additional npm runtime dependencies. Missing services, worker failure, unsafe paths or invalid semantic output stop the affected operation. Model output is validated before writing; a rejected replacement preserves any previously valid result. Explicit fallback produces a deterministic report marked as degraded.
+The Bundle requires Node.js `^22.19.0 || >=24.0.0` and DSH's `commands`, `tools` and `sessionQuery` services. The Bundle uses the declared rc.2 DSH peers, including the official message helper. Missing services, worker failure, unsafe paths or invalid semantic output stop the affected operation. Model output is validated before writing; a rejected replacement preserves any previously valid result. Explicit fallback produces a deterministic report marked as degraded.
 
-A run accepts at most 2,000 selected snapshots and 64 MiB of serialized snapshot input. Reduce `--days` or filter `--project` when that limit is exceeded. Existing Python runs cannot be resumed by the native implementation: finish them through the CLI or start a new run. Native runs retain their own validated outputs for resumption, but do not reuse a cross-run semantic cache. Deterministic summary wording has been refreshed; the report schema and dashboard remain shared with the CLI.
+A run accepts at most 2,000 selected snapshots and 64 MiB of serialized snapshot input. Reduce `--days` or filter `--project` when that limit is exceeded. Earlier analysis runs cannot resume under the V4 contract; start a new run after upgrading. Native runs retain their own validated outputs for resumption, but do not reuse a cross-run semantic cache. Deterministic summary wording has been refreshed; the report schema and dashboard remain shared with the CLI.
 
 ### Retention and cleanup
 
@@ -123,7 +123,7 @@ The semantic workflow is the default. Invalid model output gets one repair oppor
 
 ## Compatible CLI and Skill workflow
 
-The v0.1 file-log CLI and Skill remain available for automation and environments that do not mount the Bundle:
+The V4 file-log CLI and Skill remain available for automation and environments that do not mount the Bundle:
 
 ```bash
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
@@ -182,27 +182,25 @@ Each model-produced JSON file is validated before it can enter the final report.
 
 ## Current scope and limitations
 
-- Native input is the trusted DSH `sessionQuery` service; CLI compatibility input is the current session-log generation under `$DSH_HOME/sessions` — `session.jsonl.zstd` for generation 0, `session.vN.jsonl.zstd` for generation N, and the plaintext `.jsonl` forms when a home is configured without compression.
+- Native input is the trusted DSH `sessionQuery` service; the CLI reads only `session.v4.jsonl.zstd` or `session.v4.jsonl` under `$DSH_HOME/sessions`. Older raw logs require upstream migration.
 - Output follows [`dsh-session-insights/1`](docs/schema/report-v1.schema.json).
 - Token counts are deduplicated per `(turn, step)` and are usage measurements, not billing or quota figures.
 - The Dashboard and semantic prompt contract support `zh-CN` and `en` from the same report schema.
 - Reports infer patterns from available evidence; they do not prove intent, quality, task acceptance, or security.
 
-Exact package, CI, native macOS, and focused native Windows evidence is kept in the [v0.2.0 release acceptance record](docs/acceptance/v0.2.0-candidate.md). Deterministic slash dispatch and rendered English DOM remain unverified natively on Windows. The historical v0.1 CLI/Skill evidence remains in the [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md). Historical released-runtime compatibility evidence and its platform limits are recorded in the [0.1.5-rc.2 acceptance record](docs/acceptance/v0.1.5-rc.2-compatibility.md).
+Historical 0.2.0 package, CI, native macOS, and focused native Windows evidence is kept in the [v0.2.0 release acceptance record](docs/acceptance/v0.2.0-candidate.md). Deterministic slash dispatch and rendered English DOM remain unverified natively on Windows. The historical v0.1 CLI/Skill evidence remains in the [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md). Historical released-runtime compatibility evidence and its platform limits are recorded in the [0.1.5-rc.2 acceptance record](docs/acceptance/v0.1.5-rc.2-compatibility.md).
 
 ## DSH compatibility
 
 We support only the explicitly verified minimum baseline or the latest DSH version after verification. We do not maintain historical DSH releases, promise compatibility across intervening versions, or treat a new release as supported before validation. Users on older hosts should upgrade to the verified baseline.
 
-The package declares `0.1.5-rc.2` as its current DSH requirement. This exact range is also what DSH plugin markets display and enforce during installation.
+This version accepts only DSH `0.1.7-rc.2`. Native analysis uses host-restored V4 snapshots; the optional Python CLI reads only `session.v4.jsonl` and `session.v4.jsonl.zstd`. Migrate older raw logs with upstream DSH before using the CLI. It never falls back to an older generation when the current file is corrupt or newer than V4.
 
-| Scope | DSH version | Status |
-| --- | --- | --- |
-| Package target | `0.1.5-rc.2` | Exact dependency requirement retained from 0.3.2 |
-| Source and automated tests | `0.1.5-rc.2` | New Node runtime covered by macOS, Linux and Windows CI |
-| Native host acceptance of 0.4.0 | `0.1.5-rc.2` | Pending |
+Start a new analysis run after upgrading: earlier manifests and caches have a different input contract. Existing HTML, JSON and Markdown reports are retained. Update a separately installed CLI/Skill from this same version; installing the Bundle does not update it.
 
-`0.4.0` retains generation 0–3 session-log support and replaces the native Python bridge with Node.js. The earlier macOS native workflow results apply to the Python implementation in `0.3.1`/`0.3.2`. See [native migration checks](docs/acceptance/native-runtime-migration.md) for the new runtime's test scope and remaining host checks.
+Tool workload includes recorded programmatic tool calling (PTC) inner calls. The JSON `tool_execution` fields separate outer transport calls, inner executions, failures and unsettled inner calls; each recorded failed call outcome is counted once. If both an inner call and its outer program fail, both outcomes remain visible; the report does not infer whether they share one root cause. Permission denials are distinct from failed verification commands. Developer tool-registration messages and scheduled injections do not count as human requests.
+
+See the [rc.2 candidate acceptance record](docs/acceptance/v0.5.0-rc2-candidate.md) for exact checks, artifact identity and pending native/model/platform work. Historical acceptance records apply only to their named implementations.
 
 ## Session log generations
 
@@ -211,7 +209,7 @@ One logical session can hold several immutable log generations. The reader selec
 | Situation | Behavior |
 | --- | --- |
 | Several canonical generations in one session directory | The highest version wins; the session is counted once, and a migrated session is never summed twice |
-| Generation 0 only (`session.jsonl[.zstd]`) | Read the retained log format; this does not imply support for an older DSH host |
+| Only generations 0–3 | Refuse analysis and report migration required; migrate with upstream DSH |
 | Noncanonical names (temporary, uppercase, leading-zero, `.v0`, `session.lock`) | Never selected; an in-flight write cannot be mistaken for a committed generation |
 | Newer than the supported generation | Reported and skipped, with a warning; the session is **not** silently reported from an older generation |
 | Corrupt or undecompressable current generation | Reported as unreadable; the reader does **not** fall back to an older generation |
@@ -230,7 +228,7 @@ Tool and usage counts retain historical events, while semantic evidence excludes
 | `surfaceOp: "append"` | Normal surface growth |
 | `surfaceOp: {op: "replace", startSeq, endSeq}` | Compacted conversation leaves the semantic summary; historical tool and token event statistics are retained |
 | `session/end-seed` with `data.inherited: true` | Records the fork cut; untagged markers establish nothing |
-| Unknown event type | Counted in `coverage.unknown_record_types` and reported, never silently ignored |
+| Unknown event type | Reject required events; retain coverage diagnostics for explicitly ignorable extensions |
 
 ## npm download history
 
@@ -242,7 +240,9 @@ The cumulative chart is generated daily from the npm Downloads API. npm download
 
 ```bash
 python3 -m pip install -e '.[dev]'
-python3 -m unittest discover -s tests -v
+npm ci --ignore-scripts
+npm ci --prefix tests/rc2-runtime --ignore-scripts
+DSH_RUNTIME="$PWD/tests/rc2-runtime" python3 -m unittest discover -s tests -v
 python3 scripts/build_native_rules.py --check
 npm test
 python3 scripts/build_fixture.py --check

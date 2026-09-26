@@ -20,22 +20,23 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path, PureWindowsPath
 from typing import Any, Iterable
 from urllib.parse import urlsplit, urlunsplit
+from .v4 import IDENTITY, validate_records
 
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.2.3"
+ANALYZER_VERSION = "0.5.0-v4-rc2.2"
 FAILURE_RULE_VERSION = "5.0.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
-DETERMINISTIC_CACHE_VERSION = 2
+DETERMINISTIC_CACHE_VERSION = 3
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
 
 # Session-log generations understood by this reader. Native V3 is the current
 # generation; earlier generations stay readable for backward compatibility.
 # Reference: @deepseek-ai/dsh-session SESSION_FORMAT_VERSION = 3
 # (dsh 0.1.5-rc.2).
-DSH_SESSION_FORMAT_VERSION = 3
+DSH_SESSION_FORMAT_VERSION = 4
 # Canonical basename grammar shared by every generation-addressed artifact:
 # `session.jsonl` is generation 0, `session.vN.jsonl` is generation N >= 1.
 # Uppercase, leading-zero, `.v0`, and temporary names are not canonical and
@@ -112,22 +113,12 @@ DSH_V3_RECORD_TYPES = {
     "tool/ptc-dispatch",
     "tool/ptc-dispatch-start",
 }
-# Retired names kept readable so pre-V3 logs keep parsing: the legacy assistant
-# stream records retired by native V3, and the pre-PTC tool vocabulary renamed
-# to `tool/ptc-dispatch*` at the V2 -> V3 edge.
-DSH_LEGACY_RECORD_TYPES = {
-    "assistant/chunk",
-    "reasoning-chunks",
-    "tool-call-chunks",
-    "text-chunks",
-    "tool/code-dispatch",
-    "tool/code-dispatch-start",
-}
-DSH_KNOWN_RECORD_TYPES = DSH_BASE_RECORD_TYPES | DSH_V3_RECORD_TYPES | DSH_LEGACY_RECORD_TYPES
+DSH_V4_RECORD_TYPES = {"developer/message", "image/offload", "workspace/changes"}
+DSH_KNOWN_RECORD_TYPES = DSH_BASE_RECORD_TYPES | DSH_V3_RECORD_TYPES | DSH_V4_RECORD_TYPES
 
 # The four message-producing event types. Only these may carry `surfaceOp`,
 # and only these project to an LLM message.
-DSH_SURFACE_RECORD_TYPES = {"system/message", "user/message", "assistant/message", "tool/result"}
+DSH_SURFACE_RECORD_TYPES = {"developer/message", "system/message", "user/message", "assistant/message", "tool/result"}
 
 # `user/message.data.source.kind` values that mark a direct human prompt. The
 # source union is merge-extensible, so every other kind (plugin, goal,
@@ -506,6 +497,7 @@ def cache_decode(value: Any) -> Any:
 
 def deterministic_parser_contract(config: AnalysisConfig) -> dict[str, Any]:
     return {
+        **IDENTITY,
         "version": DETERMINISTIC_CACHE_VERSION,
         "analyzer": ANALYZER_VERSION,
         "failure_rules": FAILURE_RULE_VERSION,
@@ -773,13 +765,14 @@ def analyze_tool_output(value: Any, call: dict[str, Any]) -> dict[str, Any]:
     text = output_text(value)
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     runtime_exit_codes = [int(match.group(1)) for line in lines if (match := RUNTIME_EXIT_LINE_RE.fullmatch(line))]
-    if runtime_exit_codes:
-        exit_code = next((code for code in runtime_exit_codes if code != 0), runtime_exit_codes[-1])
-        outcome = "failure" if exit_code != 0 else "success"
-    elif any(RUNTIME_FAILURE_LINE_RE.fullmatch(line) for line in lines):
-        outcome = "failure"
-    elif any(RUNTIME_SUCCESS_LINE_RE.fullmatch(line) for line in lines):
-        outcome = "success"
+    if outcome == "unknown":
+        if runtime_exit_codes:
+            exit_code = next((code for code in runtime_exit_codes if code != 0), runtime_exit_codes[-1])
+            outcome = "failure" if exit_code != 0 else "success"
+        elif any(RUNTIME_FAILURE_LINE_RE.fullmatch(line) for line in lines):
+            outcome = "failure"
+        elif any(RUNTIME_SUCCESS_LINE_RE.fullmatch(line) for line in lines):
+            outcome = "success"
     diagnostic_nonzero = outcome == "failure" and bool(call.get("diagnostic"))
     structured_failure = outcome == "failure" and not diagnostic_nonzero
     text_signal = False
@@ -1001,6 +994,9 @@ def discover_dsh_session_logs(sessions_root: Path, coverage: dict[str, Any]) -> 
             if version > DSH_SESSION_FORMAT_VERSION:
                 entries["newer_generation"] = entries.get("newer_generation", 0) + 1
                 continue
+            if version < 4:
+                entries["migration_required"] = entries.get("migration_required", 0) + 1
+                continue
             if version >= 1:
                 entries["versioned_generations"] = entries.get("versioned_generations", 0) + 1
             else:
@@ -1144,6 +1140,8 @@ def new_session(meta: dict[str, Any], timestamp: datetime, path: Path, config: A
         "denied_approvals": 0,
         "approval_requests": {},
         "rejected_approval_call_ids": set(),
+        "permission_counted_call_ids": set(),
+        "denied_decision_ids": set(),
     }
 
 
@@ -1228,13 +1226,11 @@ def dsh_user_message_is_human(data: dict[str, Any]) -> bool:
     context, and entered goal rounds into the same user-role event; `source`
     is what separates them. The source union is merge-extensible, so only the
     documented human kind counts as human and every other (or absent, as in
-    pre-V3 logs that carry no source) value is treated as synthetic context
-    unless it is genuinely absent from a legacy record.
+    invalid messages without a source) value cannot be inferred to be human input.
     """
     source = data.get("source")
     if not isinstance(source, dict):
-        # Pre-V3 logs predate the source field; keep their prompts as user work.
-        return True
+        raise ValueError("V4 user message requires source")
     return str(source.get("kind") or "") == DSH_HUMAN_SOURCE_KIND
 
 
@@ -1471,6 +1467,7 @@ def process_call_output(
     config: AnalysisConfig,
     *,
     cause_override: str | None = None,
+    structured_permission: bool | None = None,
     seq: int | None = None,
 ) -> None:
     call_id = str(payload.get("call_id") or "")
@@ -1489,6 +1486,8 @@ def process_call_output(
         },
     )
     analysis = analyze_tool_output(payload.get("output"), call)
+    if structured_permission is False and analysis["cause"] == "permission_boundary":
+        analysis["cause"] = "other"
     if cause_override and analysis["structured_failure"]:
         analysis["cause"] = cause_override
     if analysis["structured_failure"]:
@@ -1508,8 +1507,8 @@ def process_call_output(
     if analysis["cause"]:
         session["failure_causes"][analysis["cause"]] += 1
         session["failure_confidence"][analysis["confidence"]] += 1
-    if call.get("verification"):
-        if analysis["outcome"] == "success" and not analysis["text_error_signal"]:
+    if call.get("verification") and cause_override != "permission_boundary":
+        if analysis["outcome"] == "success":
             session["verification_successes"] += 1
             session["verification_kinds"][call["tool"]] += 1
         elif analysis["structured_failure"] or analysis["text_error_signal"]:
@@ -1524,9 +1523,10 @@ def process_call_output(
     if (
         analysis["cause"] == "permission_boundary"
         and analysis["structured_failure"]
-        and not call.get("approval_rejected")
     ):
-        session["permission_blocks"] += 1
+        if call_id not in session["permission_counted_call_ids"]:
+            session["permission_blocks"] += 1
+            session["permission_counted_call_ids"].add(call_id)
     add_semantic_tool_evidence(
         session,
         payload.get("output"),
@@ -1585,14 +1585,18 @@ def read_dsh_jsonl_lines(path: Path) -> list[str] | None:
     """
     if dsh_log_compression(path) == "none":
         try:
-            return path.read_text(encoding="utf-8", errors="replace").splitlines()
+            return path.read_text(encoding="utf-8").splitlines()
         except OSError:
             return None
     zstandard = get_zstandard()
     try:
-        with path.open("rb") as handle:
-            raw = zstandard.ZstdDecompressor().stream_reader(handle).read()
-        return raw.decode("utf-8", errors="replace").splitlines()
+        encoded = path.read_bytes()
+        first = zstandard.ZstdDecompressor().decompressobj().decompress(encoded)
+        if not first or first.count(b"\n") != 1 or not first.endswith(b"\n"):
+            raise ValueError("V4 first frame must contain exactly the header line")
+        import io
+        raw = zstandard.ZstdDecompressor().stream_reader(io.BytesIO(encoded)).read()
+        return raw.decode("utf-8").splitlines()
     except OSError:
         return None
     except zstandard.ZstdError:
@@ -1626,34 +1630,10 @@ def canonical_dsh_tool_name(name: str) -> str:
 
 
 def dsh_tool_call_id(data: dict[str, Any]) -> str:
-    call_id = str(data.get("callId") or "")
-    if call_id:
-        return call_id
-    message = data.get("message")
-    if isinstance(message, dict):
-        source = message.get("source")
-        if isinstance(source, dict) and source.get("callId"):
-            return str(source["callId"])
-        content = message.get("content")
-        if isinstance(content, list):
-            for item in content:
-                if isinstance(item, dict) and item.get("toolCallId"):
-                    return str(item["toolCallId"])
-    return ""
-
-
-def dsh_value_has_is_error(value: Any) -> bool:
-    for key, scalar in iter_scalars(value):
-        if (key or "").casefold() in {"is_error", "iserror"} and scalar is True:
-            return True
-    return False
-
-
-def dsh_value_has_explicit_success(value: Any) -> bool:
-    keys = [(key or "").casefold() for key, _ in iter_scalars(value)]
-    if not any(key in {"is_error", "iserror"} for key in keys):
-        return False
-    return not dsh_value_has_is_error(value)
+    message = data["message"]
+    if message["toolCallId"] != message["source"]["callId"]:
+        raise ValueError("V4 tool result call identity conflict")
+    return message["toolCallId"]
 
 
 def record_dsh_usage(
@@ -1753,6 +1733,9 @@ def new_dsh_session(
     session["session_header_records"] = 1
     session["log_generation_version"] = header.get("version")
     session["surface_seqs"] = []
+    session["ptc"] = {}
+    session["child_sessions"] = set()
+    session["tool_execution"] = dict(outer_calls=0, inner_calls=0, outer_failures=0, inner_failures=0, inner_incomplete=0)
     # Native V3 conversation accounting. `system_messages` and
     # `injected_user_messages` are deliberately kept out of user work, and
     # `assistant_attempts` counts settlements that committed no visible reply.
@@ -1805,6 +1788,24 @@ def process_dsh_record(
     *,
     seq: int | None = None,
 ) -> None:
+    if record_type == "subagent/catalog":
+        session["child_sessions"].add(data["childId"])
+        return
+    if record_type in {"tool/ptc-dispatch-start", "tool/ptc-dispatch"}:
+        key = data.get("subCallId")
+        prior = session["ptc"].get(key)
+        if not all(data.get(k) for k in ("subCallId", "rootCallId", "parentCallId", "name")):
+            raise ValueError("invalid PTC identity")
+        if record_type.endswith("-start"):
+            if prior: raise ValueError("duplicate PTC start")
+            session["ptc"][key] = {**data, "settled": False}
+            session["tool_execution"]["inner_calls"] += 1
+            record_type, data = "tool/call", {**data, "callId": key, "inner": True}
+        else:
+            if not prior or prior["settled"] or any(prior[k] != data[k] for k in ("name", "rootCallId", "parentCallId")):
+                raise ValueError("unpaired PTC result")
+            prior["settled"] = True
+            record_type, data = "tool/result", {"inner": True, "error": data.get("error"), "message": {"toolCallId": key, "source": {"callId": key}, "isError": data.get("isError", False), "content": data["content"]}}
     if record_type == "turn/start":
         turn = data.get("turn")
         if turn is not None:
@@ -1857,6 +1858,8 @@ def process_dsh_record(
             payload["message"] = data["message"]
         process_event(session, payload, config, record_timestamp, seq=seq)
         return
+    if record_type == "developer/message":
+        return
     if record_type == "system/message":
         # The rendered system prompt is surface content, never user work. Only
         # its presence is counted; its text is never captured as evidence and
@@ -1907,22 +1910,12 @@ def process_dsh_record(
                 if provider and model:
                     session["provider_models"][(str(provider), str(model))] += 1
         return
-    if record_type == "assistant/chunk":
-        chunk = data.get("chunk")
-        if isinstance(chunk, dict) and str(chunk.get("type") or "") == "usage":
-            record_dsh_usage(
-                session,
-                data.get("turn"),
-                data.get("step"),
-                chunk.get("usage"),
-                "chunk",
-            )
-        return
     if record_type == "command/run":
         if str(data.get("name") or "").casefold() == "session-insights":
             session["insights_command_seen"] = True
         return
     if record_type == "tool/call":
+        if not data.get("inner"): session["tool_execution"]["outer_calls"] += 1
         name = str(data.get("name") or "unknown")
         call_id = str(data.get("callId") or "")
         payload = {
@@ -1936,7 +1929,7 @@ def process_dsh_record(
         if isinstance(call, dict) and call_id in session["rejected_approval_call_ids"]:
             call["approval_rejected"] = True
         lowered = name.casefold()
-        if lowered in {"subagent", "workflow"}:
+        if lowered in {"subagent", "workflow", "spawn_teammate"}:
             session["subagents"] += 1
         return
     if record_type == "tool/result":
@@ -1945,17 +1938,19 @@ def process_dsh_record(
         output_value: Any = message if isinstance(message, dict) else data
         error_object = data.get("error")
         error_present = isinstance(error_object, dict) and bool(error_object)
+        if error_present or message.get("isError") is True:
+            session["tool_execution"]["inner_failures" if data.get("inner") else "outer_failures"] += 1
         text = output_text(output_value)
-        sandbox_denied = bool(DSH_SANDBOX_DENIED_RE.search(text))
-        user_rejected = bool(DSH_USER_REJECTED_RE.search(text))
-        analysis_input: dict[str, Any] = {"message": output_value}
+        sandbox_denied = isinstance(error_object, dict) and error_object.get("code") in {"FS_SANDBOX_DENIED", "AUTO_REVIEW_DENIED"}
+        user_rejected = call_id in session["rejected_approval_call_ids"]
+        analysis_input: dict[str, Any] = {"content": message["content"]}
         if error_present:
             analysis_input["error"] = error_object
-        explicit_success = dsh_value_has_explicit_success(output_value)
+        explicit_success = message.get("isError", False) is False
         if explicit_success and not error_present and not sandbox_denied and not user_rejected:
             analysis_input["success"] = True
         analysis_input["isError"] = (
-            dsh_value_has_is_error(output_value)
+            message.get("isError", False)
             or error_present
             or sandbox_denied
             or user_rejected
@@ -1965,11 +1960,14 @@ def process_dsh_record(
             isinstance(error_object, dict) and error_object.get("code") == "FS_SANDBOX_DENIED"
         ):
             cause_override = "permission_boundary"
+        call = session["calls"].get(call_id, {})
+        # PTC ancestry is not proof of duplicated causality; count failed outcomes.
         process_call_output(
             session,
             {"call_id": call_id, "output": analysis_input},
             config,
             cause_override=cause_override,
+            structured_permission=sandbox_denied or user_rejected,
             seq=seq,
         )
         return
@@ -1997,17 +1995,20 @@ def process_dsh_record(
         return
     if record_type == "approval/decided":
         outcome = str(data.get("outcome") or "").casefold()
+        approval_id = str(data.get("id") or "")
+        request = session["approval_requests"].get(approval_id, {})
+        call_id = str(request.get("callId") or "")
         if outcome in {"rejected", "denied"}:
-            session["denied_approvals"] += 1
-            session["permission_blocks"] += 1
-            request = session["approval_requests"].get(str(data.get("id") or ""))
-            if isinstance(request, dict):
-                call_id = str(request.get("callId") or "")
-                if call_id:
-                    session["rejected_approval_call_ids"].add(call_id)
-                    call = session["calls"].get(call_id)
-                    if isinstance(call, dict):
-                        call["approval_rejected"] = True
+            if approval_id not in session["denied_decision_ids"]:
+                session["denied_approvals"] += 1
+                session["denied_decision_ids"].add(approval_id)
+            if call_id:
+                if call_id not in session["permission_counted_call_ids"]:
+                    session["permission_blocks"] += 1
+                    session["permission_counted_call_ids"].add(call_id)
+                session["rejected_approval_call_ids"].add(call_id)
+        elif outcome in {"approved", "allowed"} and call_id:
+            session["rejected_approval_call_ids"].discard(call_id)
         return
     if record_type == "llm/retry":
         session["llm_retries"] += 1
@@ -2030,6 +2031,7 @@ def process_dsh_record(
 
 
 def finalize_dsh_session(session: dict[str, Any], coverage: dict[str, Any]) -> dict[str, Any]:
+    session["tool_execution"]["inner_incomplete"] = sum(not p["settled"] and not p.get("inherited") for p in session["ptc"].values())
     finalize_dsh_tokens(session)
     session["repeated_retries"] = (
         session["unchanged_retries"] + session["state_change_retries"] + session["polling_retries"]
@@ -2050,6 +2052,9 @@ def parse_dsh_session_file(
     config: AnalysisConfig,
     coverage: dict[str, Any],
 ) -> dict[str, Any] | None:
+    compression = 'zstd' if path.name.endswith('.zstd') else 'none'
+    if parse_dsh_generation_filename(path.name, compression) != 4:
+        raise ValueError("only session.v4 logs are supported; migrate upstream")
     lines = read_dsh_jsonl_lines(path)
     if lines is None:
         coverage["unreadable_files"] += 1
@@ -2060,8 +2065,9 @@ def parse_dsh_session_file(
             continue
         try:
             records.append(json.loads(line))
-        except json.JSONDecodeError:
-            coverage["malformed_lines"] += 1
+        except json.JSONDecodeError as error:
+            raise ValueError("corrupt V4 JSON; no older-generation fallback") from error
+    validate_records(records, DSH_KNOWN_RECORD_TYPES, physical=True)
     return parse_dsh_session_records(
         records,
         config,
@@ -2080,7 +2086,11 @@ def parse_dsh_session_records(
     workspace_key: str,
 ) -> dict[str, Any] | None:
     """Parse one replay-validated DSH record stream without writing it to disk."""
+    records = list(records)
+    inherited_cut = validate_records(records, DSH_KNOWN_RECORD_TYPES)
     session: dict[str, Any] | None = None
+    prefix_state = None
+    prefix_transferred = False
     buffered: list[tuple[dict[str, Any], datetime | None]] = []
     for record in records:
         if not isinstance(record, dict):
@@ -2117,6 +2127,7 @@ def parse_dsh_session_records(
                 coverage["skipped_project"] += 1
                 return None
             session = new_dsh_session(header, workspace_key, timestamp, source_path, config)
+            prefix_state = new_dsh_session(header, workspace_key, timestamp, source_path, config)
             for pending, pending_time in buffered:
                 if pending_time is not None:
                     session["observed_start"] = min(session["observed_start"], pending_time)
@@ -2143,6 +2154,14 @@ def parse_dsh_session_records(
             session["observed_start"] = min(session["observed_start"], record_timestamp)
             session["observed_end"] = max(session["observed_end"], record_timestamp)
         apply_dsh_surface_shadow(session, record, coverage)
+        if record_seq is not None and record_seq < inherited_cut:
+            if record_type in {"tool/call", "tool/ptc-dispatch-start", "tool/ptc-dispatch", "approval/asked", "approval/decided"}:
+                process_dsh_record(prefix_state, record_type, data, config, record_timestamp, seq=record_seq)
+            continue
+        if not prefix_transferred and prefix_state is not None:
+            for key in ("calls", "approval_requests", "ptc", "rejected_approval_call_ids"): session[key].update(prefix_state[key])
+            for entry in session["ptc"].values(): entry["inherited"] = True
+            prefix_transferred = True
         process_dsh_record(session, record_type, data, config, record_timestamp, seq=record_seq)
     if session is None:
         coverage["missing_metadata"] += 1
@@ -2238,6 +2257,8 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "user_messages": session["user_messages"],
         "assistant_messages": session["assistant_messages"],
         "log_generation_version": session.get("log_generation_version"),
+        "tool_execution": session["tool_execution"],
+        "child_sessions": len(session["child_sessions"]),
         "system_messages": session.get("system_messages", 0),
         "injected_user_messages": session.get("injected_user_messages", 0),
         "injected_source_kinds": dict(sorted(session.get("injected_source_kinds", {}).items())),
@@ -2898,7 +2919,7 @@ def parse_with_deterministic_cache(
         cache_session["first_prompt"] = local_text(str(session.get("first_prompt") or ""), 12000)
         cache_session["provider_title"] = local_text(str(session.get("provider_title") or ""), 12000)
         cache_session["fallback_title"] = local_text(str(session.get("fallback_title") or ""), 12000)
-        for transient_key in ("calls", "last_failed_calls", "approval_requests", "semantic_message_digests"):
+        for transient_key in ("calls", "last_failed_calls", "approval_requests", "ptc", "semantic_message_digests"):
             cache_session[transient_key] = {} if transient_key != "semantic_message_digests" else set()
     payload = {
         "cache_version": DETERMINISTIC_CACHE_VERSION,
@@ -2977,9 +2998,12 @@ def build_report(
                 coverage["malformed_lines"] += 1
                 continue
             session_id = str(header.get("id") or f"stream-{index:06d}")
-            synthetic_path = sessions_root / "session-query" / session_id / "session.jsonl"
+            synthetic_path = sessions_root / "session-query" / session_id / "session.v4.jsonl"
             records = [{"type": "session", **header}]
             records.extend(events)
+            cut = validate_records(records, DSH_KNOWN_RECORD_TYPES)
+            if snapshot.get("inheritedEventCount", cut) != cut:
+                raise ValueError("V4 inherited cut disagrees with marker")
             parsed = parse_dsh_session_records(
                 records,
                 config,
@@ -3244,8 +3268,10 @@ def build_report(
     def warning(zh: str, en: str) -> None:
         warnings.append(en if config.locale == "en" else zh)
     if not paths and snapshots is None:
-        warning("在解析后的 DSH_HOME 下未找到 DSH 会话文件（session.jsonl.zstd 或 session.vN.jsonl.zstd）。", "No DSH session files (session.jsonl.zstd or session.vN.jsonl.zstd) were found under the resolved DSH_HOME.")
+        warning("在解析后的 DSH_HOME 下未找到 DSH 会话文件（session.v4.jsonl 或 session.v4.jsonl.zstd）。", "No DSH session files (session.v4.jsonl or session.v4.jsonl.zstd) were found under the resolved DSH_HOME.")
     generation = coverage.get("generation_diagnostics") or {}
+    if generation.get("migration_required"):
+        warning("旧原始日志需通过上游 DSH 迁移到 V4。", "Older raw logs require upstream DSH migration to V4.")
     if generation.get("newer_generation"):
         warning(
             f"有 {generation['newer_generation']} 个会话的最新日志代际高于本分析器支持的 V{DSH_SESSION_FORMAT_VERSION}；这些会话已跳过，未按旧代际降级统计。",

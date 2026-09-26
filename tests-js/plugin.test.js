@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { access, mkdtemp, realpath, rm } from 'node:fs/promises'
@@ -11,19 +12,11 @@ function syntheticSessions(count = 1) {
   const snapshots = new Map()
   for (let index = 0; index < count; index += 1) {
     const id = `node-test-session-${index}`
-    const header = { id, createdAt: now - (index + 1) * 1000, cwd: `/workspace/project-${index}` }
-    records.push({ header, live: false, persisted: true })
-    snapshots.set(id, {
-      session: header,
-      events: [
-        { seq: 0, type: 'turn/start', time: now - 900, data: { turn: 1 } },
-        { seq: 1, type: 'user/message', time: now - 800, data: { content: [{ type: 'text', text: `Implement and validate bounded feature ${index}.` }] } },
-        { seq: 2, type: 'tool/call', time: now - 700, data: { turn: 1, step: 1, callId: `call-${index}`, name: 'bash', arguments: '{"command":"python -m unittest"}' } },
-        { seq: 3, type: 'tool/result', time: now - 600, data: { turn: 1, step: 1, callId: `call-${index}`, result: { output: 'Command completed', metadata: { exitCode: 0 } } } },
-        { seq: 4, type: 'assistant/message', time: now - 500, data: { turn: 1, step: 1, usage: { inputTokens: 40, outputTokens: 20 }, message: { role: 'assistant', content: [{ type: 'text', text: 'Implemented and validated the requested change.' }] } } },
-        { seq: 5, type: 'turn/end', time: now - 100, data: { turn: 1, reason: { kind: 'completed' } } },
-      ],
-    })
+    const rows = readFileSync(new URL('../tests/fixtures/synthetic-session.jsonl', import.meta.url), 'utf8').trim().split('\n').map(JSON.parse)
+    const {type, ...header} = rows[0]
+    Object.assign(header, {id, createdAt: now - 1000, cwd: `/workspace/project-${index}`})
+    records.push({header, live: false, persisted: true})
+    snapshots.set(id, {session: header, inheritedEventCount: 0, events: rows.slice(1)})
   }
   return { records, snapshots }
 }
@@ -34,11 +27,12 @@ function registerPlugin(sessionData = syntheticSessions()) {
   const followups = []
   let listCalls = 0
   apply({
+    effect() {},
     commands: { register(value) { commands.push(value) } },
     tools: { register(value) { tools.push(value) } },
     sessionQuery: {
       async listSessions() { listCalls += 1; return sessionData.records },
-      async readSession(id) { return sessionData.snapshots.get(id) },
+      async observeSession(id) { const s = sessionData.snapshots.get(id); return {header:s.session,events:s.events,inheritedEventCount:0,[Symbol.dispose]() {}} },
     },
   })
   return {
@@ -76,6 +70,7 @@ test('registers one command and the workflow and cleanup tools', () => {
   const commands = []
   const tools = []
   apply({
+    effect() {},
     commands: { register(value) { commands.push(value) } },
     tools: { register(value) { tools.push(value) } },
     sessionQuery: {},
@@ -188,22 +183,15 @@ test('deterministic slash command analyzes sessionQuery data into a report', asy
   try {
     const commands = []
     const now = Date.now()
-    const header = { id: 'node-test-session', createdAt: now - 1000, cwd: '/workspace/project' }
-    const snapshot = {
-      session: header,
-      events: [
-        { seq: 0, type: 'turn/start', time: now - 900, data: { turn: 1 } },
-        { seq: 1, type: 'user/message', time: now - 800, data: { content: [{ type: 'text', text: 'Review the bounded implementation.' }] } },
-        { seq: 2, type: 'assistant/message', time: now - 500, data: { turn: 1, step: 1, usage: { inputTokens: 10, outputTokens: 5 }, message: { role: 'assistant', content: [{ type: 'text', text: 'Reviewed.' }] } } },
-        { seq: 3, type: 'turn/end', time: now - 100, data: { turn: 1, reason: { kind: 'completed' } } },
-      ],
-    }
+    const snapshot = [...syntheticSessions().snapshots.values()][0], header = snapshot.session
     apply({
+      effect() {},
+    effect() {},
       commands: { register(value) { commands.push(value) } },
       tools: { register() {} },
       sessionQuery: {
         async listSessions() { return [{ header, live: false, persisted: true }] },
-        async readSession() { return snapshot },
+        async observeSession() { return {header:snapshot.session,events:snapshot.events,inheritedEventCount:0,[Symbol.dispose]() {}} },
       },
     })
     const result = await commands[0].handler({ rawInput: '--deterministic --locale en', signal: new AbortController().signal })
