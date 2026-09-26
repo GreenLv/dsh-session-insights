@@ -1,0 +1,4 @@
+# Keep official differential fixtures byte-identical on Windows checkouts.
+tests/fixtures/**/*.jsonl text eol=lf
+tests/fixtures/**/*.json text eol=lf
+*.zstd binary

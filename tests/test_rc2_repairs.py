@@ -18,7 +18,9 @@ class Rc2RepairTests(unittest.TestCase):
         runtime = os.environ.get('DSH_RUNTIME')
         if not runtime:
             raise RuntimeError('DSH_RUNTIME required for exact rc.2 positive differential fixtures')
-        result = subprocess.run(['node', str(ROOT/'scripts/rc2-repair-fixtures.mjs'), runtime, '--check'], check=True, capture_output=True, text=True)
+        result = subprocess.run(['node', str(ROOT/'scripts/rc2-repair-fixtures.mjs'), runtime, '--check'], capture_output=True, text=True)
+        if result.returncode:
+            raise RuntimeError(f'Official rc.2 fixture check failed:\n{result.stdout}\n{result.stderr}')
         cls.cases = json.loads(result.stdout)['cases']
 
     def test_official_admitted_repairs_through_both_production_paths(self):
