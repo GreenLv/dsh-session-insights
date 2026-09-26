@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
   "renderer_version": 3,
-  "generated_at": "2026-09-25T09:45:26.442Z",
-  "data_through": "2026-09-24",
+  "generated_at": "2026-09-26T09:29:33.625Z",
+  "data_through": "2026-09-25",
   "period": {
     "start": "2026-08-22",
-    "end": "2026-09-24"
+    "end": "2026-09-25"
   },
   "title": "dsh-session-insights npm download history",
   "project": "dsh-session-insights",
@@ -16,7 +16,7 @@
       "label": "dsh-session-insights",
       "color": "#2563eb",
       "start": "2026-08-22",
-      "total": 1394,
+      "total": 1462,
       "downloads": [
         {
           "day": "2026-08-22",
@@ -180,13 +180,18 @@
         },
         {
           "day": "2026-09-23",
-          "downloads": 0,
-          "cumulative": 1394
+          "downloads": 38,
+          "cumulative": 1432
         },
         {
           "day": "2026-09-24",
+          "downloads": 30,
+          "cumulative": 1462
+        },
+        {
+          "day": "2026-09-25",
           "downloads": 0,
-          "cumulative": 1394
+          "cumulative": 1462
         }
       ]
     }
@@ -354,29 +359,34 @@
     },
     {
       "day": "2026-09-23",
-      "downloads": 0,
-      "cumulative": 1394
+      "downloads": 38,
+      "cumulative": 1432
     },
     {
       "day": "2026-09-24",
+      "downloads": 30,
+      "cumulative": 1462
+    },
+    {
+      "day": "2026-09-25",
       "downloads": 0,
-      "cumulative": 1394
+      "cumulative": 1462
     }
   ],
   "sources": [
     {
       "package": "dsh-session-insights",
       "start": "2026-08-22",
-      "end": "2026-09-24",
-      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-09-24/dsh-session-insights",
-      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-09-24/dsh-session-insights"
+      "end": "2026-09-25",
+      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-09-25/dsh-session-insights",
+      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-09-25/dsh-session-insights"
     }
   ],
-  "observation_through": "2026-09-24",
+  "observation_through": "2026-09-25",
   "settlement": {
     "mode": "latest-available-day",
     "latest_day_status": "provisional",
-    "stable_through": "2026-09-23",
+    "stable_through": "2026-09-22",
     "minimum_age_days": 2,
     "minimum_observation_span_hours": 12
   },
