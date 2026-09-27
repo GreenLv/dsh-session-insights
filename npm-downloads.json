@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
   "renderer_version": 3,
-  "generated_at": "2026-09-26T09:29:33.625Z",
-  "data_through": "2026-09-25",
+  "generated_at": "2026-09-27T10:10:02.461Z",
+  "data_through": "2026-09-26",
   "period": {
     "start": "2026-08-22",
-    "end": "2026-09-25"
+    "end": "2026-09-26"
   },
   "title": "dsh-session-insights npm download history",
   "project": "dsh-session-insights",
@@ -16,7 +16,7 @@
       "label": "dsh-session-insights",
       "color": "#2563eb",
       "start": "2026-08-22",
-      "total": 1462,
+      "total": 1543,
       "downloads": [
         {
           "day": "2026-08-22",
@@ -175,23 +175,28 @@
         },
         {
           "day": "2026-09-22",
-          "downloads": 0,
-          "cumulative": 1394
-        },
-        {
-          "day": "2026-09-23",
           "downloads": 38,
           "cumulative": 1432
         },
         {
+          "day": "2026-09-23",
+          "downloads": 38,
+          "cumulative": 1470
+        },
+        {
           "day": "2026-09-24",
           "downloads": 30,
-          "cumulative": 1462
+          "cumulative": 1500
         },
         {
           "day": "2026-09-25",
+          "downloads": 43,
+          "cumulative": 1543
+        },
+        {
+          "day": "2026-09-26",
           "downloads": 0,
-          "cumulative": 1462
+          "cumulative": 1543
         }
       ]
     }
@@ -354,39 +359,44 @@
     },
     {
       "day": "2026-09-22",
-      "downloads": 0,
-      "cumulative": 1394
-    },
-    {
-      "day": "2026-09-23",
       "downloads": 38,
       "cumulative": 1432
     },
     {
+      "day": "2026-09-23",
+      "downloads": 38,
+      "cumulative": 1470
+    },
+    {
       "day": "2026-09-24",
       "downloads": 30,
-      "cumulative": 1462
+      "cumulative": 1500
     },
     {
       "day": "2026-09-25",
+      "downloads": 43,
+      "cumulative": 1543
+    },
+    {
+      "day": "2026-09-26",
       "downloads": 0,
-      "cumulative": 1462
+      "cumulative": 1543
     }
   ],
   "sources": [
     {
       "package": "dsh-session-insights",
       "start": "2026-08-22",
-      "end": "2026-09-25",
-      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-09-25/dsh-session-insights",
-      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-09-25/dsh-session-insights"
+      "end": "2026-09-26",
+      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-09-26/dsh-session-insights",
+      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-09-26/dsh-session-insights"
     }
   ],
-  "observation_through": "2026-09-25",
+  "observation_through": "2026-09-26",
   "settlement": {
     "mode": "latest-available-day",
     "latest_day_status": "provisional",
-    "stable_through": "2026-09-22",
+    "stable_through": "2026-09-21",
     "minimum_age_days": 2,
     "minimum_observation_span_hours": 12
   },
