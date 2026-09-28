@@ -17,6 +17,7 @@ const cases=[
  ['call identity',r=>r[6].data.message.toolCallId='other',/call|tool/i],
  ['bad reference',r=>r[3].sourceEventSeqs=[99],/sourceEventSeqs|seq/i],
  ['broken sequence',r=>r[4].seq=50,/seq/i],
+ ['settled call result repeat',r=>{r.splice(7,0,structuredClone(r[6]));r.slice(1).forEach((e,i)=>e.seq=i)},/lifecycle|result/i],
 ]
 for(const [label,mutate,expected] of cases){const copy=structuredClone(rows);mutate(copy);assert.throws(()=>restore(copy),expected,label)}
-console.log(JSON.stringify({status:'pass',scope:'official rc.2 strict catalog',positiveEvents:10,negativeCases:cases.map(c=>c[0]),knownEvents:KNOWN_SESSION_EVENT_TYPES.size}))
+console.log(JSON.stringify({status:'pass',scope:'official target strict catalog',positiveEvents:10,negativeCases:cases.map(c=>c[0]),knownEvents:KNOWN_SESSION_EVENT_TYPES.size}))

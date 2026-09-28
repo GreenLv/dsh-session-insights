@@ -451,6 +451,10 @@ export function parseSnapshot(snapshot, opts, coverage) {
     session_header_records: 1,
     ptc: new Map(), children: new Set(), permissionSeen: new Set(), deniedDecisions: new Set(),
     tool_execution: {outer_calls: 0, inner_calls: 0, outer_failures: 0, inner_failures: 0, inner_incomplete: 0},
+    // Official host recovery results (DSH 0.2.0-rc.1) are uncertainty records,
+    // never confirmed failures; they are counted separately per status.
+    tool_recovery: {outcome_unknown: 0, not_started: 0},
+    recovery_seen: new Set(), settled_calls: new Set(),
   }
   const analysisPrivacy =
     opts.privacy === 'metrics'
@@ -745,8 +749,44 @@ export function parseSnapshot(snapshot, opts, coverage) {
       }
       s.calls.set(String(d.callId || ''), call)
     } else if (type === 'tool/result') {
-      const id = d.message.toolCallId,
-        call = s.calls.get(id) || { tool: 'unknown' },
+      const id = d.message.toolCallId
+      // Official host recovery results are identified only by their structured
+      // error code and a valid call identity; message text never classifies.
+      // Settlement scope follows the official recoverer: (callId, turn, step),
+      // so the same id in a later turn is a distinct pending request.
+      const scope = JSON.stringify([id, d.turn ?? null, d.step ?? null])
+      const recovery =
+        object(d.error) && typeof id === 'string' && id
+          ? { TOOL_OUTCOME_UNKNOWN: 'outcome_unknown', TOOL_NOT_STARTED: 'not_started' }[d.error.code]
+          : null
+      if (recovery) {
+        // A settled call keeps its recorded outcome; a recovery result is
+        // counted at most once per call scope and never over it. Recovery
+        // changes no failure, verification, permission or state counter.
+        if (!s.settled_calls.has(scope) && !s.recovery_seen.has(scope)) {
+          s.recovery_seen.add(scope)
+          s.tool_recovery[recovery]++
+          const call = s.calls.get(id) || { tool: 'unknown' }
+          message(
+            'tool',
+            `Tool ${call.tool}; recovery ${recovery}; recorded outcome missing; side effects possible; verify external state before retrying`,
+            seq,
+            {
+              tool: call.tool,
+              outcome: 'unknown',
+              recovery,
+              exit_code: null,
+              cause: null,
+              verification: !!call.verification,
+              state_change: !!call.state_change,
+              git_commit: !!call.git_commit,
+            },
+          )
+        }
+        continue
+      }
+      s.settled_calls.add(scope)
+      const call = s.calls.get(id) || { tool: 'unknown' },
         value = d.message || d
       const txt = outputText(value),
         permission =
@@ -978,11 +1018,12 @@ function publicSession(s, opts) {
     active_minutes: round(s.duration_ms / 60000, 1),
     log_generation_version: s.generation,
     tool_execution: s.tool_execution,
+    tool_recovery: { ...s.tool_recovery },
     child_sessions: s.children.size,
     injected_source_kinds: dict(s.injected_source_kinds),
     median_prompt_chars: Math.trunc(median(s.prompt_lengths)),
     failure_causes: dict(s.failure_causes),
-    failure_rule_version: '5.1.0-native',
+    failure_rule_version: '5.2.0-native',
     repeated_retries: s.repeated_retries,
     completion: s.completion,
     verification: {
@@ -1078,6 +1119,12 @@ export function buildReport(snapshots, input = {}) {
     active_hours: round(sum(sessions, 'duration_ms') / 3600000),
     structured_failures: sum(sessions, 'tool_failures'),
     repeated_retries: sum(sessions, 'repeated_retries'),
+    // Official recovery results are uncertainty records; neither status is a
+    // structured failure, so they are reported outside tool_failures.
+    tool_recovery: {
+      outcome_unknown: sessions.reduce((n, s) => n + s.tool_recovery.outcome_unknown, 0),
+      not_started: sessions.reduce((n, s) => n + s.tool_recovery.not_started, 0),
+    },
     tokens: aggregateTokens(sessions),
   }
   const projects = [...groupBy(sessions, 'project')]
@@ -1492,7 +1539,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.5.0-v4-rc2.2',
+    analyzer_version: '0.5.1-v4-dsh020rc1.1',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),
@@ -1524,7 +1571,7 @@ export function buildReport(snapshots, input = {}) {
         'Only human user messages count as work. System and synthetic context are not evidence.',
       timing: 'Wall time measured; active/tool/wait time are proxies.',
       causality: 'Recommendations are inferred, not verified outcomes.',
-      failure_rule_version: '5.1.0-native',
+      failure_rule_version: '5.2.0-native',
       patches: 'not_applicable',
     },
     task_family_totals: {

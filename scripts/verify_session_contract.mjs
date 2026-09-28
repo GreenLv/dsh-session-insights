@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-/** Exact rc.2, nonempty native V4 gate. Missing runtime/files always fail. */
+/** Exact target DSH, nonempty native V4 gate. Missing runtime/files always fail. */
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const TARGET = '0.1.7-rc.2'
+const TARGET = '0.2.0-rc.1'
 import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
 async function loadValidators(runtime) {
@@ -180,7 +180,7 @@ async function main() {
     else if (argv[i].startsWith('--')) throw new Error(`unknown option ${argv[i]}`)
     else paths.push(argv[i])
   }
-  if (!runtime || expected !== TARGET) throw new Error('explicit rc.2 runtime and exact expected version required')
+  if (!runtime || expected !== TARGET) throw new Error('explicit target runtime and exact expected version required')
   const validators = await loadValidators(runtime)
   const targets = await collectTargets(paths)
   if (!targets.length) throw new Error('no fixture files; validation cannot skip')

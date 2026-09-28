@@ -37,14 +37,14 @@ The HTML file contains its own styles and data, so you can keep it locally and o
 
 ## Install the Bundle
 
-The `0.5.0` Bundle requires DSH `0.1.7-rc.2` and Node.js `^22.19.0 || >=24.0.0`, without Python. The optional file-log CLI still requires Python 3.11+.
+The `0.5.1` Bundle requires DSH `0.2.0-rc.1` and Node.js `^22.19.0 || >=24.0.0`, without Python. The optional file-log CLI still requires Python 3.11+.
 
-**DSH compatibility:** The package targets `0.1.7-rc.2` only. Contract and service tests cover synthetic V4 input. Consult the acceptance record for artifact-specific host, model, platform and browser results. See [DSH compatibility](#dsh-compatibility).
+**DSH compatibility:** The package targets `0.2.0-rc.1` only. Contract and service tests cover synthetic V4 input. Consult the acceptance record for artifact-specific host, model, platform and browser results. See [DSH compatibility](#dsh-compatibility).
 
-Install the matching 0.5.0 Bundle into your DSH profile:
+Install the matching 0.5.1 Bundle into your DSH profile:
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.5.0
+dsh plugin --profile web add dsh-session-insights@0.5.1
 dsh web
 ```
 
@@ -85,7 +85,7 @@ The Bundle analyzes `sessionQuery` snapshots in a Node.js worker. It does not st
 | Environment and credentials | The host uses `DSH_HOME` or the OS home directory to locate storage. No interpreter discovery, environment forwarding, separate API key or credential-store calls are used by native analysis. Session content can still contain secrets; redaction is not a disclosure guarantee. |
 | Network and models | Deterministic analysis runs offline. The default semantic workflow sends bounded, sanitized evidence through the current DSH agent to its configured model provider, with that provider's data handling and costs. Use `--deterministic` to skip it. |
 
-The Bundle requires Node.js `^22.19.0 || >=24.0.0` and DSH's `commands`, `tools` and `sessionQuery` services. The Bundle uses the declared rc.2 DSH peers, including the official message helper. Missing services, worker failure, unsafe paths or invalid semantic output stop the affected operation. Model output is validated before writing; a rejected replacement preserves any previously valid result. Explicit fallback produces a deterministic report marked as degraded.
+The Bundle requires Node.js `^22.19.0 || >=24.0.0` and DSH's `commands`, `tools` and `sessionQuery` services. The Bundle uses the declared 0.2.0-rc.1 DSH peers, including the official message helper. Missing services, worker failure, unsafe paths or invalid semantic output stop the affected operation. Model output is validated before writing; a rejected replacement preserves any previously valid result. Explicit fallback produces a deterministic report marked as degraded.
 
 A run accepts at most 2,000 selected snapshots and 64 MiB of serialized snapshot input. Reduce `--days` or filter `--project` when that limit is exceeded. Earlier analysis runs cannot resume under the V4 contract; start a new run after upgrading. Native runs retain their own validated outputs for resumption, but do not reuse a cross-run semantic cache. Deterministic summary wording has been refreshed; the report schema and dashboard remain shared with the CLI.
 
@@ -194,13 +194,15 @@ Historical 0.2.0 package, CI, native macOS, and focused native Windows evidence 
 
 We support only the explicitly verified minimum baseline or the latest DSH version after verification. We do not maintain historical DSH releases, promise compatibility across intervening versions, or treat a new release as supported before validation. Users on older hosts should upgrade to the verified baseline.
 
-This version accepts only DSH `0.1.7-rc.2`. Native analysis uses host-restored V4 snapshots; the optional Python CLI reads only `session.v4.jsonl` and `session.v4.jsonl.zstd`. Migrate older raw logs with upstream DSH before using the CLI. It never falls back to an older generation when the current file is corrupt or newer than V4.
+This version accepts only DSH `0.2.0-rc.1`. Native analysis uses host-restored V4 snapshots; the optional Python CLI reads only `session.v4.jsonl` and `session.v4.jsonl.zstd`. Migrate older raw logs with upstream DSH before using the CLI. It never falls back to an older generation when the current file is corrupt or newer than V4.
 
 Start a new analysis run after upgrading: earlier manifests and caches have a different input contract. Existing HTML, JSON and Markdown reports are retained. Update a separately installed CLI/Skill from this same version; installing the Bundle does not update it.
 
 Tool workload includes recorded programmatic tool calling (PTC) inner calls. The JSON `tool_execution` fields separate outer transport calls, inner executions, failures and unsettled inner calls; each recorded failed call outcome is counted once. If both an inner call and its outer program fail, both outcomes remain visible; the report does not infer whether they share one root cause. Permission denials are distinct from failed verification commands. Developer tool-registration messages and scheduled injections do not count as human requests.
 
-See the [0.5.0 release acceptance](docs/acceptance/v0.5.0-release.md) for the exact artifact, CI, macOS model workflow, Windows deterministic host checks and human bilingual browser checks. The [frozen candidate record](docs/acceptance/v0.5.0-rc2-candidate.md) retains the source review matrix. Historical acceptance records apply only to their named implementations.
+DSH 0.2.0-rc.1 can close an interrupted step by writing official recovery results with the structured error codes `TOOL_OUTCOME_UNKNOWN` and `TOOL_NOT_STARTED`. This report classifies them separately from confirmed failures: `tool_recovery` counts `{outcome_unknown, not_started}` per session and in totals. `TOOL_OUTCOME_UNKNOWN` means a recorded call's completed outcome was not durably recorded, so the tool may have produced side effects; `TOOL_NOT_STARTED` means the log has no record of the call starting. Neither state is counted as a tool failure or a failed verification, and neither proves that a tool executed or that it did nothing. Text that merely mentions a recovery code is classified by the ordinary result rules. The report never recommends directly retrying an operation that may have had side effects.
+
+The 0.5.1 candidate review scope is recorded in [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md). The [0.5.0 release acceptance](docs/acceptance/v0.5.0-release.md) and the [frozen 0.5.0 candidate record](docs/acceptance/v0.5.0-rc2-candidate.md) apply only to that 0.5.0 implementation and its named host. Historical acceptance records apply only to their named implementations.
 
 ## Session log generations
 
@@ -241,8 +243,8 @@ The cumulative chart is generated daily from the npm Downloads API. npm download
 ```bash
 python3 -m pip install -e '.[dev]'
 npm ci --ignore-scripts
-npm ci --prefix tests/rc2-runtime --ignore-scripts
-DSH_RUNTIME="$PWD/tests/rc2-runtime" python3 -m unittest discover -s tests -v
+npm ci --prefix tests/dsh-runtime --ignore-scripts
+DSH_RUNTIME="$PWD/tests/dsh-runtime" python3 -m unittest discover -s tests -v
 python3 scripts/build_native_rules.py --check
 npm test
 python3 scripts/build_fixture.py --check

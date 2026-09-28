@@ -1,5 +1,5 @@
 """Bounded V4 admission for the read-only CLI (not an upstream migrator)."""
-IDENTITY = {"target_dsh_version": "0.1.7-rc.2", "input_format_version": 4, "analyzer_semantics": "v4-rc2.2"}
+IDENTITY = {"target_dsh_version": "0.2.0-rc.1", "input_format_version": 4, "analyzer_semantics": "v4-dsh020rc1.1"}
 SURFACE = {"user/message", "assistant/message", "system/message", "developer/message", "tool/result"}
 
 def validate_records(records, known, *, physical=False):

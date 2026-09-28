@@ -4,6 +4,17 @@
 
 Public releases are listed newest first.
 
+## 0.5.1 - unreleased
+
+Target DSH `0.2.0-rc.1` exclusively and start new V4 analysis runs after upgrading.
+
+### Changed
+
+- Classify the official host recovery results `TOOL_OUTCOME_UNKNOWN` and `TOOL_NOT_STARTED` separately from confirmed failures in both production analyzers. New `tool_recovery: {outcome_unknown, not_started}` counts appear per session and in totals; neither status counts as a tool failure, a failed verification or permission evidence, and recovery is settled by the official `(callId, turn, step)` identity so the same id in a later turn is a distinct request. Text that merely mentions a recovery code keeps ordinary result rules.
+- Pin all DSH dependencies, `engines.dsh` and Bundle metadata to exactly `0.2.0-rc.1`; bind input identity, manifests and deterministic caches to the new `v4-dsh020rc1.1` semantics. Old runs and caches are invalidated, not migrated.
+- Rename the active regression tooling to neutral names (`tests/dsh-runtime`, `dsh-repair-fixtures.mjs`, `dsh-contract-tests.mjs`, `dsh-services.mjs`, `build_dsh_fixture.mjs`) and regenerate the recovery fixture corpus through the official `ToolCallRecovery` of the exact target package, with close-once, identity-boundary, settled-call and text-only controls, plus Node/Python parity over 3 privacy modes × 2 locales.
+- Add `scripts/verify_host_acceptance.mjs` (`native-acceptance/v2`) and a two-mode `windows-host-acceptance` workflow that freeze one candidate `.tgz` with its SHA-256, read it back by artifact id on hosted Windows, install it through the official plugin CLI, compare installed bytes, and run zero-model deterministic host checks. Full host app, GUI and model gates stay separate.
+
 ## 0.5.0 - 2026-09-26
 
 Target DSH `0.1.7-rc.2` exclusively and start new V4 analysis runs after upgrading.

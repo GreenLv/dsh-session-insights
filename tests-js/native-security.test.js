@@ -505,7 +505,7 @@ test('resume rejects old DSH, format and analyzer manifest identities', () =>
   scope(({ store, run }) => {
     prepare(store, run)
     const original = store.read(run, 'manifest.json')
-    for (const [key, value] of [['target_dsh_version', '0.1.7-rc.1'], ['input_format_version', 3], ['analyzer_semantics', 'old'], ['native_version', 1]]) {
+    for (const [key, value] of [['target_dsh_version', '0.1.7-rc.2'], ['input_format_version', 3], ['analyzer_semantics', 'v4-rc2.2'], ['native_version', 1]]) {
       store.write(run, 'manifest.json', {...original, [key]: value})
       assert.throws(() => prepareAggregate(store, run), /manifest|version|identity/)
     }

@@ -1,4 +1,4 @@
-// Deterministic nonempty rc.2 fixture, admitted by the official strict catalog.
+// Deterministic nonempty synthetic fixture, admitted by the official strict catalog.
 import {createRequire} from 'node:module'
 import {pathToFileURL} from 'node:url'
 import {resolve,join} from 'node:path'

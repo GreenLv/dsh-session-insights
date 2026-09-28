@@ -1,4 +1,4 @@
-// Real rc.2 Session + query service integration, with synthetic data only.
+// Real target-host Session + query service integration, with synthetic data only.
 // This is service/codec evidence, not a GUI or real-model acceptance claim.
 import {createRequire} from 'node:module'
 import {pathToFileURL} from 'node:url'
@@ -52,7 +52,7 @@ live.append('step/end',{turn:2,step:1})
 live.append('turn/end',{turn:2,reason:{kind:'completed'}})
 // Encode actual session events, write to an isolated file and restore using the
 // same official strict catalog used by persistence, then create a new Session.
-const folder=await mkdtemp(join(tmpdir(),'insights-rc2-services-'))
+const folder=await mkdtemp(join(tmpdir(),'insights-dsh-services-'))
 try {
  const encoded=[{type:'session',...live.header},...live.snapshotEvents().map(e=>releasedV4SessionFormatCodec.encodeEvent(e))]
  const path=join(folder,'session.v4.jsonl')
@@ -64,7 +64,7 @@ try {
  const reopened=Session.create(artifact.header.id,artifact.events,artifact.header,artifact.inheritedEventCount)
  assert.equal(reopened.snapshotEvents().find(e=>e.type==='user/message' && e.data.id===notice.id).data.source.kind,'session-insights')
  // Inject only a synthetic persistence seam; query, Session preparation and
- // interrupted-tail handling are the real rc.2 implementation.
+ // interrupted-tail handling are the real target implementation.
  const coldCtx=new Context(), coldSessions=new SessionStore(coldCtx)
  let closed=0, mode='ok'
  const coldHeader={...header,id:'cold-synthetic'}
@@ -87,7 +87,7 @@ try {
    setImmediate(()=>controller.abort());await assert.rejects(cancelled,e=>e.code==='SESSION_QUERY_ABORTED');assert.equal(closed,2)
    mode='corrupt';await assert.rejects(coldQuery.observeSession(coldHeader.id,{projectionMode:'none'}),e=>e.code==='SESSION_QUERY_CORRUPT_SESSION');assert.equal(closed,3)
  } finally {await coldCtx.fiber.dispose()}
- var result={status:'pass',scope:'real rc.2 Session/query/codec, synthetic input; no model or GUI',persistedEvents:artifact.events.length,noticeReopened:true,queryDetached:true,realCordisRegistrationReload:true,developerHistoryReopened:true,coldReadClosed:closed,coldCancelled:true,coldCorruptionPropagated:true}
+ var result={status:'pass',scope:'real target Session/query/codec, synthetic input; no model or GUI',persistedEvents:artifact.events.length,noticeReopened:true,queryDetached:true,realCordisRegistrationReload:true,developerHistoryReopened:true,coldReadClosed:closed,coldCancelled:true,coldCorruptionPropagated:true}
 } finally {await ctx.fiber.dispose();await rm(folder,{recursive:true,force:true})}
 
 console.log(JSON.stringify(result))

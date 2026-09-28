@@ -1,5 +1,66 @@
 [
   {
+    "name": "recovery-not-started",
+    "expected": {
+      "failures": 0,
+      "permission": 0,
+      "success": 0,
+      "recovery": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "name": "recovery-outcome-unknown",
+    "expected": {
+      "failures": 0,
+      "permission": 0,
+      "success": 0,
+      "recovery": [
+        1,
+        0
+      ]
+    }
+  },
+  {
+    "name": "recovery-mixed-group",
+    "expected": {
+      "failures": 1,
+      "permission": 0,
+      "success": 1,
+      "verificationFailures": 1,
+      "recovery": [
+        1,
+        1
+      ]
+    }
+  },
+  {
+    "name": "recovery-id-boundary",
+    "expected": {
+      "failures": 0,
+      "permission": 0,
+      "success": 1,
+      "recovery": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "name": "recovery-surface-replace",
+    "expected": {
+      "failures": 0,
+      "permission": 0,
+      "success": 0,
+      "recovery": [
+        1,
+        0
+      ]
+    }
+  },
+  {
     "name": "optional-isError",
     "expected": {
       "failures": 0,
@@ -152,6 +213,32 @@
       "success": 0,
       "verificationFailures": 0,
       "pending": 0
+    }
+  },
+  {
+    "name": "recovery-text-only",
+    "expected": {
+      "failures": 1,
+      "permission": 0,
+      "success": 0,
+      "verificationFailures": 1,
+      "recovery": [
+        0,
+        0
+      ]
+    }
+  },
+  {
+    "name": "recovery-no-code",
+    "expected": {
+      "failures": 1,
+      "permission": 0,
+      "success": 0,
+      "verificationFailures": 1,
+      "recovery": [
+        0,
+        0
+      ]
     }
   }
 ]

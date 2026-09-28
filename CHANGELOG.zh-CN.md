@@ -4,6 +4,17 @@
 
 这里按时间倒序记录公开版本。
 
+## 0.5.1 - 未发布
+
+仅适配 DSH `0.2.0-rc.1`；升级后请新建 V4 分析运行。
+
+### 变更
+
+- 两个生产分析器把官方宿主恢复结果 `TOOL_OUTCOME_UNKNOWN` 与 `TOOL_NOT_STARTED` 与确认失败分开分类。每个会话和总量新增 `tool_recovery: {outcome_unknown, not_started}` 计数；两种状态都不计入工具失败、验证失败或权限证据；恢复结果按官方 `(callId, turn, step)` 身份结算，同一 ID 在后续轮次属于新的待决请求。仅正文提到恢复码的文本仍按一般结果规则分类。
+- 全部 DSH 依赖、`engines.dsh` 与 Bundle 元数据精确固定到 `0.2.0-rc.1`；输入身份、manifest 与确定性缓存绑定新的 `v4-dsh020rc1.1` 语义。旧运行与缓存只会失效，不会被迁移。
+- 活动回归工具改为中性命名（`tests/dsh-runtime`、`dsh-repair-fixtures.mjs`、`dsh-contract-tests.mjs`、`dsh-services.mjs`、`build_dsh_fixture.mjs`），恢复 fixture 语料改由精确目标包的官方 `ToolCallRecovery` 生成，并带 close-once、身份边界、已结算与纯文本控制，以及 3 种隐私 × 2 种语言的 Node/Python 对等检查。
+- 新增 `scripts/verify_host_acceptance.mjs`（`native-acceptance/v2`）与双模式 `windows-host-acceptance` workflow：一次冻结候选 `.tgz` 及其 SHA-256，hosted Windows 按 artifact id 读回同一字节，经官方插件 CLI 安装并逐字节比对，再运行零模型确定性宿主检查。完整宿主应用、GUI 与模型 gate 保持独立。
+
 ## 0.5.0 - 2026-09-26
 
 仅适配 DSH `0.1.7-rc.2`；升级后请新建 V4 分析运行。

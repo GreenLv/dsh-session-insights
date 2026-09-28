@@ -1,0 +1,122 @@
+name: windows-host-acceptance
+
+# Portable zero-model Windows host acceptance for one exact candidate.
+# mode=pack freezes the candidate .tgz once and uploads it with its SHA-256.
+# mode=windows-accept reads that same artifact back by run id, verifies the
+# accepted digest, and runs scripts/verify_host_acceptance.mjs on hosted
+# Windows. The annex records every check; full host app/GUI gates stay open.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'pack (freeze candidate tgz) or windows-accept (verify accepted artifact)'
+        required: true
+        default: 'pack'
+        type: choice
+        options:
+          - pack
+          - windows-accept
+      commit:
+        description: 'Exact candidate commit (full SHA) to check out in both modes'
+        required: true
+      artifact_run_id:
+        description: 'windows-accept only: producer run id that uploaded the frozen tgz'
+        required: false
+      artifact_name:
+        description: 'windows-accept only: producer artifact name'
+        required: false
+        default: 'candidate-tgz'
+      expected_sha256:
+        description: 'windows-accept only: accepted artifact SHA-256 (lowercase hex)'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-host-acceptance-${{ github.workflow }}-${{ inputs.commit }}-${{ inputs.mode }}
+  cancel-in-progress: false
+
+jobs:
+  pack:
+    if: ${{ inputs.mode == 'pack' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.commit }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.19.0'
+      - run: npm ci --ignore-scripts
+      - run: npm pack
+      - name: Record artifact digest
+        run: |
+          tgz=$(ls dsh-session-insights-*.tgz)
+          echo "artifact=$tgz" >> "$GITHUB_OUTPUT"
+          sha256sum "$tgz" | tee tgz.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: candidate-tgz
+          path: |
+            dsh-session-insights-*.tgz
+            tgz.sha256
+          if-no-files-found: error
+
+  windows-accept:
+    if: ${{ inputs.mode == 'windows-accept' }}
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.commit }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.19.0'
+      - name: Read back the frozen producer artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ inputs.artifact_name }}
+          run-id: ${{ inputs.artifact_run_id }}
+          path: candidate
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify the accepted artifact digest
+        shell: pwsh
+        run: |
+          $tgz = Get-ChildItem candidate/dsh-session-insights-*.tgz | Select-Object -First 1
+          $hash = (Get-FileHash $tgz.FullName -Algorithm SHA256).Hash.ToLower()
+          "artifact=$($tgz.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "expected=${{ inputs.expected_sha256 }}"
+          if ($hash -ne "${{ inputs.expected_sha256 }}") {
+            Write-Error "artifact digest mismatch: $hash"
+            exit 1
+          }
+          "digest $hash matches the accepted artifact"
+      - name: Install the exact target runtime and host
+        run: |
+          npm ci --prefix tests/dsh-runtime --ignore-scripts
+          npm install --prefix host-home @deepseek-ai/dsh@0.2.0-rc.1 --ignore-scripts
+          npm install --global pnpm --ignore-scripts
+      - name: Run the zero-model host acceptance entry
+        shell: pwsh
+        run: |
+          $commit = "${{ inputs.commit }}"
+          $sha = "${{ inputs.expected_sha256 }}"
+          $tgz = (Get-ChildItem candidate/dsh-session-insights-*.tgz | Select-Object -First 1).Name
+          node scripts/verify_host_acceptance.mjs `
+            --package "candidate/$tgz" `
+            --expected-sha256 $sha `
+            --commit $commit `
+            --runtime tests/dsh-runtime `
+            --host host-home `
+            --workdir $env:RUNNER_TEMP `
+            --annex native-acceptance/annex.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: native-acceptance-v2-annex
+          path: native-acceptance/annex.json
+          if-no-files-found: error

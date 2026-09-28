@@ -631,7 +631,7 @@ class SessionFormatV4Tests(unittest.TestCase):
             self.assertEqual(fourth["totals"], third["totals"])
 
     def test_cache_version_reflects_generation_aware_parsing(self):
-        self.assertEqual(analyzer.DETERMINISTIC_CACHE_VERSION, 3)
+        self.assertEqual(analyzer.DETERMINISTIC_CACHE_VERSION, 4)
         self.assertEqual(analyzer.DSH_SESSION_FORMAT_VERSION, 4)
 
     def test_written_generations_satisfy_the_header_frame_contract(self):

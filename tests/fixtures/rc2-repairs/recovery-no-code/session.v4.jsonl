@@ -1,0 +1,9 @@
+{"agentPreset":"standard","createdAt":1786423200000,"cwd":"/synthetic/workspace/project-a","delegationDepth":0,"id":"synthetic-fixture-001","type":"session","version":4,"isSeeded":false}
+{"type":"turn/start","data":{"turn":1},"seq":0,"time":1786423200000}
+{"type":"step/start","data":{"turn":1,"step":1},"seq":1,"time":1786423201000}
+{"type":"user/message","surfaceOp":"append","data":{"turn":1,"step":1,"id":"u1","role":"user","source":{"kind":"user"},"content":[{"type":"text","text":"Synthetic first task."}]},"seq":2,"time":1786423202000}
+{"type":"assistant/message","surfaceOp":"append","data":{"turn":1,"step":1,"stream":[],"message":{"id":"assistant-a","role":"assistant","source":{"kind":"model","provider":"synthetic-provider","model":"synthetic-model"},"content":[{"type":"text","text":"Synthetic request."},{"type":"tool-call","id":"call-a","name":"bash","arguments":"{\"command\": \"python -m unittest\"}"}]}},"seq":3,"time":1786423203000}
+{"type":"tool/call","data":{"turn":1,"step":1,"callId":"call-a","name":"bash","arguments":"{\"command\": \"python -m unittest\"}"},"seq":4,"time":1786423204000}
+{"type":"tool/result","surfaceOp":"append","data":{"turn":1,"step":1,"message":{"id":"result-call-a-recovery","role":"tool","source":{"kind":"tool","callId":"call-a"},"toolCallId":"call-a","isError":true,"content":[{"type":"text","text":"Synthetic failure"}]},"error":{"name":"ToolError","reason":"Synthetic ordinary error"}},"seq":5,"time":1786423205000}
+{"type":"step/end","data":{"turn":1,"step":1},"seq":6,"time":1786423206000}
+{"type":"turn/end","data":{"turn":1,"reason":{"kind":"completed"}},"seq":7,"time":1786423207000}

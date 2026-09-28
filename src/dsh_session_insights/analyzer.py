@@ -25,11 +25,11 @@ from .v4 import IDENTITY, validate_records
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.5.0-v4-rc2.2"
-FAILURE_RULE_VERSION = "5.0.0"
+ANALYZER_VERSION = "0.5.1-v4-dsh020rc1.1"
+FAILURE_RULE_VERSION = "5.1.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
-DETERMINISTIC_CACHE_VERSION = 3
+DETERMINISTIC_CACHE_VERSION = 4
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
 
 # Session-log generations understood by this reader. Native V3 is the current
@@ -1303,6 +1303,52 @@ def add_semantic_tool_evidence(
     )
 
 
+def add_recovery_tool_evidence(
+    session: dict[str, Any],
+    config: AnalysisConfig,
+    summary: str,
+    call: dict[str, Any],
+    recovery: str,
+    *,
+    record_identity: str,
+    seq: int | None = None,
+) -> None:
+    """Retain one official recovery result as bounded uncertainty evidence."""
+    if (
+        not config.semantic_capture
+        or config.metrics_only
+        or analysis_privacy(config) == "metrics"
+        or config.analysis_depth != "evidence"
+    ):
+        return
+    if not summary:
+        return
+    digest = hashlib.sha256(f"tool\0{record_identity}\0{summary}".encode("utf-8")).hexdigest()
+    if digest in session["semantic_message_digests"]:
+        return
+    session["semantic_message_digests"].add(digest)
+    session["semantic_messages"].append(
+        {
+            "id": f"tool-{digest[:16]}",
+            "role": "tool",
+            "text": summary,
+            "record_identity": record_identity,
+            "seq": seq,
+            "digest": digest,
+            "tool_facts": {
+                "tool": call.get("tool", "unknown"),
+                "outcome": "unknown",
+                "recovery": recovery,
+                "exit_code": None,
+                "cause": None,
+                "verification": bool(call.get("verification")),
+                "state_change": bool(call.get("state_change")),
+                "git_commit": bool(call.get("git_commit")),
+            },
+        }
+    )
+
+
 def add_excerpt_candidate(session: dict[str, Any], kind: str, raw: str, config: AnalysisConfig) -> None:
     if config.metrics_only or config.privacy_mode == "metrics" or not raw:
         return
@@ -1736,6 +1782,11 @@ def new_dsh_session(
     session["ptc"] = {}
     session["child_sessions"] = set()
     session["tool_execution"] = dict(outer_calls=0, inner_calls=0, outer_failures=0, inner_failures=0, inner_incomplete=0)
+    # Official host recovery results (DSH 0.2.0-rc.1) are uncertainty records,
+    # never confirmed failures; they are counted separately per status.
+    session["tool_recovery"] = {"outcome_unknown": 0, "not_started": 0}
+    session["recovery_seen"] = set()
+    session["settled_calls"] = set()
     # Native V3 conversation accounting. `system_messages` and
     # `injected_user_messages` are deliberately kept out of user work, and
     # `assistant_attempts` counts settlements that committed no visible reply.
@@ -1937,6 +1988,33 @@ def process_dsh_record(
         message = data.get("message")
         output_value: Any = message if isinstance(message, dict) else data
         error_object = data.get("error")
+        # Official host recovery results are identified only by their structured
+        # error code and a valid call identity; message text never classifies.
+        # Settlement scope follows the official recoverer: (callId, turn, step),
+        # so the same id in a later turn is a distinct pending request.
+        scope = repr((call_id, data.get("turn"), data.get("step")))
+        recovery_kind = (
+            isinstance(error_object, dict)
+            and isinstance(call_id, str)
+            and bool(call_id)
+            and {"TOOL_OUTCOME_UNKNOWN": "outcome_unknown", "TOOL_NOT_STARTED": "not_started"}.get(error_object.get("code"))
+        ) or None
+        if recovery_kind is not None:
+            # A settled call keeps its recorded outcome; a recovery result is
+            # counted at most once per call scope and never over it. Recovery
+            # changes no failure, verification, permission or state counters.
+            if scope not in session["settled_calls"] and scope not in session["recovery_seen"]:
+                session["recovery_seen"].add(scope)
+                session["tool_recovery"][recovery_kind] += 1
+                call = session["calls"].get(call_id, {})
+                recovery_summary = analysis_text(
+                    f"工具 {call.get('tool', 'unknown')}；恢复 {recovery_kind}；未记录到最终结果；可能有副作用；重试前先核实外部状态",
+                    config,
+                    700,
+                )
+                add_recovery_tool_evidence(session, config, recovery_summary, call, recovery_kind, record_identity=call_id, seq=seq)
+            return
+        session["settled_calls"].add(scope)
         error_present = isinstance(error_object, dict) and bool(error_object)
         if error_present or message.get("isError") is True:
             session["tool_execution"]["inner_failures" if data.get("inner") else "outer_failures"] += 1
@@ -2258,6 +2336,7 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "assistant_messages": session["assistant_messages"],
         "log_generation_version": session.get("log_generation_version"),
         "tool_execution": session["tool_execution"],
+        "tool_recovery": dict(session.get("tool_recovery") or {"outcome_unknown": 0, "not_started": 0}),
         "child_sessions": len(session["child_sessions"]),
         "system_messages": session.get("system_messages", 0),
         "injected_user_messages": session.get("injected_user_messages", 0),
@@ -2919,8 +2998,10 @@ def parse_with_deterministic_cache(
         cache_session["first_prompt"] = local_text(str(session.get("first_prompt") or ""), 12000)
         cache_session["provider_title"] = local_text(str(session.get("provider_title") or ""), 12000)
         cache_session["fallback_title"] = local_text(str(session.get("fallback_title") or ""), 12000)
-        for transient_key in ("calls", "last_failed_calls", "approval_requests", "ptc", "semantic_message_digests"):
-            cache_session[transient_key] = {} if transient_key != "semantic_message_digests" else set()
+        for transient_key in ("calls", "last_failed_calls", "approval_requests", "ptc"):
+            cache_session[transient_key] = {}
+        for transient_key in ("semantic_message_digests", "recovery_seen", "settled_calls"):
+            cache_session[transient_key] = set()
     payload = {
         "cache_version": DETERMINISTIC_CACHE_VERSION,
         "fingerprint": fingerprint,
@@ -3045,6 +3126,12 @@ def build_report(
     }
     totals["llm_retries"] = sum(session["llm_retries"] for session in sessions)
     totals["denied_approvals"] = sum(session["denied_approvals"] for session in sessions)
+    # Official recovery results are uncertainty records; neither status is a
+    # structured failure, so they are reported outside tool_failures.
+    totals["tool_recovery"] = {
+        "outcome_unknown": sum(session.get("tool_recovery", {}).get("outcome_unknown", 0) for session in sessions),
+        "not_started": sum(session.get("tool_recovery", {}).get("not_started", 0) for session in sessions),
+    }
     # Native V3 conversation accounting. Injected user-role context and the
     # rendered system prompt are reported separately so they can never be read
     # as user work, and attempts are reported so a failed settlement is visible

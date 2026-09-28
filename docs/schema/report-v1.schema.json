@@ -102,6 +102,25 @@
           "type": "integer",
           "minimum": 0
         },
+        "tool_recovery": {
+          "type": "object",
+          "description": "Official DSH recovery results, counted separately from confirmed failures. outcome_unknown: a recorded call whose completed outcome was not durably recorded (side effects possible). not_started: no record of the call starting. Neither status proves a tool executed or did nothing.",
+          "required": [
+            "outcome_unknown",
+            "not_started"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "outcome_unknown": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "not_started": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
         "tokens": {
           "type": "object",
           "required": [
@@ -156,6 +175,25 @@
                 "minimum": 0
               },
               "inner_incomplete": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "tool_recovery": {
+            "type": "object",
+            "description": "Official recovery results for this session; same contract as totals.tool_recovery. Never counted as tool failures.",
+            "required": [
+              "outcome_unknown",
+              "not_started"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "outcome_unknown": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "not_started": {
                 "type": "integer",
                 "minimum": 0
               }
