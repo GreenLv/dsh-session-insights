@@ -4,8 +4,9 @@ import {readFileSync} from 'node:fs'
 import {buildReport} from '../plugin/lib/analyzer.js'
 import {validateV4} from '../plugin/lib/v4.js'
 import {createRequire} from 'node:module'
+import {pathToFileURL} from 'node:url'
 const runtimeRequire = createRequire(new URL('../tests/dsh-runtime/package.json', import.meta.url))
-const {sessionFormatCatalog} = await import(runtimeRequire.resolve('@deepseek-ai/dsh-session-format-catalog'))
+const {sessionFormatCatalog} = await import(pathToFileURL(runtimeRequire.resolve('@deepseek-ai/dsh-session-format-catalog')).href)
 function admitted(snapshot) {
  const restore = sessionFormatCatalog.createRestore(snapshot.session, {recovery:'strict',validation:'current'})
  for (const event of snapshot.events) restore.decodeRow(event)
