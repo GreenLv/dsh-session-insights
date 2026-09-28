@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
   "renderer_version": 3,
-  "generated_at": "2026-09-27T10:10:02.461Z",
-  "data_through": "2026-09-26",
+  "generated_at": "2026-09-28T11:10:36.378Z",
+  "data_through": "2026-09-27",
   "period": {
     "start": "2026-08-22",
-    "end": "2026-09-26"
+    "end": "2026-09-27"
   },
   "title": "dsh-session-insights npm download history",
   "project": "dsh-session-insights",
@@ -16,7 +16,7 @@
       "label": "dsh-session-insights",
       "color": "#2563eb",
       "start": "2026-08-22",
-      "total": 1543,
+      "total": 1775,
       "downloads": [
         {
           "day": "2026-08-22",
@@ -195,8 +195,13 @@
         },
         {
           "day": "2026-09-26",
-          "downloads": 0,
-          "cumulative": 1543
+          "downloads": 149,
+          "cumulative": 1692
+        },
+        {
+          "day": "2026-09-27",
+          "downloads": 83,
+          "cumulative": 1775
         }
       ]
     }
@@ -379,24 +384,29 @@
     },
     {
       "day": "2026-09-26",
-      "downloads": 0,
-      "cumulative": 1543
+      "downloads": 149,
+      "cumulative": 1692
+    },
+    {
+      "day": "2026-09-27",
+      "downloads": 83,
+      "cumulative": 1775
     }
   ],
   "sources": [
     {
       "package": "dsh-session-insights",
       "start": "2026-08-22",
-      "end": "2026-09-26",
-      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-09-26/dsh-session-insights",
-      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-09-26/dsh-session-insights"
+      "end": "2026-09-27",
+      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-09-27/dsh-session-insights",
+      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-09-27/dsh-session-insights"
     }
   ],
-  "observation_through": "2026-09-26",
+  "observation_through": "2026-09-27",
   "settlement": {
     "mode": "latest-available-day",
     "latest_day_status": "provisional",
-    "stable_through": "2026-09-21",
+    "stable_through": "2026-09-25",
     "minimum_age_days": 2,
     "minimum_observation_span_hours": 12
   },
