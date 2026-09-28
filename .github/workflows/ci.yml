@@ -61,3 +61,13 @@ jobs:
       - run: node scripts/dsh-contract-tests.mjs tests/dsh-runtime
       - run: node scripts/dsh-services.mjs tests/dsh-runtime
       - run: npm test
+      - name: Freeze the candidate artifact
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '22.19.0' && github.event_name == 'push' && github.ref != 'refs/heads/main'
+        run: node scripts/pack_candidate.mjs "$GITHUB_SHA" "$RUNNER_TEMP/candidate"
+      - name: Retain candidate bytes and inventory
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '22.19.0' && github.event_name == 'push' && github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: candidate-tgz
+          path: ${{ runner.temp }}/candidate
+          if-no-files-found: error

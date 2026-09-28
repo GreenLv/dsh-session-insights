@@ -25,7 +25,7 @@ from .v4 import IDENTITY, validate_records
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.5.1-v4-dsh020rc1.1"
+ANALYZER_VERSION = "0.5.1-v4-dsh020rc1.2"
 FAILURE_RULE_VERSION = "5.1.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
@@ -1339,6 +1339,10 @@ def add_recovery_tool_evidence(
                 "tool": call.get("tool", "unknown"),
                 "outcome": "unknown",
                 "recovery": recovery,
+                "record_identity": record_identity,
+                "call_id": call.get("call_id"),
+                "turn": call.get("turn"),
+                "step": call.get("step"),
                 "exit_code": None,
                 "cause": None,
                 "verification": bool(call.get("verification")),
@@ -1484,16 +1488,20 @@ def process_call(
         session["skill_counts"][skill_name(arguments)] += 1
     polling = lowered in {"wait", "wait_agent", "wait_threads", "write_stdin"}
     prior_failure = session["last_failed_calls"].get(fingerprint)
+    retry_kind = None
     if polling and session["fingerprint_counts"][fingerprint] > 1:
-        session["polling_retries"] += 1
+        retry_kind = "polling_retries"
     elif prior_failure:
         if approval_mode != prior_failure.get("approval_mode", "default") or session["state_epoch"] > prior_failure["state_epoch"]:
-            session["state_change_retries"] += 1
+            retry_kind = "state_change_retries"
         else:
-            session["unchanged_retries"] += 1
+            retry_kind = "unchanged_retries"
+    if retry_kind:
+        session[retry_kind] += 1
     if call_id:
         session["calls"][call_id] = {
             "tool": name,
+            "retry_kind": retry_kind,
             "fingerprint": fingerprint,
             "git_commit": contains_git_commit(arguments),
             "arguments_text": arguments_text,
@@ -1787,6 +1795,7 @@ def new_dsh_session(
     session["tool_recovery"] = {"outcome_unknown": 0, "not_started": 0}
     session["recovery_seen"] = set()
     session["settled_calls"] = set()
+    session["scoped_calls"] = {}
     # Native V3 conversation accounting. `system_messages` and
     # `injected_user_messages` are deliberately kept out of user work, and
     # `assistant_attempts` counts settlements that committed no visible reply.
@@ -1977,6 +1986,8 @@ def process_dsh_record(
         }
         process_call(session, payload, canonical_name=canonical_dsh_tool_name(name))
         call = session["calls"].get(call_id)
+        if isinstance(call, dict):
+            session["scoped_calls"][repr((call_id, data.get("turn"), data.get("step")))] = call
         if isinstance(call, dict) and call_id in session["rejected_approval_call_ids"]:
             call["approval_rejected"] = True
         lowered = name.casefold()
@@ -2006,13 +2017,20 @@ def process_dsh_record(
             if scope not in session["settled_calls"] and scope not in session["recovery_seen"]:
                 session["recovery_seen"].add(scope)
                 session["tool_recovery"][recovery_kind] += 1
-                call = session["calls"].get(call_id, {})
+                scoped_call = session["scoped_calls"].get(scope, {})
+                if scoped_call.get("retry_kind"):
+                    session[scoped_call["retry_kind"]] -= 1
+                    scoped_call["retry_kind"] = None
+                if scoped_call.get("fingerprint"):
+                    session["last_failed_calls"].pop(scoped_call["fingerprint"], None)
+                call = {**scoped_call, "call_id": call_id,
+                        "turn": data.get("turn"), "step": data.get("step")}
                 recovery_summary = analysis_text(
                     f"工具 {call.get('tool', 'unknown')}；恢复 {recovery_kind}；未记录到最终结果；可能有副作用；重试前先核实外部状态",
                     config,
                     700,
                 )
-                add_recovery_tool_evidence(session, config, recovery_summary, call, recovery_kind, record_identity=call_id, seq=seq)
+                add_recovery_tool_evidence(session, config, recovery_summary, call, recovery_kind, record_identity=scope, seq=seq)
             return
         session["settled_calls"].add(scope)
         error_present = isinstance(error_object, dict) and bool(error_object)
@@ -2998,7 +3016,7 @@ def parse_with_deterministic_cache(
         cache_session["first_prompt"] = local_text(str(session.get("first_prompt") or ""), 12000)
         cache_session["provider_title"] = local_text(str(session.get("provider_title") or ""), 12000)
         cache_session["fallback_title"] = local_text(str(session.get("fallback_title") or ""), 12000)
-        for transient_key in ("calls", "last_failed_calls", "approval_requests", "ptc"):
+        for transient_key in ("calls", "scoped_calls", "last_failed_calls", "approval_requests", "ptc"):
             cache_session[transient_key] = {}
         for transient_key in ("semantic_message_digests", "recovery_seen", "settled_calls"):
             cache_session[transient_key] = set()

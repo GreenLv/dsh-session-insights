@@ -23,7 +23,7 @@ IMAGE_ASSET_SUFFIXES = {".png": b"\x89PNG\r\n\x1a\n", ".jpg": b"\xff\xd8\xff", "
 # Mirrors the analyzer grammar; a test asserts the two stay in sync.
 SESSION_LOG_NAME_RE = re.compile(r"^session(?:\.v[1-9][0-9]*)?\.jsonl(?:\.zstd)?$")
 CONTENT_RULES = {
-    "private-user-path": re.compile(r"/Users/lgr59|[A-Za-z]:[\\/]Users[\\/]lgr59", re.IGNORECASE),
+    "private-user-path": re.compile(r"(?:/Users/|/home/|[A-Za-z]:[\\/]+Users[\\/]+)[\w.-]+(?:[\\/]|(?=[\s\"'`]|$))", re.IGNORECASE),
     "private-source-name": re.compile(r"codex-sync", re.IGNORECASE),
     "legacy-product": re.compile(r"\bcodex\b", re.IGNORECASE),
     "legacy-home-field": re.compile(r"codex_home", re.IGNORECASE),

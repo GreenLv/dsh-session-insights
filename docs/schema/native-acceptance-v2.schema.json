@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/native-acceptance-v2.schema.json",
+  "title": "Native acceptance result with explicit evidence provenance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "status", "product", "gate_profile", "repository", "runtime_tree_sha256", "artifact", "platform", "gates", "cleanup", "run", "unperformed_actions"],
+  "properties": {
+    "schema": {"const": "native-acceptance/v2"},
+    "status": {"enum": ["passed", "failed"]},
+    "product": {"$ref": "#/$defs/id"},
+    "gate_profile": {"$ref": "#/$defs/id"},
+    "repository": {"$ref": "#/$defs/repository"},
+    "runtime_tree_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha64"}]},
+    "artifact": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/artifact"}]},
+    "platform": {"$ref": "#/$defs/platform"},
+    "gates": {"type": "array", "minItems": 1, "maxItems": 128, "items": {"$ref": "#/$defs/gate"}},
+    "cleanup": {"$ref": "#/$defs/cleanup"},
+    "run": {"$ref": "#/$defs/run"},
+    "unperformed_actions": {"type": "array", "uniqueItems": true, "maxItems": 7, "items": {"enum": ["commit", "push", "merge", "tag", "package_publish", "release", "public_promotion"]}}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"},
+    "sha40": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha64": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "repository": {
+      "type": "object", "additionalProperties": false,
+      "required": ["url", "commit"],
+      "properties": {"url": {"type": "string", "minLength": 1, "maxLength": 500}, "commit": {"$ref": "#/$defs/sha40"}}
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["filename", "sha256", "size_bytes", "file_count", "git_head"],
+      "properties": {
+        "filename": {"type": "string", "minLength": 1, "maxLength": 255},
+        "sha256": {"$ref": "#/$defs/sha64"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "file_count": {"type": "integer", "minimum": 1},
+        "git_head": {"$ref": "#/$defs/sha40"}
+      }
+    },
+    "platform": {
+      "type": "object", "additionalProperties": false,
+      "required": ["os", "shell", "toolchain"],
+      "properties": {
+        "os": {"enum": ["windows", "macos", "linux"]},
+        "shell": {"type": "string", "minLength": 1, "maxLength": 200},
+        "toolchain": {"type": "object", "minProperties": 1, "maxProperties": 32, "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 200}}
+      }
+    },
+    "subject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {"kind": {"enum": ["commit", "runtime_tree", "artifact"]}, "id": {"type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"}}
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mode", "source_result_sha256", "source_gate_id", "invalidation_reason"],
+      "properties": {
+        "mode": {"enum": ["executed", "reused"]},
+        "source_result_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha64"}]},
+        "source_gate_id": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/id"}]},
+        "invalidation_reason": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/id"}]}
+      }
+    },
+    "gate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "required", "status", "subject", "exit_code", "note", "evidence"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "required": {"type": "boolean"},
+        "status": {"enum": ["passed", "failed", "skipped", "not_run"]},
+        "subject": {"$ref": "#/$defs/subject"},
+        "exit_code": {"type": ["integer", "null"]},
+        "note": {"type": ["string", "null"], "maxLength": 1000},
+        "evidence": {"$ref": "#/$defs/evidence"}
+      }
+    },
+    "cleanup": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "remaining_ids"],
+      "properties": {"status": {"enum": ["passed", "failed", "not_run"]}, "remaining_ids": {"type": "array", "uniqueItems": true, "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 300}}}
+    },
+    "run": {
+      "type": "object", "additionalProperties": false,
+      "required": ["started_at", "finished_at", "run_url"],
+      "properties": {"started_at": {"type": "string", "format": "date-time"}, "finished_at": {"type": "string", "format": "date-time"}, "run_url": {"type": ["string", "null"], "maxLength": 1000}}
+    }
+  }
+}

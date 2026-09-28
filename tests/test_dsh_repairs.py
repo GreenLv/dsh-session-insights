@@ -41,6 +41,7 @@ class DshRepairTests(unittest.TestCase):
                 self.assertEqual(r['session_summaries'][0]['verification']['successes'], e['success'])
                 self.assertEqual(r['session_summaries'][0]['verification']['failures'], e.get('verificationFailures', 0))
                 self.assertEqual(r['session_summaries'][0]['tool_recovery'], self.recovery_expected(e))
+                if 'retries' in e: self.assertEqual(r['totals']['repeated_retries'], e['retries'])
                 with tempfile.TemporaryDirectory() as home:
                     path=Path(home)/'sessions/project/case';path.mkdir(parents=True)
                     shutil.copy2(ROOT/'tests/fixtures/rc2-repairs'/case['name']/'session.v4.jsonl',path/'session.v4.jsonl')
@@ -53,6 +54,7 @@ class DshRepairTests(unittest.TestCase):
                     self.assertEqual(cli['totals']['permission_blocks'],e['permission'])
                     self.assertEqual(cli['session_summaries'][0]['verification']['failures'],e.get('verificationFailures',0))
                     self.assertEqual(cli['session_summaries'][0]['tool_recovery'],self.recovery_expected(e))
+                    if 'retries' in e: self.assertEqual(cli['totals']['repeated_retries'], e['retries'])
 
     def test_official_recovery_parity_across_privacy_and_locale(self):
         official = [c for c in self.cases if c['name'].startswith('recovery-') and (c['expected'].get('recovery') or [0, 0]) != [0, 0]]
@@ -77,8 +79,55 @@ class DshRepairTests(unittest.TestCase):
             second=analyzer.build_report(config)
             self.assertEqual(first['totals']['tool_recovery'],{'outcome_unknown':1,'not_started':1})
             self.assertEqual(first['totals']['tool_failures'],1)
+            self.assertEqual(first['totals']['repeated_retries'],0)
             self.assertEqual(second['totals']['tool_recovery'],first['totals']['tool_recovery'])
             self.assertEqual(second['totals']['tool_failures'],first['totals']['tool_failures'])
+
+    def test_ordinary_settled_retry_retains_count(self):
+        case = next(c for c in self.cases if c['name'] == 'recovery-mixed-group')
+        snapshot = json.loads(json.dumps(case['snapshot']))
+        result = next(e for e in snapshot['events'] if e['data'].get('error', {}).get('code') == 'TOOL_OUTCOME_UNKNOWN')
+        del result['data']['error']
+        result['data']['message'].update(isError=False, content=[{'type': 'text', 'text': 'Command completed'}])
+        report = self.compare([snapshot])
+        self.assertEqual(report['totals']['tool_failures'], 1)
+        self.assertEqual(report['totals']['repeated_retries'], 1)
+        self.assertEqual(report['totals']['tool_recovery'], {'outcome_unknown': 0, 'not_started': 1})
+
+    def internal(self, snapshot):
+        now = datetime.fromtimestamp((snapshot['session']['createdAt'] + 86400000)/1000, tz=timezone.utc)
+        config = analyzer.AnalysisConfig(dsh_home=Path('/synthetic'), since=now-timedelta(days=30), until=now, generated_at=now, privacy_mode='redacted', semantic_capture=True, deterministic_cache=False, locale='en')
+        return analyzer.build_report(config, session_snapshots=[snapshot], include_internal_sessions=True)
+
+    def test_ordinary_error_codes_keep_failure_accounting(self):
+        case = next(c for c in self.cases if c['name'] == 'recovery-no-code')
+        for code in ('toString', 'constructor', '__proto__', 'ORDINARY_ERROR'):
+            with self.subTest(code=code):
+                snapshot = json.loads(json.dumps(case['snapshot']))
+                next(e for e in snapshot['events'] if e['type'] == 'tool/result')['data']['error']['code'] = code
+                report = self.compare([snapshot])
+                self.assertEqual(report['totals']['tool_failures'], 1)
+                self.assertEqual(report['totals']['tool_recovery'], {'outcome_unknown': 0, 'not_started': 0})
+
+    def test_reused_unstarted_call_does_not_borrow_prior_metadata(self):
+        case = next(c for c in self.cases if c['name'] == 'recovery-id-boundary')
+        snapshot = json.loads(json.dumps(case['snapshot']))
+        message = next(e for e in snapshot['events'] if e['type'] == 'assistant/message' and e['data']['turn'] == 2)['data']['message']
+        next(b for b in message['content'] if b['type'] == 'tool-call')['name'] = 'write_file'
+        _, sessions = self.internal(snapshot)
+        facts = next(m['tool_facts'] for m in sessions[0]['semantic_messages'] if m.get('tool_facts', {}).get('recovery'))
+        self.assertFalse(facts['verification'])
+        self.assertEqual(facts['tool'], 'unknown')
+        self.assertEqual(facts['call_id'], 'call-a')
+        self.assertEqual(facts['turn'], 2)
+
+    def test_repeated_recovery_scopes_keep_separate_semantic_evidence(self):
+        case = next(c for c in self.cases if c['name'] == 'recovery-repeated-identity')
+        report, sessions = self.internal(case['snapshot'])
+        messages = [m for m in sessions[0]['semantic_messages'] if m.get('tool_facts', {}).get('recovery')]
+        self.assertEqual(report['totals']['tool_recovery']['not_started'], 2)
+        self.assertEqual(len(messages), 2)
+        self.assertNotEqual(messages[0]['record_identity'], messages[1]['record_identity'])
 
     def test_settled_call_keeps_outcome_and_late_recovery_is_not_counted(self):
         case = next(c for c in self.cases if c['name'] == 'recovery-text-only')

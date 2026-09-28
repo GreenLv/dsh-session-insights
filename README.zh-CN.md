@@ -192,7 +192,7 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 ## DSH 兼容性
 
-默认只支持明确验证过的最低基线，或经验证的 DSH 最新版本。不再维护历史 DSH 版本，不承诺中间版本连续兼容，也不会在新版发布后自动将其视为已支持。使用旧版宿主时，请升级到已验证的基线。
+每个产品版本只适配一个经过验证的 DSH 版本。不维护历史宿主，也不会在新版 DSH 发布后自动将其视为已支持。旧版宿主请升级到下面注明的版本。
 
 本版只接受 DSH `0.2.0-rc.1`。原生分析读取宿主恢复后的 V4 快照；可选 Python CLI 只读取 `session.v4.jsonl` 和 `session.v4.jsonl.zstd`。旧原始日志需先由上游 DSH 迁移。当前文件损坏或存在高于 V4 的代数时，不会回退读取旧文件。
 
@@ -200,7 +200,7 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 工具工作量包含日志记录的程序化工具调用（PTC）内层调用。JSON 的 `tool_execution` 分别记录外层运输调用、内层执行、失败和未结束调用；每个失败调用结果计一次。若内层调用和外层程序都失败，则保留两个结果，不据此推断它们是否源于同一个原因。权限拒绝不算验证命令执行失败。developer 工具注册消息和定时注入不计人工请求。
 
-DSH 0.2.0-rc.1 会在收尾被中断的步骤时写入带结构化错误码 `TOOL_OUTCOME_UNKNOWN` 和 `TOOL_NOT_STARTED` 的官方恢复结果。本报告把它们与确认失败分开统计：`tool_recovery` 按 `{outcome_unknown, not_started}` 在每个会话和总量中单独计数。`TOOL_OUTCOME_UNKNOWN` 表示已记录的调用没有持久化的最终结果，工具可能已产生副作用；`TOOL_NOT_STARTED` 表示日志中没有该调用开始的记录。两者都不计入工具失败或验证失败，也不证明工具执行过或没有执行。仅正文提到恢复码的文本仍按一般结果规则分类。报告不会建议对可能有副作用的操作直接重试。
+DSH 0.2.0-rc.1 会在收尾被中断的步骤时写入带结构化错误码 `TOOL_OUTCOME_UNKNOWN` 和 `TOOL_NOT_STARTED` 的官方恢复结果。本报告把它们与确认失败分开统计：`tool_recovery` 按 `{outcome_unknown, not_started}` 在每个会话和总量中单独计数。`TOOL_OUTCOME_UNKNOWN` 表示已记录的调用没有持久化的最终结果，工具可能已产生副作用；`TOOL_NOT_STARTED` 表示日志中没有该调用开始的记录。两者都不计入工具失败或验证失败，也不证明工具执行过或没有执行。仅正文提到恢复码的文本仍按一般结果规则分类。重试可能改变数据的操作前，应先核实外部状态。
 
 0.5.1 的候选审查范围记录在 [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md)。[0.5.0 发布验收记录](docs/acceptance/v0.5.0-release.md)和[冻结的 0.5.0 候选记录](docs/acceptance/v0.5.0-rc2-candidate.md)只适用于那个 0.5.0 实现及其注明的宿主。历史验收只适用于各自注明的实现。
 

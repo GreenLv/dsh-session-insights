@@ -1,6 +1,6 @@
 # v0.3.0 Windows native acceptance record
 
-Status: Windows-native acceptance of `dsh-session-insights` **v0.3.0** (commit `d6065402`, tag `v0.3.0`) performed independently on 2026-08-25 in the workspace `E:\GitHub\dsh-session-insights`, following the release's separation-of-evidence-scope convention. Reported outcomes are backed by command output and artifact paths, not a bare "pass".
+Status: historical Windows-native acceptance of `dsh-session-insights` **v0.3.0** (commit `d6065402`, tag `v0.3.0`), performed independently on 2026-08-25. Paths in this record are anonymized as `<repository-root>`, `<dsh-home>` and `<acceptance-root>`; test outcomes and limitations remain those of v0.3.0.
 
 > Scope note: the macOS `v0.3.0` record is [`v0.3.0-candidate.md`](v0.3.0-candidate.md). It verified offline regression (37 Python / 11 Node tests, fixture, audit, doctor) and the isolated deterministic readback (6 gates), and left the three real-model gates — `semantic-complete`, `metrics-skip`, `fallback` — as `not_run`, plus Windows-native slash dispatch, rendered English DOM, plugin removal, and concurrent-home behavior as explicit boundaries. This Windows record closes the real-model semantic gates and the rendered English DOM on Windows native, and verifies the deterministic report-generation → correct-directory path; the interactive `/session-insights` slash dispatch, plugin removal, and concurrent-home behavior remain boundaries (see the summary table).
 
@@ -8,21 +8,21 @@ Status: Windows-native acceptance of `dsh-session-insights` **v0.3.0** (commit `
 
 | Item | Value |
 |---|---|
-| OS | Microsoft Windows 11 家庭版 中文版 (Chinese Home), build 26200 (`10.0.26200.0`) |
+| OS | Windows 11, Chinese locale |
 | Architecture | X64 |
 | PowerShell | 5.1.26100.9168 |
-| Base interpreter (Python) | 3.14.6 (`C:\Users\green\miniconda3\python.exe`) |
+| Base interpreter (Python) | 3.14.6 (`<python-install>\python.exe`) |
 | Managed venv Python | 3.14.6 (`$env:DSH_HOME\tools\dsh-session-insights\venv\Scripts\python.exe`) |
-| `$env:DSH_HOME` | `C:\Users\green\.dsh` |
+| `$env:DSH_HOME` | `<dsh-home>` |
 | `v0.3.0` identity | tag `v0.3.0` → commit `d6065402dcae195eba6f6cd8cdd453bc8129b9f1`; `git describe` = `v0.3.0`; `pyproject.toml` `version = "0.3.0"`; managed CLI `--version` = `0.3.0` |
 
-All acceptance artifacts (reports, `verify.json`, screenshot, rendered DOM) live under `C:\Users\green\AppData\Local\Temp\dsi-windows-v030\` (outside the repo). The per-step evidence paths are listed in the sections below.
+Acceptance artifacts (reports, `verify.json`, screenshot, rendered DOM) were retained under `<acceptance-root>` outside the repository. Evidence filenames are listed below.
 
 ## 1. Acquisition & install
 
 - Checkout: `git checkout v0.3.0` → detached HEAD at `d6065402`.
 - Editable install: `python -m pip install --disable-pip-version-check -e ".[dev]"` → `Successfully installed dsh-session-insights-0.3.0`; `import dsh_session_insights.__version__` = `0.3.0`; editable path `src\dsh_session_insights`. Dependencies already satisfied (`zstandard 0.25.0`, `jsonschema 4.26.0`).
-- Managed install: `python scripts/bootstrap.py install --dsh-home "$env:DSH_HOME"` → venv created, `dsh-session-insights-0.3.0` pip-installed into `C:\Users\green\.dsh\tools\dsh-session-insights\venv`, Skill bundle staged at `C:\Users\green\.dsh\skills\dsh-session-insights`, printed both paths, exit 0.
+- Managed install: `python scripts/bootstrap.py install --dsh-home "$env:DSH_HOME"` → venv created, `dsh-session-insights-0.3.0` pip-installed into `<dsh-home>\tools\dsh-session-insights\venv`, Skill bundle staged at `<dsh-home>\skills\dsh-session-insights`, exit 0.
 
 Sandbox note: the pip build-tracker and Python `tempfile.TemporaryDirectory` cleanup are denied under the workspace-write file sandbox (`Permission denied` on `pip-build-tracker-*` and `WinError 5` on tempdir `scandir`/`chmod`). The editable install and managed install therefore ran under the wider sandbox. This is a tooling/sandbox boundary, not a product defect: the same installs complete normally outside the sandbox. The managed-runtime marker still reads `"version": "0.1.0"` (a pre-existing `bootstrap.py` hardcode), but the installed CLI reports `0.3.0`.
 
@@ -41,7 +41,7 @@ The first two runs under workplace scope failed only because a scratch log direc
 
 ## 3. Isolated native readback (deterministic subset)
 
-Isolation root: `C:\Users\green\AppData\Local\Temp\dsi-windows-v030`. Home: `<root>\home`.
+Isolation root: `<acceptance-root>`. In the steps below, `<root>` is this same placeholder; home is `<root>\home`.
 
 - Session source: `<root>\home\sessions\--synthetic-workspace-project-a--\session.jsonl.zstd` (10 records, 592 bytes), derived from `tests/fixtures/synthetic-session.jsonl` plus one appended `type=tool/call`, `data.name="skill"`, `arguments={"name":"dsh-session-insights"}`. Verified by round-trip decompression.
 - Managed CLI (`report`) generated three `--privacy redacted --format json` reports, all exit 0, `coverage.deterministic_cache`:
@@ -128,7 +128,7 @@ Honesty note: `status="complete"` here reflects model-authored content that the 
 
 ## Evidence artifact index
 
-All under `C:\Users\green\AppData\Local\Temp\dsi-windows-v030\evidence\`:
+All under `<acceptance-root>\evidence\`:
 `first_report.json`, `second_report.json`, `third_report.json`, `semantic_report_en.json`, `semantic_report_zh-CN.json`, `metrics_manifest.json`, `fallback_report.json`, `native-acceptance.json`, `verify.json`, `en_report.html`, `en_report.json`, `en_dom_rendered.html`, `en_report_screenshot.png`. Session source: `...\home\sessions\--synthetic-workspace-project-a--\session.jsonl.zstd`.
 
 Command logs: `...\logs\unittest.txt`, `...\logs\build_fixture.txt`, `...\logs\audit_public_tree.txt`.

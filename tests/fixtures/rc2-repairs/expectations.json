@@ -12,6 +12,18 @@
     }
   },
   {
+    "name": "recovery-repeated-identity",
+    "expected": {
+      "failures": 0,
+      "permission": 0,
+      "success": 0,
+      "recovery": [
+        0,
+        2
+      ]
+    }
+  },
+  {
     "name": "recovery-outcome-unknown",
     "expected": {
       "failures": 0,
@@ -33,7 +45,8 @@
       "recovery": [
         1,
         1
-      ]
+      ],
+      "retries": 0
     }
   },
   {
@@ -213,6 +226,20 @@
       "success": 0,
       "verificationFailures": 0,
       "pending": 0
+    }
+  },
+  {
+    "name": "recovery-followed-by-success",
+    "expected": {
+      "failures": 1,
+      "permission": 0,
+      "success": 2,
+      "verificationFailures": 1,
+      "recovery": [
+        1,
+        1
+      ],
+      "retries": 0
     }
   },
   {

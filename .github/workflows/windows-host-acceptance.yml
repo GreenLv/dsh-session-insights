@@ -37,11 +37,19 @@ concurrency:
   group: windows-host-acceptance-${{ github.workflow }}-${{ inputs.commit }}-${{ inputs.mode }}
   cancel-in-progress: false
 
+env:
+  CANDIDATE_COMMIT: ${{ inputs.commit }}
+  ACCEPTED_SHA256: ${{ inputs.expected_sha256 }}
+  PRODUCER_RUN: ${{ inputs.artifact_run_id }}
+  PRODUCER_ARTIFACT: ${{ inputs.artifact_name }}
+
 jobs:
   pack:
     if: ${{ inputs.mode == 'pack' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Validate immutable input
+        run: '[[ "$CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]'
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ inputs.commit }}
@@ -49,18 +57,11 @@ jobs:
         with:
           node-version: '22.19.0'
       - run: npm ci --ignore-scripts
-      - run: npm pack
-      - name: Record artifact digest
-        run: |
-          tgz=$(ls dsh-session-insights-*.tgz)
-          echo "artifact=$tgz" >> "$GITHUB_OUTPUT"
-          sha256sum "$tgz" | tee tgz.sha256
+      - run: node scripts/pack_candidate.mjs "$CANDIDATE_COMMIT" "$RUNNER_TEMP/candidate"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: candidate-tgz
-          path: |
-            dsh-session-insights-*.tgz
-            tgz.sha256
+          path: ${{ runner.temp }}/candidate
           if-no-files-found: error
 
   windows-accept:
@@ -70,12 +71,24 @@ jobs:
       contents: read
       actions: read
     steps:
+      - name: Validate immutable inputs
+        shell: pwsh
+        run: |
+          if ($env:CANDIDATE_COMMIT -cnotmatch '^[0-9a-f]{40}$' -or $env:ACCEPTED_SHA256 -cnotmatch '^[0-9a-f]{64}$' -or $env:PRODUCER_RUN -notmatch '^[0-9]+$' -or $env:PRODUCER_ARTIFACT -notmatch '^[A-Za-z0-9._-]+$') { throw 'Invalid immutable inputs' }
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ inputs.commit }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22.19.0'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Verify exact checkout
+        shell: pwsh
+        run: |
+          $head = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $head -cne $env:CANDIDATE_COMMIT) { throw 'Checkout identity mismatch' }
       - name: Read back the frozen producer artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -86,34 +99,42 @@ jobs:
       - name: Verify the accepted artifact digest
         shell: pwsh
         run: |
-          $tgz = Get-ChildItem candidate/dsh-session-insights-*.tgz | Select-Object -First 1
+          $packages = @(Get-ChildItem candidate/dsh-session-insights-*.tgz)
+          if ($packages.Count -ne 1) { throw 'Exactly one candidate tgz required' }
+          $tgz = $packages[0]
           $hash = (Get-FileHash $tgz.FullName -Algorithm SHA256).Hash.ToLower()
           "artifact=$($tgz.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "expected=${{ inputs.expected_sha256 }}"
-          if ($hash -ne "${{ inputs.expected_sha256 }}") {
+          if ($hash -cne $env:ACCEPTED_SHA256) {
             Write-Error "artifact digest mismatch: $hash"
             exit 1
           }
           "digest $hash matches the accepted artifact"
       - name: Install the exact target runtime and host
+        shell: pwsh
         run: |
           npm ci --prefix tests/dsh-runtime --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime install failed' }
           npm install --prefix host-home @deepseek-ai/dsh@0.2.0-rc.1 --ignore-scripts
-          npm install --global pnpm --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'Host install failed' }
+          npm install --global pnpm@11.22.0 --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+          python -m pip install --disable-pip-version-check -e ".[dev]"
+          if ($LASTEXITCODE -ne 0) { throw 'Annex validator dependencies failed' }
       - name: Run the zero-model host acceptance entry
         shell: pwsh
         run: |
-          $commit = "${{ inputs.commit }}"
-          $sha = "${{ inputs.expected_sha256 }}"
           $tgz = (Get-ChildItem candidate/dsh-session-insights-*.tgz | Select-Object -First 1).Name
           node scripts/verify_host_acceptance.mjs `
             --package "candidate/$tgz" `
-            --expected-sha256 $sha `
-            --commit $commit `
+            --expected-sha256 $env:ACCEPTED_SHA256 `
+            --commit $env:CANDIDATE_COMMIT `
             --runtime tests/dsh-runtime `
             --host host-home `
             --workdir $env:RUNNER_TEMP `
             --annex native-acceptance/annex.json
+          if ($LASTEXITCODE -ne 0) { throw 'Portable installed-artifact acceptance failed' }
+          python scripts/validate_host_annex.py native-acceptance/annex.json
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid acceptance annex' }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:

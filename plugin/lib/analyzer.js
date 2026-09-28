@@ -454,7 +454,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
     // Official host recovery results (DSH 0.2.0-rc.1) are uncertainty records,
     // never confirmed failures; they are counted separately per status.
     tool_recovery: {outcome_unknown: 0, not_started: 0},
-    recovery_seen: new Set(), settled_calls: new Set(),
+    recovery_seen: new Set(), settled_calls: new Set(), scoped_calls: new Map(),
   }
   const analysisPrivacy =
     opts.privacy === 'metrics'
@@ -468,7 +468,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
       return
     const text = sanitize(raw, analysisPrivacy, role === 'tool' ? 700 : 12000)
     if (!text || text === '[code omitted]') return
-    const digest = hash(`${role}\0${text}`)
+    const digest = hash(`${role}\0${facts?.recovery ? `${facts.record_identity}\0` : ''}${text}`)
     if (!s.messages.some((m) => m.digest === digest))
       s.messages.push({
         role,
@@ -727,15 +727,12 @@ export function parseSnapshot(snapshot, opts, coverage) {
           'write_stdin',
         ].includes(name),
         prior = s.last_failed_calls.get(fp)
-      if (polling && s.fingerprints.get(fp) > 1) s.polling_retries++
-      else if (prior)
-        s[
-          prior.epoch < s.epoch || prior.approval !== approval
-            ? 'state_change_retries'
-            : 'unchanged_retries'
-        ]++
+      const retryKind = polling && s.fingerprints.get(fp) > 1 ? 'polling_retries'
+        : prior ? (prior.epoch < s.epoch || prior.approval !== approval ? 'state_change_retries' : 'unchanged_retries') : null
+      if (retryKind) s[retryKind]++
       const call = {
         tool: name,
+        retry_kind: retryKind,
         fingerprint: fp,
         approval,
         polling,
@@ -748,6 +745,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
         git_commit: /(?:^|[\s;|&])git\s+commit(?:\s|$)/.test(argumentText),
       }
       s.calls.set(String(d.callId || ''), call)
+      s.scoped_calls.set(JSON.stringify([String(d.callId || ''), d.turn ?? null, d.step ?? null]), call)
     } else if (type === 'tool/result') {
       const id = d.message.toolCallId
       // Official host recovery results are identified only by their structured
@@ -757,7 +755,8 @@ export function parseSnapshot(snapshot, opts, coverage) {
       const scope = JSON.stringify([id, d.turn ?? null, d.step ?? null])
       const recovery =
         object(d.error) && typeof id === 'string' && id
-          ? { TOOL_OUTCOME_UNKNOWN: 'outcome_unknown', TOOL_NOT_STARTED: 'not_started' }[d.error.code]
+          ? (d.error.code === 'TOOL_OUTCOME_UNKNOWN' ? 'outcome_unknown'
+            : d.error.code === 'TOOL_NOT_STARTED' ? 'not_started' : null)
           : null
       if (recovery) {
         // A settled call keeps its recorded outcome; a recovery result is
@@ -766,7 +765,12 @@ export function parseSnapshot(snapshot, opts, coverage) {
         if (!s.settled_calls.has(scope) && !s.recovery_seen.has(scope)) {
           s.recovery_seen.add(scope)
           s.tool_recovery[recovery]++
-          const call = s.calls.get(id) || { tool: 'unknown' }
+          const call = s.scoped_calls.get(scope) || { tool: 'unknown' }
+          // A recorded call can be provisionally classified as a retry before
+          // its result arrives. Recovery removes that attribution and breaks
+          // the confirmed-failure chain for later calls of this operation.
+          if (call.retry_kind) { s[call.retry_kind]--; call.retry_kind = null }
+          if (call.fingerprint) s.last_failed_calls.delete(call.fingerprint)
           message(
             'tool',
             `Tool ${call.tool}; recovery ${recovery}; recorded outcome missing; side effects possible; verify external state before retrying`,
@@ -775,6 +779,10 @@ export function parseSnapshot(snapshot, opts, coverage) {
               tool: call.tool,
               outcome: 'unknown',
               recovery,
+              record_identity: scope,
+              call_id: id,
+              turn: d.turn ?? null,
+              step: d.step ?? null,
               exit_code: null,
               cause: null,
               verification: !!call.verification,
@@ -1539,7 +1547,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.5.1-v4-dsh020rc1.1',
+    analyzer_version: '0.5.1-v4-dsh020rc1.2',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),

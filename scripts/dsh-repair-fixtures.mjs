@@ -50,10 +50,17 @@ const turnEnd=(t,kind)=>({type:'turn/end',data:{turn:t,reason:{kind:kind??'compl
 const stepStart=(t,s)=>({type:'step/start',data:{turn:t,step:s}})
 const stepEnd=(t,s)=>({type:'step/end',data:{turn:t,step:s}})
 // Unrecorded start: the assistant request never reached a tool/call record.
-addRecovery('recovery-not-started',[
+const recoveredFirst = addRecovery('recovery-not-started',[
  turnStart(1),stepStart(1,1),userMessage(1,1,'u1','Synthetic first task.'),
  assistantCall(1,1,'assistant-a','call-a'),
 ],{failures:0,permission:0,success:0,recovery:[0,1]})
+// Reusing the same call id after a repaired turn must preserve two distinct
+// uncertainty records. Let the official recoverer produce each closer.
+addRecovery('recovery-repeated-identity',[
+ ...recoveredFirst.events,
+ turnStart(2),stepStart(2,1),userMessage(2,1,'u2','Synthetic second task.'),
+ assistantCall(2,1,'assistant-b','call-a'),
+],{failures:0,permission:0,success:0,recovery:[0,2]})
 // Recorded start without a durable result; the call args are a verification
 // command, and recovery must not become a failed verification.
 addRecovery('recovery-outcome-unknown',[
@@ -62,14 +69,14 @@ addRecovery('recovery-outcome-unknown',[
 ],{failures:0,permission:0,success:0,recovery:[1,0]})
 // Mixed group: one normal success, one normal failure, then one started and
 // one unrecorded request; normal accounting stays, recovery counts once each.
-addRecovery('recovery-mixed-group',[
+const mixedRecovered = addRecovery('recovery-mixed-group',[
  turnStart(1),stepStart(1,1),userMessage(1,1,'u1','Synthetic first task.'),
  assistantCall(1,1,'assistant-a','call-a'),toolCall(1,1,'call-a'),toolResult(1,1,'call-a',false,'Command completed'),
  stepEnd(1,1),stepStart(1,2),
  assistantCall(1,2,'assistant-b','call-b'),toolCall(1,2,'call-b'),toolResult(1,2,'call-b',true,'Command failed'),
  assistantCall(1,2,'assistant-c','call-c'),toolCall(1,2,'call-c'),
  assistantCall(1,2,'assistant-d','call-d'),
-],{failures:1,permission:0,success:1,verificationFailures:1,recovery:[1,1]})
+],{failures:1,permission:0,success:1,verificationFailures:1,recovery:[1,1],retries:0})
 // Same call identity across two turns: the settled first turn keeps its
 // success; the unrecorded second-turn request is the only recovery.
 addRecovery('recovery-id-boundary',[
@@ -118,6 +125,15 @@ for(const name of ['outer-own-failure','inner-fail-caught','propagated-failure',
 // catalog rejects it; that rejection lives in dsh-contract-tests.mjs, and the
 // analyzer-side settled guard is covered by inline differential tests.)
 const addClosed=(name,events,expected)=>{renumber(events);add(name,[structuredClone(base[0]),...events],expected)}
+// Unknown outcomes break confirmed-failure retry attribution, including for a
+// later ordinary call of the same operation. This does not erase the earlier
+// failure or the recorded call workload.
+addClosed('recovery-followed-by-success',[
+ ...mixedRecovered.events,
+ turnStart(2),stepStart(2,1),userMessage(2,1,'u2','Synthetic later task.'),
+ assistantCall(2,1,'assistant-e','call-e'),toolCall(2,1,'call-e'),toolResult(2,1,'call-e',false,'Command completed'),
+ stepEnd(2,1),turnEnd(2),
+],{failures:1,permission:0,success:2,verificationFailures:1,recovery:[1,1],retries:0})
 // Text that merely mentions a recovery code stays an ordinary failure.
 addClosed('recovery-text-only',[
  turnStart(1),stepStart(1,1),userMessage(1,1,'u1','Synthetic first task.'),

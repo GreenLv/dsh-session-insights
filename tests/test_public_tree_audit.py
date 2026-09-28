@@ -40,7 +40,7 @@ class PublicTreeAuditTests(unittest.TestCase):
     def test_negative_private_path_and_generated_cache(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            (root / "leak.txt").write_text("private path: /Users/lgr59/work", encoding="utf-8")
+            (root / "leak.txt").write_text("private path: /Users/synthetic-user/work", encoding="utf-8")
             cache = root / "__pycache__"
             cache.mkdir()
             (cache / "module.pyc").write_bytes(b"binary")
@@ -48,6 +48,22 @@ class PublicTreeAuditTests(unittest.TestCase):
             rules = {item["rule"] for item in result["findings"]}
             self.assertIn("private-user-path", rules)
             self.assertIn("generated-name", rules)
+
+    def test_private_paths_across_platforms_and_anonymous_placeholders(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            examples = {
+                "mac.txt": "/Users/synthetic-user/work",
+                "linux.txt": "/home/synthetic-user/work",
+                "windows.txt": r"C:\Users\synthetic-user\work",
+                "windows-slashes.txt": "D:/Users/synthetic-user/work",
+                "anonymous.txt": "<repository-root> <dsh-home> <acceptance-root>",
+            }
+            for name, value in examples.items():
+                (root / name).write_text(value, encoding="utf-8")
+            findings = AUDIT.audit(root)["findings"]
+            leaked = {item["path"] for item in findings if item["rule"] == "private-user-path"}
+            self.assertEqual(leaked, set(examples) - {"anonymous.txt"})
 
     def test_gitignored_generated_files_are_outside_public_tree(self):
         with tempfile.TemporaryDirectory() as temp:

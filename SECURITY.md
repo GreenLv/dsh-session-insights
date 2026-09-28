@@ -23,7 +23,7 @@ The Bundle uses a Node.js worker for cancellable snapshot analysis. It does not 
 
 ## Dependencies and failures
 
-The Bundle requires Node.js 20+ or the host DSH's stricter requirement, and DSH's `commands`, `tools` and `sessionQuery` services. Exact DSH peers remain in `package.json`. There are no additional npm runtime dependencies or install/build lifecycle scripts. The optional Python CLI is maintained separately from the native Bundle.
+The Bundle requires Node.js `^22.19.0 || >=24.0.0` and DSH's `commands`, `tools` and `sessionQuery` services. Exact DSH peers remain in `package.json`. There are no additional npm runtime dependencies or install/build lifecycle scripts. The optional Python CLI is maintained separately from the native Bundle.
 
 Missing services, worker failure, unsafe filesystem targets and oversized input stop the affected operation. The native selection limit is 2,000 snapshots / 64 MiB serialized input; reduce the time window or filter by project rather than silently dropping sessions. JSON artifact reads and submitted model payloads are capped at 16 MiB. Model outputs are validated in memory before writing, including evidence ownership, enum values, privacy and prohibited completion fields. A rejected replacement preserves the prior validated output. Structured tool failures cannot be overridden by success-looking output text. Explicit fallback keeps a deterministic report marked as degraded. Failures may leave a marked partial run that can be previewed and cleaned up.
 

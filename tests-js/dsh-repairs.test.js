@@ -3,6 +3,15 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {buildReport} from '../plugin/lib/analyzer.js'
 import {validateV4} from '../plugin/lib/v4.js'
+import {createRequire} from 'node:module'
+const runtimeRequire = createRequire(new URL('../tests/dsh-runtime/package.json', import.meta.url))
+const {sessionFormatCatalog} = await import(runtimeRequire.resolve('@deepseek-ai/dsh-session-format-catalog'))
+function admitted(snapshot) {
+ const restore = sessionFormatCatalog.createRestore(snapshot.session, {recovery:'strict',validation:'current'})
+ for (const event of snapshot.events) restore.decodeRow(event)
+ restore.finish()
+ return buildReport([snapshot], {now:snapshot.session.createdAt+86400000,days:30,privacy:'redacted',locale:'en',analysis_depth:'evidence'})
+}
 const root=new URL('../tests/fixtures/rc2-repairs/',import.meta.url)
 for(const {name,expected} of JSON.parse(readFileSync(new URL('expectations.json',root)))) {
  test(`target admitted repair regression: ${name}`,()=>{
@@ -17,6 +26,7 @@ for(const {name,expected} of JSON.parse(readFileSync(new URL('expectations.json'
   assert.equal(s.verification.successes,expected.success)
   assert.equal(s.verification.failures,expected.verificationFailures??0)
   assert.equal(s.tool_execution.inner_incomplete,expected.pending??0)
+  if(expected.retries!==undefined)assert.equal(s.repeated_retries,expected.retries)
   assert.deepEqual(s.tool_recovery,{outcome_unknown:expected.recovery?.[0]??0,not_started:expected.recovery?.[1]??0})
  })
 }
@@ -52,4 +62,43 @@ test('recovery counts are stable across repeated analysis of one snapshot',()=>{
  assert.deepEqual(second.totals.tool_recovery,first.totals.tool_recovery)
  assert.deepEqual(first.totals.tool_recovery,{outcome_unknown:1,not_started:1})
  assert.equal(first.totals.tool_failures,1)
+ assert.equal(first.totals.repeated_retries,0)
+})
+test('an ordinary settled retry keeps its count beside unstarted recovery',()=>{
+ const [session,...events]=readFileSync(new URL('recovery-mixed-group/session.v4.jsonl',root),'utf8').trim().split('\n').map(JSON.parse)
+ const result=events.find(e=>e.data.error?.code==='TOOL_OUTCOME_UNKNOWN')
+ delete result.data.error
+ result.data.message.isError=false
+ result.data.message.content=[{type:'text',text:'Command completed'}]
+ const {report}=admitted({session,events})
+ assert.equal(report.totals.tool_failures,1)
+ assert.equal(report.totals.repeated_retries,1)
+ assert.deepEqual(report.totals.tool_recovery,{outcome_unknown:0,not_started:1})
+})
+for (const code of ['toString','constructor','__proto__','ORDINARY_ERROR']) {
+ test(`official ordinary error ${code} never becomes a recovery status`,()=>{
+  const [session,...events]=readFileSync(new URL('recovery-no-code/session.v4.jsonl',root),'utf8').trim().split('\n').map(JSON.parse)
+  events.find(e=>e.type==='tool/result').data.error.code=code
+  const {report}=admitted({session,events})
+  assert.equal(report.totals.tool_failures,1)
+  assert.deepEqual(report.totals.tool_recovery,{outcome_unknown:0,not_started:0})
+ })
+}
+test('a reused id without a recorded start never inherits prior call facts',()=>{
+ const [session,...events]=readFileSync(new URL('recovery-id-boundary/session.v4.jsonl',root),'utf8').trim().split('\n').map(JSON.parse)
+ events.find(e=>e.type==='assistant/message'&&e.data.turn===2).data.message.content.find(b=>b.type==='tool-call').name='write_file'
+ const {sessions}=admitted({session,events})
+ const facts=sessions[0].messages.find(m=>m.tool_facts?.recovery).tool_facts
+ assert.equal(facts.verification,false)
+ assert.equal(facts.tool,'unknown')
+ assert.equal(facts.call_id,'call-a')
+ assert.equal(facts.turn,2)
+})
+test('repeated recovery scopes retain separate semantic evidence',()=>{
+ const [session,...events]=readFileSync(new URL('recovery-repeated-identity/session.v4.jsonl',root),'utf8').trim().split('\n').map(JSON.parse)
+ const {report,sessions}=admitted({session,events})
+ assert.equal(report.totals.tool_recovery.not_started,2)
+ const messages=sessions[0].messages.filter(m=>m.tool_facts?.recovery)
+ assert.equal(messages.length,2)
+ assert.notEqual(messages[0].tool_facts.record_identity,messages[1].tool_facts.record_identity)
 })
