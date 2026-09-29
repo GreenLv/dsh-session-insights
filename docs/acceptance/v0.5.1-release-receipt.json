@@ -1,0 +1,181 @@
+{
+  "schema": "release-receipt/v2",
+  "status": "passed",
+  "release_profile": "package",
+  "repository": {
+    "url": "https://github.com/GreenLv/dsh-session-insights",
+    "commit": "b935998e87e50cba2b03cc64074b4740f67b704a"
+  },
+  "version": "0.5.1",
+  "tag": "v0.5.1",
+  "artifact": {
+    "filename": "dsh-session-insights-0.5.1.tgz",
+    "sha256": "793d539d8d129ee8518f70876611b3318f1fa3f7b2bcc7229b0aa759294337cd",
+    "size_bytes": 140556
+  },
+  "channels": [
+    {
+      "id": "source_tag",
+      "kind": "source_tag",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/tree/v0.5.1",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.5.1",
+        "commit": "b935998e87e50cba2b03cc64074b4740f67b704a",
+        "artifact_sha256": null
+      },
+      "observed": {
+        "version": "0.5.1",
+        "commit": "b935998e87e50cba2b03cc64074b4740f67b704a",
+        "artifact_sha256": null
+      }
+    },
+    {
+      "id": "npm_registry",
+      "kind": "package_registry",
+      "required": true,
+      "status": "verified",
+      "url": "https://registry.npmjs.org/dsh-session-insights/0.5.1",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.5.1",
+        "commit": "b935998e87e50cba2b03cc64074b4740f67b704a",
+        "artifact_sha256": "793d539d8d129ee8518f70876611b3318f1fa3f7b2bcc7229b0aa759294337cd"
+      },
+      "observed": {
+        "version": "0.5.1",
+        "commit": "b935998e87e50cba2b03cc64074b4740f67b704a",
+        "artifact_sha256": "793d539d8d129ee8518f70876611b3318f1fa3f7b2bcc7229b0aa759294337cd"
+      }
+    },
+    {
+      "id": "github_release",
+      "kind": "repository_release",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.5.1",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.5.1",
+        "commit": "b935998e87e50cba2b03cc64074b4740f67b704a",
+        "artifact_sha256": "793d539d8d129ee8518f70876611b3318f1fa3f7b2bcc7229b0aa759294337cd"
+      },
+      "observed": {
+        "version": "0.5.1",
+        "commit": "b935998e87e50cba2b03cc64074b4740f67b704a",
+        "artifact_sha256": "793d539d8d129ee8518f70876611b3318f1fa3f7b2bcc7229b0aa759294337cd"
+      }
+    },
+    {
+      "id": "public_readback",
+      "kind": "public_readback",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.5.1",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.5.1",
+        "commit": "b935998e87e50cba2b03cc64074b4740f67b704a",
+        "artifact_sha256": "793d539d8d129ee8518f70876611b3318f1fa3f7b2bcc7229b0aa759294337cd"
+      },
+      "observed": {
+        "version": "0.5.1",
+        "commit": "b935998e87e50cba2b03cc64074b4740f67b704a",
+        "artifact_sha256": "793d539d8d129ee8518f70876611b3318f1fa3f7b2bcc7229b0aa759294337cd"
+      }
+    }
+  ],
+  "assets": [
+    {
+      "filename": "artifact.json",
+      "sha256": "60c7c354b096f4da630564d7cb832f63a4f5311262acf2897ca9505ac977c303",
+      "size_bytes": 3950,
+      "role": "manifest"
+    },
+    {
+      "filename": "browser-acceptance.json",
+      "sha256": "5da0d883b17283efc99501055ceb0a9dd6e29afe385cfa8c7a0bbe8acfc3db84",
+      "size_bytes": 2157,
+      "role": "other"
+    },
+    {
+      "filename": "ci-summary.json",
+      "sha256": "5001529e473c34f17b258e35f6db6f1d0b1f9b4a3d6d57db478d924c6079d5e8",
+      "size_bytes": 2749,
+      "role": "other"
+    },
+    {
+      "filename": "dsh-session-insights-0.5.1.tgz",
+      "sha256": "793d539d8d129ee8518f70876611b3318f1fa3f7b2bcc7229b0aa759294337cd",
+      "size_bytes": 140556,
+      "role": "artifact"
+    },
+    {
+      "filename": "macos-model-annex.json",
+      "sha256": "e30238e6e19a67c45dbc43ab0c042e9e3cd8ea9a6801de3d8ab8785afb2e0e5c",
+      "size_bytes": 10120,
+      "role": "native_annex"
+    },
+    {
+      "filename": "macos-native-annex.json",
+      "sha256": "695c41b58bb58dce46c22875abd74d884ca0dae53c5a49c61bdab39e39726ec2",
+      "size_bytes": 8948,
+      "role": "native_annex"
+    },
+    {
+      "filename": "macos-portable-annex.json",
+      "sha256": "04d24fb94e2465047a8149cbfaf1716832e24035468f4a46518a48315a01fed0",
+      "size_bytes": 11303,
+      "role": "native_annex"
+    },
+    {
+      "filename": "model-observations.json",
+      "sha256": "87cbbadd9439ba6e1877152dac6864711be9e0b96d4fcce28f92f59a159a19c8",
+      "size_bytes": 385,
+      "role": "other"
+    },
+    {
+      "filename": "reader-review.json",
+      "sha256": "8dcd5500dfd95dce6da7b7f9d4176b690dbb0f807844248f8e66d8aafea89642",
+      "size_bytes": 4099,
+      "role": "other"
+    },
+    {
+      "filename": "release-acceptance.md",
+      "sha256": "d18e137053ddb34ffc535a6b5b766ea282b0df98dc9dace2b160c1f6641214c3",
+      "size_bytes": 5018,
+      "role": "other"
+    },
+    {
+      "filename": "release-notes.md",
+      "sha256": "b070fdd553783dd6fad6b51b96e9cce8551e362c0dfe328b4d7a71f8a3ff35da",
+      "size_bytes": 3258,
+      "role": "release_notes"
+    },
+    {
+      "filename": "tgz.sha256",
+      "sha256": "eb1a50b2fb2be8eacdd2f4443ad6031ddf185f99f0f455b1639cdf06fb9321f9",
+      "size_bytes": 97,
+      "role": "checksum"
+    },
+    {
+      "filename": "windows-native-annex.json",
+      "sha256": "d204f67ba5ab864ea451021a1d91d2bf176e1915cafa47f078ef7bcdc7bcf4dc",
+      "size_bytes": 9589,
+      "role": "native_annex"
+    },
+    {
+      "filename": "windows-portable-annex.json",
+      "sha256": "b95639c17471b21efe31b20fe89249faef15aba1a200ed600d4cabb7101bd8a0",
+      "size_bytes": 8147,
+      "role": "native_annex"
+    }
+  ],
+  "run": {
+    "started_at": "2026-09-29T01:24:44.537365+00:00",
+    "finished_at": "2026-09-29T01:33:48.182413+00:00"
+  },
+  "unperformed_actions": []
+}

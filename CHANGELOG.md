@@ -4,7 +4,7 @@
 
 Public releases are listed newest first.
 
-## 0.5.1 - unreleased
+## 0.5.1 - 2026-09-29
 
 Target DSH `0.2.0-rc.1` exclusively. Start a new analysis run after upgrading; existing reports are retained.
 
@@ -12,7 +12,7 @@ Target DSH `0.2.0-rc.1` exclusively. Start a new analysis run after upgrading; e
 
 - Count interrupted tool results separately from confirmed failures in both production readers. JSON totals and session summaries add `tool_recovery: {outcome_unknown, not_started}` for the host's exact recovery codes; these records do not increase failure, failed-verification, permission or retry counts. Call identity includes its turn and step, preserving separate uncertainty evidence when an ID is reused.
 - Pin DSH peers and Bundle compatibility to `0.2.0-rc.1`. New input identity `v4-dsh020rc1.2` invalidates earlier analysis manifests and deterministic caches.
-- Generate recovery fixtures through the exact host's official recoverer. Release tooling now retains one commit-bound tarball and validates installation bytes, populated reports, cancellation and cleanup in a portable gate. Full native-host and model acceptance remain separate; see the [candidate record](docs/acceptance/v0.5.1-candidate.md).
+- Generate recovery fixtures through the exact host's official recoverer. Release tooling now retains one commit-bound tarball and validates installation bytes, populated reports, cancellation and cleanup in a portable gate. Source, package, native-host and model acceptance are recorded separately in the [release acceptance](docs/acceptance/v0.5.1-release.md).
 - Anonymize machine-local paths in a historical acceptance document and broaden the public-tree path scan. Historical results and limitations are unchanged.
 
 ## 0.5.0 - 2026-09-26
