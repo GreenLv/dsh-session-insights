@@ -210,9 +210,10 @@ test('analysis gate caps concurrent runs and queues the rest cancellably', async
   cancellable.abort()
   await assert.rejects(queued, /cancelled/)
   for (const entry of blocked.splice(0).reverse()) entry.resolve([])
-  assert.equal(JSON.parse((await running[0]).text).selected, 0)
+  for (const result of await Promise.all(running.slice(0, _test.ANALYSIS_CONCURRENCY)))
+    assert.equal(JSON.parse(result.text).selected, 0)
   await new Promise((r) => setImmediate(r))
-  assert.ok(blocked.length > 0, 'queued work starts as slots free up')
+  assert.equal(blocked.length, 2, 'both queued requests start after both active Workers terminate')
   for (const entry of blocked) entry.resolve([])
   await Promise.allSettled(running)
   } finally {
