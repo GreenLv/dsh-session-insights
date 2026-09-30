@@ -8,6 +8,7 @@ import {resolve, join, dirname, basename} from 'node:path'
 import {readFile, writeFile, mkdir, mkdtemp, rm, readdir, symlink, cp, realpath, stat} from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import {run, digest, fileManifest, inspectRuntime, TARGET} from './acceptance_identity.mjs'
+const MINIMUM_DSH_RANGE = '>=0.2.0-rc.2'
 
 const TOOLS = ['session_insights_prepare', 'session_insights_get_batch', 'session_insights_submit_batch', 'session_insights_get_aggregate', 'session_insights_submit_aggregate', 'session_insights_finalize', 'session_insights_cleanup']
 const REQUIRED = ['artifact_digest', 'artifact_identity', 'runtime_closure', 'host_cli_identity', 'install_official_cli', 'installed_manifest', 'uninstall_official_cli', 'reload_official_cli', 'reloaded_manifest', 'loaded_manifest', 'load_and_register', 'project_isolation', 'deterministic_report', 'cancel_recovers', 'rerun_after_cancel', 'registration_reload', 'dispose_cleanup']
@@ -61,7 +62,7 @@ async function main() {
   try {
     const bytes = await readFile(options.package)
     record('artifact_digest', digest(bytes) === options['expected-sha256'], 'accepted SHA-256 compared before install')
-    work = await mkdtemp(join(options.workdir, 'host-acceptance-'))
+    work = await realpath(await mkdtemp(join(options.workdir, 'host-acceptance-')))
     const home = join(work, 'dsh-home'), extraction = join(work, 'artifact')
     await mkdir(home); await mkdir(extraction)
     // Store resolves DSH_HOME in this process, not just CLI children.
@@ -69,13 +70,13 @@ async function main() {
     await gate('artifact_identity', async () => {
       await run('tar', ['-xzf', options.package, '-C', extraction])
       const metadata = JSON.parse(await readFile(join(extraction, 'package/package.json'), 'utf8'))
-      assert.equal(metadata.name, 'dsh-session-insights'); assert.equal(metadata.version, '0.5.1')
-      assert.equal(metadata.engines.dsh, TARGET); assert.equal(metadata.dsh.engines.dsh, TARGET)
+      assert.equal(metadata.name, 'dsh-session-insights'); assert.equal(metadata.version, '0.5.2')
+      assert.equal(metadata.engines.dsh, MINIMUM_DSH_RANGE); assert.equal(metadata.dsh.engines.dsh, MINIMUM_DSH_RANGE)
       assert.equal(metadata.gitHead, options.commit)
       const files = await fileManifest(join(extraction, 'package'))
       assert.ok(files.length > 0)
       annex.artifact = {filename: basename(options.package), sha256: digest(bytes), size_bytes: bytes.length, file_count: files.length, git_head: metadata.gitHead}
-      record('artifact_identity', true, `0.5.1, exact host, embedded commit, ${files.length} files`)
+      record('artifact_identity', true, `0.5.2, exact host, embedded commit, ${files.length} files`)
     })
     await gate('runtime_closure', async () => {
       const runtime = await inspectRuntime(options.runtime)

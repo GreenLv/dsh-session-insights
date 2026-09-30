@@ -1,6 +1,7 @@
 import { INPUT_IDENTITY } from './v4.js'
 import { readFileSync } from 'node:fs'
-import { hash, sanitize, secretErrors, analysisInternals } from './analyzer.js'
+import { resolve } from 'node:path'
+import { hash, sanitize, secretErrors, analysisInternals, normalizeProjectKey } from './analyzer.js'
 import rules from './rules.js'
 
 const VERSION = '1.0.0'
@@ -205,12 +206,42 @@ function candidate(family, sessions, options) {
     ),
   }
 }
+const VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
+function scopeFingerprint(selection) {
+  return hash(analysisInternals.canonical({
+    selection,
+    input_format_version: INPUT_IDENTITY.input_format_version,
+    analyzer_semantics: INPUT_IDENTITY.analyzer_semantics,
+  }))
+}
+function validSelection(m) {
+  const s = m.selection
+  return s && typeof s === 'object' && !Array.isArray(s) &&
+    (s.project === null || (typeof s.project === 'string' && s.project.length > 0 && normalizeProjectKey(s.project) === s.project)) &&
+    Number.isSafeInteger(s.days) && s.days > 0 &&
+    typeof s.window_end === 'string' && Number.isFinite(Date.parse(s.window_end)) &&
+    new Date(s.window_end).toISOString() === s.window_end &&
+    ['local', 'redacted', 'metrics'].includes(s.privacy) &&
+    ['local', 'redacted', 'metrics'].includes(s.analysis_privacy) &&
+    (s.privacy !== 'metrics' || s.analysis_privacy === 'metrics') &&
+    ['conversation', 'evidence'].includes(s.analysis_depth) &&
+    ['en', 'zh-CN'].includes(s.locale) &&
+    ['privacy', 'analysis_privacy', 'analysis_depth', 'locale'].every(k => s[k] === m[k]) &&
+    m.scope_fingerprint === scopeFingerprint(s)
+}
 export function loadManifest(store, run) {
   const m = store.read(run, 'manifest.json')
+  // Host-version growth alone does not invalidate a run: format and analyzer
+  // semantics must match exactly, while the recorded target version only has
+  // to be a well-formed version string.
   if (
     m.semantic_schema_version !== VERSION ||
     m.native_version !== 2 ||
-    Object.entries(INPUT_IDENTITY).some(([k,v]) => m[k] !== v) ||
+    m.input_format_version !== INPUT_IDENTITY.input_format_version ||
+    m.analyzer_semantics !== INPUT_IDENTITY.analyzer_semantics ||
+    typeof m.target_dsh_version !== 'string' ||
+    !VERSION_RE.test(m.target_dsh_version) ||
+    !validSelection(m) ||
     !['local', 'redacted', 'metrics'].includes(m.privacy) ||
     !['en', 'zh-CN'].includes(m.locale) ||
     !strings(m.batch_ids) ||
@@ -255,10 +286,27 @@ export function prepareSemantic(store, run, built) {
   }
   store.write(run, 'base-report.json', report)
   store.write(run, 'semantic-evidence.json', { candidates })
+  // The full recorded selection scope: a later resume may only bind this run
+  // with the same normalized project, window length, privacy pair, depth and
+  // locale, so a resumed report can never widen what was analyzed.
+  const selection = {
+    project: options.project ? normalizeProjectKey(resolve(options.project)) : null,
+    days: options.days,
+    window_end: new Date(options.now).toISOString(),
+    privacy: options.privacy,
+    analysis_privacy:
+      options.privacy === 'metrics'
+        ? 'metrics'
+        : options.analysis_privacy || options.privacy,
+    analysis_depth: options.analysis_depth,
+    locale: options.locale,
+  }
   const manifest = {
     native_version: 2,
     ...INPUT_IDENTITY,
     semantic_schema_version: VERSION,
+    selection,
+    scope_fingerprint: scopeFingerprint(selection),
     privacy: options.privacy,
     analysis_privacy:
       options.privacy === 'metrics'

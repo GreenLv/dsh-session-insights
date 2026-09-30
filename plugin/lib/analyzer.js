@@ -451,7 +451,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
     session_header_records: 1,
     ptc: new Map(), children: new Set(), permissionSeen: new Set(), deniedDecisions: new Set(),
     tool_execution: {outer_calls: 0, inner_calls: 0, outer_failures: 0, inner_failures: 0, inner_incomplete: 0},
-    // Official host recovery results (DSH 0.2.0-rc.1) are uncertainty records,
+    // Official host recovery results (DSH >= 0.2.0-rc.2) are uncertainty records,
     // never confirmed failures; they are counted separately per status.
     tool_recovery: {outcome_unknown: 0, not_started: 0},
     recovery_seen: new Set(), settled_calls: new Set(), scoped_calls: new Map(),
@@ -1547,7 +1547,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.5.1-v4-dsh020rc1.2',
+    analyzer_version: '0.5.2-v4-dsh020rc2.1',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),
@@ -1693,3 +1693,12 @@ function buildRecommendations(t, m, c, projects, en) {
   return rows
 }
 export const analysisInternals = { identifier, canonical, regex, groupBy }
+// Canonical selection-scope key for a project path: forward slashes, no
+// trailing separator, case-folded for Windows drives (and on Windows itself),
+// so a recorded run scope and a later resume request compare equal.
+export function normalizeProjectKey(value, platform = process.platform) {
+  const normalized = String(value).replace(/\\/g, '/').replace(/\/+$/, '') || '/'
+  return platform === 'win32' || /^[A-Za-z]:\//.test(normalized)
+    ? normalized.toLowerCase()
+    : normalized
+}

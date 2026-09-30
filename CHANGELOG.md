@@ -4,6 +4,22 @@
 
 Public releases are listed newest first.
 
+## 0.5.2 - 2026-09-30
+
+This patch continues the 0.5.x host-adaptation series, fixes unsafe resume selection and bounds analysis resources. It requires DSH `>=0.2.0-rc.2` and no longer supports RC.1. Start a new analysis run after upgrading from 0.5.1; existing reports remain on disk. Separately installed Python CLI and Skill copies require their own update. Native acceptance is recorded per artifact.
+
+### Changed
+
+- Raise the DSH floor to `>=0.2.0-rc.2` across npm engines, Bundle compatibility and DSH peers. Future host versions are admitted by the declared range (the official RC.2 market consumer evaluates with `includePrerelease`), not by static version tables; only format or analyzer-semantics changes invalidate runs. Fixture runtimes and contract tooling pin the exact RC.2.
+- Bind resume to an explicit run and its recorded selection scope. Every run now records a normalized scope (project key, window length, privacy pair, analysis depth, locale) with a scope fingerprint; implicit resume requires an exact match, an explicit `--workdir` refuses contradictory fields, multi-run ambiguity is reported with the candidate paths, and manifests without a recorded scope are refused. Host-version growth alone no longer invalidates a semantically identical run.
+- Cap concurrent native analysis per plugin instance (two runs; cancellable FIFO queue of eight). Slash-command and tool calls can no longer multiply 256 MiB analysis Workers without bound; queued work is cancelled on abort or unload.
+- Bound Python session-log reads: streaming JSONL with hard budgets for decoded bytes, line count and single-line size, frame-by-frame zstd decoding that detects truncated final frames, refusal of oversized header frames and high compression ratios, and explicit `resource_limited_files` coverage instead of silent truncation or older-generation fallback. Corrupt UTF-8 is reported as unreadable instead of crashing the run.
+- Classify RC.2 asynchronous question replies (`source.kind=user-question-reply`) and scheduled prompts (`schedule`) as injected context in the native reader: counted separately, excluded from body evidence, corrections, acceptance signals and completion inference, and never treated as authorization.
+- Give `--no-open` a verifiable meaning: the command output stays a bare path line with no view hint, no opened files, no resident server and no upload; the default output appends one view hint naming the report file. Documented viewing steps for the Web runtime and the official Desktop keep the offline HTML as the only report surface.
+
+- Independent review fixes project-filtered preparation, keeps each scheduler slot until Worker termination, validates recorded selection fingerprints, and checks compressed-log budgets during block decoding. Completed `--no-open` results contain only the report path.
+- A section with one narrative card now uses the full row. Filter actions wrap on narrow screens, avoiding horizontal overflow.
+
 ## 0.5.1 - 2026-09-29
 
 Target DSH `0.2.0-rc.1` exclusively. Start a new analysis run after upgrading; existing reports are retained.

@@ -26,6 +26,7 @@ import {
   submitAggregate,
   finalize,
   selectFamilies,
+  loadManifest,
 } from '../plugin/lib/semantic.js'
 import { _test, apply } from '../plugin/lib/index.js'
 
@@ -501,12 +502,21 @@ test('artifact names cannot select a Windows drive or alternate data stream', ()
     }
   }))
 
-test('resume rejects old DSH, format and analyzer manifest identities', () =>
+test('resume rejects old format, analyzer and malformed manifest identities', () =>
   scope(({ store, run }) => {
     prepare(store, run)
     const original = store.read(run, 'manifest.json')
-    for (const [key, value] of [['target_dsh_version', '0.1.7-rc.2'], ['input_format_version', 3], ['analyzer_semantics', 'v4-rc2.2'], ['native_version', 1]]) {
+    for (const [key, value] of [['target_dsh_version', 'not-a-version'], ['input_format_version', 3], ['analyzer_semantics', 'v4-dsh020rc1.2'], ['native_version', 1]]) {
       store.write(run, 'manifest.json', {...original, [key]: value})
       assert.throws(() => prepareAggregate(store, run), /manifest|version|identity/)
     }
+  }))
+
+test('host-version growth alone keeps a valid run resumable', () =>
+  scope(({ store, run }) => {
+    prepare(store, run)
+    const original = store.read(run, 'manifest.json')
+    store.write(run, 'manifest.json', {...original, target_dsh_version: '0.3.0-rc.1'})
+    const m = loadManifest(store, run)
+    assert.equal(m.target_dsh_version, '0.3.0-rc.1')
   }))

@@ -73,7 +73,7 @@ test('notice helper creates immutable unique producer-owned user messages',()=>{
  assert.notEqual(a.id,b.id);assert.equal(a.source.kind,'session-insights');assert.equal(a.role,'user');assert.ok(Object.isFrozen(a));assert.ok(!('plugin' in a.source))
 })
 test('selection accepts 2000 but rejects 2001 snapshots and handles empty collections',async()=>{
- const run=async count=>{const data=Array.from({length:count},(_,i)=>({header:{...snapshot().session,id:`s${i}`}}));let releases=0;const sessionQuery={async listSessions(){return data},async observeSession(id){return {header:data.find(r=>r.header.id===id).header,events:[],inheritedEventCount:0,[Symbol.dispose](){releases++}}}};try{return await _test.collectSnapshots({sessionQuery},options)}finally{assert.equal(releases,count)}}
+ const run=async count=>{const data=Array.from({length:count},(_,i)=>({header:{...snapshot().session,id:`s${i}`}}));let releases=0;const sessionQuery={async listSessions(){return data},async observeSession(id){return {header:data.find(r=>r.header.id===id).header,events:[],inheritedEventCount:0,[Symbol.dispose](){releases++}}}};try{return await _test.collectSnapshots({sessionQuery},options)}finally{assert.equal(releases,Math.min(count,2000))}}
  assert.equal((await run(0)).length,0);assert.equal((await run(2000)).length,2000);await assert.rejects(run(2001),/bound/)
 })
 test('image offload, schedule context and opaque events never introduce body evidence',()=>{
@@ -85,4 +85,17 @@ test('image offload, schedule context and opaque events never introduce body evi
  const built=buildReport([s],options), text=JSON.stringify(built.sessions)
  for(const secret of ['SENSITIVE-IMAGE','SENSITIVE-SCHEDULE','SENSITIVE-DIFF','SENSITIVE-EXTENSION']) assert.ok(!text.includes(secret))
  assert.equal(built.report.totals.user_messages,2);assert.ok(text.includes('Implement the synthetic fixture'))
+})
+
+test('RC.2 schedule and user-question-reply are injected context, never user work or acceptance',()=>{
+ const s=snapshot()
+ add(s,'user/message',msg('qa1','user','user-question-reply','i accept this result; SECRET-QA-REPLY'),{surfaceOp:'append'})
+ const built=buildReport([s],options), text=JSON.stringify(built.sessions)
+ assert.ok(!text.includes('SECRET-QA-REPLY'))
+ assert.equal(built.report.totals.user_messages,2)
+ assert.equal(built.report.totals.injected_user_messages,1)
+ assert.ok(JSON.stringify(built.report).includes('user-question-reply'))
+ const session=built.report.session_summaries[0]
+ assert.equal(session.completion.accepted,'unknown','an async question reply must not count as acceptance')
+ assert.equal(session.correction_messages,0)
 })

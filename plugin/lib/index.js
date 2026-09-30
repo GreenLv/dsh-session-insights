@@ -1,7 +1,8 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { resolve, sep } from 'node:path'
+import { resolve } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { Store, MAX_JSON_BYTES } from './storage.js'
+import { normalizeProjectKey } from './analyzer.js'
 import {
   prepareSemantic,
   loadManifest,
@@ -18,6 +19,12 @@ export const inject = ['commands', 'tools', 'sessionQuery']
 const LOCALES = new Set(['zh-CN', 'en'])
 const PRIVACY = new Set(['local', 'redacted', 'metrics'])
 const DEPTHS = new Set(['conversation', 'evidence'])
+// Instance-wide analysis budget. Each run keeps the 2000-session/64 MiB input
+// bound; at most this many runs collect and analyze concurrently, and further
+// requests queue (cancellably) instead of multiplying Workers. The Worker
+// maxOldGenerationSizeMb below caps one Worker's old space, not host RSS.
+const ANALYSIS_CONCURRENCY = 2
+const ANALYSIS_QUEUE_LIMIT = 8
 function schema(properties, required = []) {
   return { type: 'object', properties, required, additionalProperties: false }
 }
@@ -93,6 +100,11 @@ function normalizeOptions(input = {}) {
   if (!LOCALES.has(result.locale)) throw new Error('locale must be zh-CN or en')
   return result
 }
+function matchesProject(cwd, project) {
+  const key = normalizeProjectKey(resolve(String(cwd || '')))
+  const root = normalizeProjectKey(resolve(project))
+  return key === root || key.startsWith(root.endsWith('/') ? root : root + '/')
+}
 
 async function collectSnapshots(ctx, options, signal) {
   cancelled(signal)
@@ -117,72 +129,138 @@ async function collectSnapshots(ctx, options, signal) {
     )
       continue
     if (options.project) {
-      const normalize = (p) =>
-        process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p)
-      const cwd = normalize(String(header.cwd || '')),
-        project = normalize(options.project)
-      if (cwd !== project && !cwd.startsWith(project + sep)) continue
+      if (!matchesProject(header.cwd, options.project)) continue
     }
+    if (snapshots.length >= 2000)
+      throw new Error('session selection exceeds the native analysis bound; reduce --days or filter --project')
     const observation = await ctx.sessionQuery.observeSession(header.id, {signal, projectionMode: 'none'})
     let snapshot
     try {
       cancelled(signal)
-      snapshot = structuredClone({session: observation.header, events: observation.events,
-        inheritedEventCount: observation.inheritedEventCount})
+      const borrowed = {session: observation.header, events: observation.events,
+        inheritedEventCount: observation.inheritedEventCount}
+      // The query API materializes a session before returning its lease. Check
+      // its serialized size before making a detached copy or sending a Worker.
+      const selectedBytes = Buffer.byteLength(JSON.stringify(borrowed))
+      if (selectedBytes > 64 * 1024 * 1024 - bytes)
+        throw new Error('session selection exceeds the native analysis bound; reduce --days or filter --project')
+      snapshot = structuredClone(borrowed)
+      bytes += selectedBytes
     } finally {
       observation[Symbol.dispose]()
     }
     if (snapshot.session.id !== header.id) throw new Error('session identity changed; retry analysis')
     if (snapshot.session.createdAt < cutoff || snapshot.session.createdAt > options.now) continue
     if (options.project) {
-      const normalize = p => process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p)
-      const cwd = normalize(String(snapshot.session.cwd || '')), project = normalize(options.project)
-      if (cwd !== project && !cwd.startsWith(project + sep)) continue
+      if (!matchesProject(snapshot.session.cwd, options.project)) continue
     }
     cancelled(signal)
-    bytes += Buffer.byteLength(JSON.stringify(snapshot))
-    if (bytes > 64 * 1024 * 1024 || snapshots.length >= 2000)
-      throw new Error(
-        'session selection exceeds the native analysis bound; reduce --days or filter --project',
-      )
     snapshots.push(snapshot)
   }
   return snapshots
 }
-async function prepare(ctx, raw, signal) {
+async function prepare(ctx, raw, signal, scheduleAnalysis) {
   cancelled(signal)
-  const options = { ...normalizeOptions(raw), now: Date.now() },
-    store = new Store()
-  if (raw.resume) {
-    for (const workdir of store.list()) {
-      try {
-        const m = loadManifest(store, workdir)
-        return {
-          workdir,
-          batches: m.batch_ids,
-          selected: m.selected_task_family_ids.length,
-          locale: m.locale,
-          metrics_semantic_skipped: m.metrics_semantic_skipped,
-          resumed: true,
-        }
-      } catch {
-        /* old or incomplete runs are not resumable */
-      }
-    }
-    throw new Error(
-      'no resumable native run exists; legacy Python runs must be finalized with the CLI or restarted',
-    )
-  }
-  const snapshots = await collectSnapshots(ctx, options, signal),
-    built = await analyze(snapshots, options, signal)
+  const store = new Store()
+  if (raw.resume) return resumeRun(store, raw, signal)
+  const options = { ...normalizeOptions(raw), now: Date.now() }
+  const built = await scheduleAnalysis(signal, async () => {
+    const snapshots = await collectSnapshots(ctx, options, signal)
+    return analyze(snapshots, options, signal)
+  })
   cancelled(signal)
   const run = store.create()
   return prepareSemantic(store, run, built)
 }
-async function deterministicReport(ctx, raw, signal) {
-  const options = { ...normalizeOptions(raw), now: Date.now() },
-    snapshots = await collectSnapshots(ctx, options, signal),
-    built = await analyze(snapshots, options, signal)
+// Canonical selection scope of a resume request. Defaults match
+// normalizeOptions; project uses the recorded key form so a relative or
+// differently-cased spelling cannot select another project's run.
+function requestedScope(raw) {
+  const options = normalizeOptions(raw)
+  return {
+    project: options.project
+      ? normalizeProjectKey(resolve(options.project))
+      : null,
+    days: options.days,
+    privacy: options.privacy,
+    analysis_privacy:
+      options.privacy === 'metrics'
+        ? 'metrics'
+        : options.analysis_privacy || options.privacy,
+    analysis_depth: options.analysis_depth,
+    locale: options.locale,
+  }
+}
+const SCOPE_FIELDS = [
+  'project',
+  'days',
+  'privacy',
+  'analysis_privacy',
+  'analysis_depth',
+  'locale',
+]
+const scopeEqual = (a, b) =>
+  SCOPE_FIELDS.every((k) => JSON.stringify(a[k]) === JSON.stringify(b[k]))
+async function resumeRun(store, raw, signal) {
+  cancelled(signal)
+  const requested = requestedScope(raw)
+  if (raw.workdir !== undefined) {
+    // Explicit run binding: the recorded selection is authoritative and every
+    // scope field the caller did provide must agree with it.
+    const workdir = store.run(resolve(String(raw.workdir)))
+    const m = loadManifest(store, workdir)
+    if (!m.selection)
+      throw new Error(
+        'this run was prepared before selection scopes were recorded; start a new run',
+      )
+    for (const field of SCOPE_FIELDS)
+      if (raw[field] !== undefined && requested[field] !== m.selection[field])
+        throw new Error(
+          `resume scope mismatch: requested ${field}=${JSON.stringify(requested[field])} but the run recorded ${field}=${JSON.stringify(m.selection[field])}`,
+        )
+    return resumedResult(workdir, m)
+  }
+  const matches = []
+  for (const workdir of store.list()) {
+    cancelled(signal)
+    let m
+    try {
+      m = loadManifest(store, workdir)
+    } catch {
+      /* old or incomplete runs are not resumable */
+      continue
+    }
+    if (!m.selection) continue
+    if (scopeEqual(requested, m.selection)) matches.push({ workdir, m })
+  }
+  if (matches.length === 1) return resumedResult(matches[0].workdir, matches[0].m)
+  if (matches.length === 0)
+    throw new Error(
+      'no resumable native run matches the requested scope (days, project, privacy, analysis_privacy, analysis_depth, locale); pass the run workdir explicitly or start a new run',
+    )
+  throw new Error(
+    `multiple runs match the requested scope; resume one explicitly by workdir: ${matches
+      .map((x) => x.workdir)
+      .join(', ')}`,
+  )
+}
+function resumedResult(workdir, m) {
+  return {
+    workdir,
+    batches: m.batch_ids,
+    selected: m.selected_task_family_ids.length,
+    locale: m.locale,
+    metrics_semantic_skipped: m.metrics_semantic_skipped,
+    resumed: true,
+    selection: m.selection,
+  }
+}
+async function deterministicReport(ctx, raw, signal, scheduleAnalysis) {
+  const options = { ...normalizeOptions(raw), now: Date.now() }
+  const built = await scheduleAnalysis(signal, async () => {
+    const snapshots = await collectSnapshots(ctx, options, signal)
+    return analyze(snapshots, options, signal)
+  })
   cancelled(signal)
   const store = new Store(),
     run = store.create()
@@ -202,6 +280,7 @@ function parseCommandInput(rawInput) {
     ['--analysis-privacy', 'analysis_privacy'],
     ['--analysis-depth', 'analysis_depth'],
     ['--locale', 'locale'],
+    ['--workdir', 'workdir'],
   ])
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
@@ -243,6 +322,66 @@ function payload(text) {
 }
 export function apply(ctx) {
   const lifetime = new AbortController(), pending = new Set()
+  // Analysis gate: at most ANALYSIS_CONCURRENCY runs collect and analyze at
+  // once; further requests wait in a cancellable FIFO. Queued and running work
+  // is rejected when the plugin unloads, and no Worker or lease outlives it.
+  const gate = {
+    active: 0,
+    queue: [],
+    admit() {
+      while (this.active < ANALYSIS_CONCURRENCY && this.queue.length) {
+        const task = this.queue.shift()
+        this.active += 1
+        task.go()
+      }
+    },
+    release() {
+      this.active -= 1
+      this.admit()
+    },
+  }
+  const scheduleAnalysis = (signal, operation) => {
+    if (gate.queue.length >= ANALYSIS_QUEUE_LIMIT)
+      return Promise.reject(
+        new Error(
+          `session insights analysis queue is full (${ANALYSIS_QUEUE_LIMIT} waiting); retry after current runs complete`,
+        ),
+      )
+    return new Promise((resolveTask, rejectTask) => {
+      const task = { go: null }
+      // Only queued work is rejected here. A running operation keeps its own
+      // signal handling, so cancellation reaches it through the same combined
+      // signal the query and Worker already honour.
+      const abort = () => {
+        const index = gate.queue.indexOf(task)
+        if (index >= 0) {
+          gate.queue.splice(index, 1)
+          signal?.removeEventListener('abort', abort)
+          rejectTask(new Error('session insights cancelled'))
+        }
+      }
+      if (signal?.aborted) return rejectTask(new Error('session insights cancelled'))
+      signal?.addEventListener('abort', abort, { once: true })
+      task.go = () => {
+        Promise.resolve()
+          .then(() => operation(signal))
+          .then(
+            (value) => {
+              signal?.removeEventListener('abort', abort)
+              gate.release()
+              resolveTask(value)
+            },
+            (error) => {
+              signal?.removeEventListener('abort', abort)
+              gate.release()
+              rejectTask(error)
+            },
+          )
+      }
+      gate.queue.push(task)
+      gate.admit()
+    })
+  }
   const owned = (signal, operation) => {
     const combined = signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal
     cancelled(combined)
@@ -278,8 +417,9 @@ export function apply(ctx) {
       analysis_depth: { type: 'string', enum: [...DEPTHS] },
       locale: { type: 'string', enum: [...LOCALES] },
       resume: { type: 'boolean' },
+      workdir: { type: 'string' },
     }),
-    (args, signal) => prepare(ctx, args, signal),
+    (args, signal) => prepare(ctx, args, signal, scheduleAnalysis),
   )
   const runSchema = (extra) =>
     schema({ workdir: { type: 'string' }, ...extra }, [
@@ -336,24 +476,29 @@ export function apply(ctx) {
     name: 'session-insights',
     description: 'Analyze DSH sessions and create a local retrospective',
     input: {
-      hint: '[--days N] [--project PATH] [--privacy MODE] [--analysis-privacy MODE] [--analysis-depth LEVEL] [--locale zh-CN|en] [--deterministic] [--resume] [--no-open]',
+      hint: '[--days N] [--project PATH] [--privacy MODE] [--analysis-privacy MODE] [--analysis-depth LEVEL] [--locale zh-CN|en] [--deterministic] [--resume] [--workdir RUN] [--no-open]',
     },
     async handler(invocation) {
       return owned(invocation.signal, async signal => {
       try {
         const options = parseCommandInput(invocation.rawInput)
+        const viewHint = options.no_open
+          ? ''
+          : '\nOpen the report file in a local browser to view it; the HTML works offline and nothing is uploaded.'
+        const reportText = path => options.no_open ? path : `Session insights report: ${path}${viewHint}`
         if (options.deterministic) {
           const result = await deterministicReport(
             ctx,
             options,
             signal,
+            scheduleAnalysis,
           )
           return {
             kind: 'success',
-            text: `Session insights report: ${result.report}`,
+            text: reportText(result.report),
           }
         }
-        const result = await prepare(ctx, options, signal)
+        const result = await prepare(ctx, options, signal, scheduleAnalysis)
         if (result.metrics_semantic_skipped || result.selected === 0) {
           const report = finalize(
             new Store(),
@@ -362,7 +507,7 @@ export function apply(ctx) {
           )
           return {
             kind: 'success',
-            text: `Session insights report: ${report.report}`,
+            text: reportText(report.report),
           }
         }
         if (!invocation.agent?.followup)
@@ -388,4 +533,7 @@ export const _test = {
   orchestrationPrompt,
   analyze,
   collectSnapshots,
+  requestedScope,
+  ANALYSIS_CONCURRENCY,
+  ANALYSIS_QUEUE_LIMIT,
 }
