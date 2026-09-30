@@ -4,9 +4,9 @@
 
 Public releases are listed newest first.
 
-## 0.6.0 - 2026-09-30
+## 0.5.2 - 2026-09-30
 
-Requires DSH `>=0.2.0-rc.2`; DSH `0.2.0-rc.1` is below the supported floor. Input remains V4. Desktop support, resume scoping and native acceptance are recorded separately per artifact.
+This patch continues the 0.5.x host-adaptation series, fixes unsafe resume selection and bounds analysis resources. It requires DSH `>=0.2.0-rc.2` and no longer supports RC.1. Start a new analysis run after upgrading from 0.5.1; existing reports remain on disk. Separately installed Python CLI and Skill copies require their own update. Native acceptance is recorded per artifact.
 
 ### Changed
 

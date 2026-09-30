@@ -37,18 +37,18 @@ The HTML file contains its own styles and data, so you can keep it locally and o
 
 ## Install the Bundle
 
-The `0.6.0` Bundle requires DSH `>=0.2.0-rc.2` and Node.js `^22.19.0 || >=24.0.0`, without Python. The optional file-log CLI still requires Python 3.11+.
+The `0.5.2` Bundle requires DSH `>=0.2.0-rc.2` and Node.js `^22.19.0 || >=24.0.0`, without Python. The optional file-log CLI still requires Python 3.11+.
 
 **DSH compatibility:** The package requires `>=0.2.0-rc.2`; DSH `0.2.0-rc.1` is below the supported floor and later releases are admitted by the declared range, not by static version tables. Contract and service tests cover synthetic V4 input. Consult the acceptance record for artifact-specific host, model, platform and browser results. See [DSH compatibility](#dsh-compatibility).
 
-The registry command below requires `0.6.0` to be published. When testing a candidate, install its reviewed tarball or source revision instead. Check the version on [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) before using the registry command:
+The registry command below requires `0.5.2` to be published. When testing a candidate, install its reviewed tarball or source revision instead. Check the version on [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) before using the registry command:
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.6.0
+dsh plugin --profile web add dsh-session-insights@0.5.2
 dsh web
 ```
 
-To install from source, replace `REVIEWED_REF` with `v0.6.0` after publication, or with the full candidate commit recorded in its artifact manifest. Select that revision before installing; cloning alone checks out the default branch, which may contain another version:
+To install from source, replace `REVIEWED_REF` with `v0.5.2` after publication, or with the full candidate commit recorded in its artifact manifest. Select that revision before installing; cloning alone checks out the default branch, which may contain another version:
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
@@ -70,7 +70,7 @@ The npm package has no install or build lifecycle script. The registry command i
 
 ### Official Desktop
 
-Desktop uses the same Node analysis implementation. Its plugin profile is managed by the official Electron application; the npm CLI rejects `--profile desktop`. Use the app's plugin controls or its bundled command carrier to manage the Bundle. On macOS that carrier is `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`; invoke it with `plugin --profile desktop add <package>`. Check the [candidate acceptance record](docs/acceptance/v0.6.0-candidate.md) for the observed results on each platform before using an unpublished candidate. On Windows, close the main app and its child host before reinstalling when files are in use (`EPERM`). Report viewing uses the HTML path returned by the command; open it in your local browser, or pass `--no-open` for a path without the viewing hint.
+Desktop uses the same Node analysis implementation. Its plugin profile is managed by the official Electron application; the npm CLI rejects `--profile desktop`. Use the app's plugin controls or its bundled command carrier to manage the Bundle. On macOS that carrier is `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`; invoke it with `plugin --profile desktop add <package>`. Check the [candidate acceptance record](docs/acceptance/v0.5.2-candidate.md) for the observed results on each platform before using an unpublished candidate. On Windows, close the main app and its child host before reinstalling when files are in use (`EPERM`). Report viewing uses the HTML path returned by the command; open it in your local browser, or pass `--no-open` for a path without the viewing hint.
 
 ## Availability
 
@@ -209,7 +209,7 @@ Tool workload includes recorded programmatic tool calling (PTC) inner calls. The
 
 DSH writes scheduled prompts as user-role messages with source kind `schedule`, and RC.2 adds asynchronous question replies with source kind `user-question-reply`. Neither is treated as user work: both are counted separately as injected context, excluded from conversation evidence, corrections, acceptance signals and completion inference, and can never authorize an action. Only human user messages with source kind `user` contribute body evidence. Official recovery results with the structured error codes `TOOL_OUTCOME_UNKNOWN` and `TOOL_NOT_STARTED` are classified separately from confirmed failures: `tool_recovery` counts `{outcome_unknown, not_started}` per session and in totals. `TOOL_OUTCOME_UNKNOWN` means a recorded call's completed outcome was not durably recorded, so the tool may have produced side effects; `TOOL_NOT_STARTED` means the log has no record of the call starting. Neither state is counted as a tool failure or a failed verification, and neither proves that a tool executed or that it did nothing. Text that merely mentions a recovery code is classified by the ordinary result rules. Verify external state before retrying an operation that can change data.
 
-The 0.6.0 independent review and pending gates are recorded in [docs/acceptance/v0.6.0-candidate.md](docs/acceptance/v0.6.0-candidate.md). The 0.5.1 candidate review scope is recorded in [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md). The [0.5.0 release acceptance](docs/acceptance/v0.5.0-release.md) and the [frozen 0.5.0 candidate record](docs/acceptance/v0.5.0-rc2-candidate.md) apply only to that 0.5.0 implementation and its named host. Historical acceptance records apply only to their named implementations.
+The 0.5.2 independent review and pending gates are recorded in [docs/acceptance/v0.5.2-candidate.md](docs/acceptance/v0.5.2-candidate.md). The 0.5.1 candidate review scope is recorded in [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md). The [0.5.0 release acceptance](docs/acceptance/v0.5.0-release.md) and the [frozen 0.5.0 candidate record](docs/acceptance/v0.5.0-rc2-candidate.md) apply only to that 0.5.0 implementation and its named host. Historical acceptance records apply only to their named implementations.
 
 ## Session log generations
 

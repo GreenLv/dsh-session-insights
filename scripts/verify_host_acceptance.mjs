@@ -70,13 +70,13 @@ async function main() {
     await gate('artifact_identity', async () => {
       await run('tar', ['-xzf', options.package, '-C', extraction])
       const metadata = JSON.parse(await readFile(join(extraction, 'package/package.json'), 'utf8'))
-      assert.equal(metadata.name, 'dsh-session-insights'); assert.equal(metadata.version, '0.6.0')
+      assert.equal(metadata.name, 'dsh-session-insights'); assert.equal(metadata.version, '0.5.2')
       assert.equal(metadata.engines.dsh, MINIMUM_DSH_RANGE); assert.equal(metadata.dsh.engines.dsh, MINIMUM_DSH_RANGE)
       assert.equal(metadata.gitHead, options.commit)
       const files = await fileManifest(join(extraction, 'package'))
       assert.ok(files.length > 0)
       annex.artifact = {filename: basename(options.package), sha256: digest(bytes), size_bytes: bytes.length, file_count: files.length, git_head: metadata.gitHead}
-      record('artifact_identity', true, `0.6.0, exact host, embedded commit, ${files.length} files`)
+      record('artifact_identity', true, `0.5.2, exact host, embedded commit, ${files.length} files`)
     })
     await gate('runtime_closure', async () => {
       const runtime = await inspectRuntime(options.runtime)
