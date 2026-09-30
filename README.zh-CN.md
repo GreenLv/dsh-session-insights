@@ -41,18 +41,19 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 **DSH 兼容性：** 软件包要求 `>=0.2.0-rc.2`；DSH `0.2.0-rc.1` 低于支持下限，后续版本按声明的范围准入，不依赖静态版本表。契约与服务测试覆盖合成 V4 输入；具体制品的宿主、模型、平台与页面验收结果分别记录。详见 [DSH 兼容性](#dsh-兼容性)。
 
-0.6.0 当前为未发布候选；发布核实前，请使用下方的本地源码安装步骤。发布后可把对应 Bundle 安装到 DSH profile，再启动该 profile：
+下方 registry 命令需要 `0.6.0` 已发布。验收候选时，请安装已审查的 tgz 或源码版本；使用 registry 命令前，请先在 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) 核实版本：
 
 ```bash
 dsh plugin --profile web add dsh-session-insights@0.6.0
 dsh web
 ```
 
-如需从已审查的源码安装：
+从源码安装时，请把 `REVIEWED_REF` 替换为发布后的 `v0.6.0`，或候选制品清单中记录的完整提交号。安装前先选择该版本；仅克隆仓库会检出默认分支，它可能还是其他版本：
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
 cd dsh-session-insights
+git checkout --detach REVIEWED_REF
 dsh plugin --profile web add .
 dsh web
 ```

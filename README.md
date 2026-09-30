@@ -41,18 +41,19 @@ The `0.6.0` Bundle requires DSH `>=0.2.0-rc.2` and Node.js `^22.19.0 || >=24.0.0
 
 **DSH compatibility:** The package requires `>=0.2.0-rc.2`; DSH `0.2.0-rc.1` is below the supported floor and later releases are admitted by the declared range, not by static version tables. Contract and service tests cover synthetic V4 input. Consult the acceptance record for artifact-specific host, model, platform and browser results. See [DSH compatibility](#dsh-compatibility).
 
-0.6.0 is currently an unreleased candidate. Use the local checkout instructions below until its release is verified. After publication, install the matching Bundle into your DSH profile:
+The registry command below requires `0.6.0` to be published. When testing a candidate, install its reviewed tarball or source revision instead. Check the version on [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) before using the registry command:
 
 ```bash
 dsh plugin --profile web add dsh-session-insights@0.6.0
 dsh web
 ```
 
-To install from a reviewed source checkout instead:
+To install from source, replace `REVIEWED_REF` with `v0.6.0` after publication, or with the full candidate commit recorded in its artifact manifest. Select that revision before installing; cloning alone checks out the default branch, which may contain another version:
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
 cd dsh-session-insights
+git checkout --detach REVIEWED_REF
 dsh plugin --profile web add .
 dsh web
 ```
