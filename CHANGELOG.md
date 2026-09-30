@@ -4,7 +4,7 @@
 
 Public releases are listed newest first.
 
-## 0.6.0 - Unreleased
+## 0.6.0 - 2026-09-30
 
 Requires DSH `>=0.2.0-rc.2`; DSH `0.2.0-rc.1` is below the supported floor. Input remains V4. Desktop support, resume scoping and native acceptance are recorded separately per artifact.
 
@@ -18,6 +18,7 @@ Requires DSH `>=0.2.0-rc.2`; DSH `0.2.0-rc.1` is below the supported floor. Inpu
 - Give `--no-open` a verifiable meaning: the command output stays a bare path line with no view hint, no opened files, no resident server and no upload; the default output appends one view hint naming the report file. Documented viewing steps for the Web runtime and the official Desktop keep the offline HTML as the only report surface.
 
 - Independent review fixes project-filtered preparation, keeps each scheduler slot until Worker termination, validates recorded selection fingerprints, and checks compressed-log budgets during block decoding. Completed `--no-open` results contain only the report path.
+- A section with one narrative card now uses the full row. Filter actions wrap on narrow screens, avoiding horizontal overflow.
 
 ## 0.5.1 - 2026-09-29
 
