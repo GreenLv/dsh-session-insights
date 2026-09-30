@@ -3,7 +3,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { access, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { apply, inject, _test } from '../plugin/lib/index.js'
 
 function syntheticSessions(count = 1) {
@@ -128,7 +128,7 @@ test('resume cannot cross project, privacy, locale or window scope', async () =>
     const signal = new AbortController().signal
     await registered.tools.get('session_insights_prepare').execute({ days: 30, locale: 'en' }, { signal })
     for (const [label, request] of [
-      ['another project', { resume: true, days: 30, locale: 'en', project: '/workspace/project-9' }],
+      ['another project', { resume: true, days: 30, locale: 'en', project: join(temporary, 'other-project') }],
       ['wider privacy', { resume: true, days: 30, locale: 'en', privacy: 'metrics' }],
       ['other locale', { resume: true, days: 30, locale: 'zh-CN' }],
       ['other window', { resume: true, days: 7, locale: 'en' }],
@@ -174,16 +174,25 @@ test('explicit workdir resume reports scope contradictions and multi-run ambigui
 })
 
 test('analysis gate caps concurrent runs and queues the rest cancellably', async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-session-insights-gate-'))
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = temporary
+  let unload
+  try {
   let blocked = []
   const commands = []
   const tools = []
   apply({
-    effect() {},
+    effect(factory) { unload = factory() },
     commands: { register(value) { commands.push(value) } },
     tools: { register(value) { tools.push(value) } },
     sessionQuery: {
       listSessions(signal) {
-        return new Promise((resolve) => blocked.push({ resolve, signal }))
+        return new Promise((resolve, reject) => {
+          const abort = () => reject(new Error('cancelled'))
+          signal.addEventListener('abort', abort, {once: true})
+          blocked.push({resolve(value) { signal.removeEventListener('abort', abort); resolve(value) }, signal})
+        })
       },
       async observeSession() { throw new Error('not reached') },
     },
@@ -206,20 +215,31 @@ test('analysis gate caps concurrent runs and queues the rest cancellably', async
   assert.ok(blocked.length > 0, 'queued work starts as slots free up')
   for (const entry of blocked) entry.resolve([])
   await Promise.allSettled(running)
+  } finally {
+    await unload?.()
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+    await rm(temporary, {recursive: true, force: true})
+  }
 })
 
 test('analysis gate rejects beyond its queue limit', async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-session-insights-gate-full-'))
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = temporary
+  let unload
+  try {
   const commands = []
   const tools = []
   let blocked = 0
   apply({
-    effect() {},
+    effect(factory) { unload = factory() },
     commands: { register(value) { commands.push(value) } },
     tools: { register(value) { tools.push(value) } },
     sessionQuery: {
-      listSessions() {
+      listSessions(signal) {
         blocked += 1
-        return new Promise(() => {})
+        return new Promise((_, reject) => signal.addEventListener('abort', () => reject(new Error('cancelled')), {once: true}))
       },
       async observeSession() { throw new Error('not reached') },
     },
@@ -234,6 +254,14 @@ test('analysis gate rejects beyond its queue limit', async () => {
     /queue is full/,
   )
   for (const run of running) run.catch(() => {})
+  await unload(); unload = undefined
+  await Promise.allSettled(running)
+  } finally {
+    await unload?.()
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+    await rm(temporary, {recursive: true, force: true})
+  }
 })
 
 test('repeated runs accept nonexistent descendants below an aliased DSH home', async () => {
@@ -307,7 +335,7 @@ test('--no-open returns a bare path line without any view hint', async () => {
     assert.match(open.text, /Open the report file in a local browser/)
     const closed = await registered.commands[0].handler({ rawInput: '--deterministic --locale en --no-open', signal, agent: registered.agent })
     assert.equal(closed.kind, 'success')
-    assert.ok(closed.text.endsWith('/report.html'))
+    assert.equal(basename(closed.text), 'report.html')
     assert.equal(closed.text.split('\n').length, 1)
     await access(closed.text)
     const metrics = await registered.commands[0].handler({ rawInput: '--privacy metrics --locale en --no-open', signal, agent: registered.agent })
