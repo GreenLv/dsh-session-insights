@@ -4,6 +4,13 @@ import {readFile,writeFile,mkdir,mkdtemp,rm,readdir,realpath,stat,cp} from 'node
 import {join,dirname,resolve} from 'node:path'
 import assert from 'node:assert/strict'
 import {run,digest,fileManifest} from './acceptance_identity.mjs'
+// The Web host prints a scratch access URL during boot. Keep its token out of
+// tool output and retained acceptance logs.
+const originalStdoutWrite=process.stdout.write.bind(process.stdout)
+process.stdout.write=(chunk,...args)=>originalStdoutWrite(
+ typeof chunk==='string'||Buffer.isBuffer(chunk)
+  ? chunk.toString().replace(/([?&]token=)[^&\s]+/g,'$1<redacted>')
+  : chunk,...args)
 const base=resolve(process.argv[2] || ''), hostRoot=resolve(process.argv[3] || '')
 const profile=process.argv[4] || 'web'
 if(!process.argv[2] || !process.argv[3] || !['web','headless'].includes(profile))throw new Error('artifact directory, official CLI runtime root, web|headless required')
@@ -28,7 +35,7 @@ const begin=id=>{currentGate=id}
 const env={...process.env,npm_config_cache:join(work,'npm-cache'),npm_config_store_dir:join(work,'pnpm-store'),XDG_CACHE_HOME:join(work,'cache'),XDG_DATA_HOME:join(work,'data')}
 const cli=async args=>run(process.execPath,[join(dirname(hostManifest),'lib/bin.js'),'plugin','--profile',profile,...args],{env,cwd:project,timeout:180000,maxBuffer:8*1024*1024})
 const overlay=join(work,'native.patch.yml')
-await writeFile(overlay,'- id: hmr\n  disabled: true\n- id: session-title-llm\n  disabled: true\n')
+await writeFile(overlay,'- id: hmr\n  disabled: true\n- id: session-title-llm\n  disabled: true\n'+(profile==='headless'?'- id: headless-runner\n  disabled: true\n':''))
 const boot=()=>runProfile({environment:createLaunchEnvironmentSnapshot([{source:'process',values:{DSH_HOME:home,DSH_TELEMETRY_DISABLED:'1'}}]),profile,patchFiles:[overlay],args:profile==='web'?['--no-open','--host','127.0.0.1','--port','0']:[]})
 const fixture=async(name,id,cwd)=>{
  const rows=(await readFile(join(source,'tests/fixtures/rc2-repairs',name,'session.v4.jsonl'),'utf8')).trim().split('\n').map(JSON.parse)
@@ -57,8 +64,10 @@ try{
  begin('artifact_digest');assert.equal(digest(await readFile(tgz)),canonical.sha256);record(currentGate,'canonical producer SHA-256 compared before install')
  begin('runtime_closure');const runtime=await inspectRuntime(dirname(hostManifest));annex.runtime_tree_sha256=runtime.sha256;await writeFile(join(output,'runtime-inventory.json'),JSON.stringify(runtime,null,2)+'\n');record(currentGate,`${runtime.identities.length} actual CLI-resolved DSH/Cordis package inventories`,{kind:'runtime_tree',id:runtime.sha256})
  begin('official_cli_install');await cli(['add',tgz]);record(currentGate,'official CLI installed canonical package under isolated home')
- begin('installed_loaded_manifest');const profilePath=join(home,'profiles',profile,'package.json'),profile=JSON.parse(await readFile(profilePath,'utf8'));const installed=dirname(await realpath(createRequire(profilePath).resolve('dsh-session-insights/package.json')));assert.deepEqual(await fileManifest(installed),canonical.files);assert.equal(JSON.parse(await readFile(join(installed,'package.json'),'utf8')).gitHead,canonical.commit);record(currentGate,'all installed package files match canonical artifact and embedded commit')
- begin('web_profile_boot');app=await boot();for(const name of ['sessionPersistence','sessionQuery','agents','commands','tools'])assert.ok(app.ctx.get(name));assert.ok(app.ctx.profileContext.startedBundles.includes('dsh-session-insights'));assert.ok(tools.every(n=>app.ctx.tools.get(n)));record(currentGate,'official Web profile boot mounted installed Bundle; private overlay disables HMR watcher and title model')
+ begin('installed_loaded_manifest');const profilePath=join(home,'profiles',profile,'package.json');const installed=dirname(await realpath(createRequire(profilePath).resolve('dsh-session-insights/package.json')));assert.deepEqual(await fileManifest(installed),canonical.files);assert.equal(JSON.parse(await readFile(join(installed,'package.json'),'utf8')).gitHead,canonical.commit);record(currentGate,'all installed package files match canonical artifact and embedded commit')
+ begin('install_noop');const profileState=async()=>(await fileManifest(dirname(profilePath))).filter(file=>!file.path.startsWith('.plugin-manager/logs/'));const beforeInstall=await profileState();await cli(['add',tgz]);assert.deepEqual(await profileState(),beforeInstall);assert.deepEqual(await fileManifest(installed),canonical.files);record(currentGate,'second official install preserves installed/configuration bytes; manager operation logs are separately excluded')
+ begin('official_reinstall');await cli(['remove','dsh-session-insights']);await cli(['add',tgz]);const reinstalled=dirname(await realpath(createRequire(profilePath).resolve('dsh-session-insights/package.json')));assert.deepEqual(await fileManifest(reinstalled),canonical.files);record(currentGate,'official uninstall and reinstall restored all canonical package bytes')
+ begin('profile_service_boot');app=await boot();for(const name of ['sessionPersistence','sessionQuery','agents','commands','tools'])assert.ok(app.ctx.get(name));assert.ok(app.ctx.profileContext.startedBundles.includes('dsh-session-insights'));assert.ok(tools.every(n=>app.ctx.tools.get(n)));record(currentGate,profile==='web'?'official Web profile boot mounted installed Bundle; private overlay disables HMR watcher and title model':'official Headless profile services mounted installed Bundle; one-shot runner is paused for deterministic service checks; actual CLI model task is a separate gate')
  begin('real_persistence');for(const item of [['recovery-mixed-group','native-target',project],['optional-isError','native-unrelated',join(work,'unrelated')]]){const a=await fixture(...item);const h=await app.ctx.sessionPersistence.create(a.header,{inheritedEventCount:a.inheritedEventCount});try{await h.append(a.events);await h.flush()}finally{await h.close()}}
  assert.equal((await app.ctx.sessionPersistence.list()).length,2);record(currentGate,'two nonempty official strict fixtures appended, flushed and closed through actual JSONL persistence')
  await app.shutdown.shutdown(0);app=undefined

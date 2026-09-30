@@ -62,7 +62,7 @@ async function main() {
   try {
     const bytes = await readFile(options.package)
     record('artifact_digest', digest(bytes) === options['expected-sha256'], 'accepted SHA-256 compared before install')
-    work = await mkdtemp(join(options.workdir, 'host-acceptance-'))
+    work = await realpath(await mkdtemp(join(options.workdir, 'host-acceptance-')))
     const home = join(work, 'dsh-home'), extraction = join(work, 'artifact')
     await mkdir(home); await mkdir(extraction)
     // Store resolves DSH_HOME in this process, not just CLI children.
