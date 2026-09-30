@@ -1,5 +1,5 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { resolve, sep } from 'node:path'
+import { resolve } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { Store, MAX_JSON_BYTES } from './storage.js'
 import { normalizeProjectKey } from './analyzer.js'
@@ -100,6 +100,11 @@ function normalizeOptions(input = {}) {
   if (!LOCALES.has(result.locale)) throw new Error('locale must be zh-CN or en')
   return result
 }
+function matchesProject(cwd, project) {
+  const key = normalizeProjectKey(resolve(String(cwd || '')))
+  const root = normalizeProjectKey(resolve(project))
+  return key === root || key.startsWith(root.endsWith('/') ? root : root + '/')
+}
 
 async function collectSnapshots(ctx, options, signal) {
   cancelled(signal)
@@ -124,34 +129,32 @@ async function collectSnapshots(ctx, options, signal) {
     )
       continue
     if (options.project) {
-      const normalize = (p) =>
-        process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p)
-      const cwd = normalize(String(header.cwd || '')),
-        project = normalize(options.project)
-      if (cwd !== project && !cwd.startsWith(project + sep)) continue
+      if (!matchesProject(header.cwd, options.project)) continue
     }
+    if (snapshots.length >= 2000)
+      throw new Error('session selection exceeds the native analysis bound; reduce --days or filter --project')
     const observation = await ctx.sessionQuery.observeSession(header.id, {signal, projectionMode: 'none'})
     let snapshot
     try {
       cancelled(signal)
-      snapshot = structuredClone({session: observation.header, events: observation.events,
-        inheritedEventCount: observation.inheritedEventCount})
+      const borrowed = {session: observation.header, events: observation.events,
+        inheritedEventCount: observation.inheritedEventCount}
+      // The query API materializes a session before returning its lease. Check
+      // its serialized size before making a detached copy or sending a Worker.
+      const selectedBytes = Buffer.byteLength(JSON.stringify(borrowed))
+      if (selectedBytes > 64 * 1024 * 1024 - bytes)
+        throw new Error('session selection exceeds the native analysis bound; reduce --days or filter --project')
+      snapshot = structuredClone(borrowed)
+      bytes += selectedBytes
     } finally {
       observation[Symbol.dispose]()
     }
     if (snapshot.session.id !== header.id) throw new Error('session identity changed; retry analysis')
     if (snapshot.session.createdAt < cutoff || snapshot.session.createdAt > options.now) continue
     if (options.project) {
-      const normalize = p => process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p)
-      const cwd = normalize(String(snapshot.session.cwd || '')), project = normalize(options.project)
-      if (cwd !== project && !cwd.startsWith(project + sep)) continue
+      if (!matchesProject(snapshot.session.cwd, options.project)) continue
     }
     cancelled(signal)
-    bytes += Buffer.byteLength(JSON.stringify(snapshot))
-    if (bytes > 64 * 1024 * 1024 || snapshots.length >= 2000)
-      throw new Error(
-        'session selection exceeds the native analysis bound; reduce --days or filter --project',
-      )
     snapshots.push(snapshot)
   }
   return snapshots
@@ -161,10 +164,10 @@ async function prepare(ctx, raw, signal, scheduleAnalysis) {
   const store = new Store()
   if (raw.resume) return resumeRun(store, raw, signal)
   const options = { ...normalizeOptions(raw), now: Date.now() }
-  const snapshots = await scheduleAnalysis(signal, () =>
-    collectSnapshots(ctx, options, signal),
-  )
-  const built = await analyze(snapshots, options, signal)
+  const built = await scheduleAnalysis(signal, async () => {
+    const snapshots = await collectSnapshots(ctx, options, signal)
+    return analyze(snapshots, options, signal)
+  })
   cancelled(signal)
   const run = store.create()
   return prepareSemantic(store, run, built)
@@ -198,12 +201,6 @@ const SCOPE_FIELDS = [
 ]
 const scopeEqual = (a, b) =>
   SCOPE_FIELDS.every((k) => JSON.stringify(a[k]) === JSON.stringify(b[k]))
-function selectionScope(options) {
-  return {
-    ...requestedScope(options),
-    window_end: new Date(options.now).toISOString(),
-  }
-}
 async function resumeRun(store, raw, signal) {
   cancelled(signal)
   const requested = requestedScope(raw)
@@ -260,10 +257,10 @@ function resumedResult(workdir, m) {
 }
 async function deterministicReport(ctx, raw, signal, scheduleAnalysis) {
   const options = { ...normalizeOptions(raw), now: Date.now() }
-  const snapshots = await scheduleAnalysis(signal, () =>
-    collectSnapshots(ctx, options, signal),
-  )
-  const built = await analyze(snapshots, options, signal)
+  const built = await scheduleAnalysis(signal, async () => {
+    const snapshots = await collectSnapshots(ctx, options, signal)
+    return analyze(snapshots, options, signal)
+  })
   cancelled(signal)
   const store = new Store(),
     run = store.create()
@@ -359,6 +356,7 @@ export function apply(ctx) {
         const index = gate.queue.indexOf(task)
         if (index >= 0) {
           gate.queue.splice(index, 1)
+          signal?.removeEventListener('abort', abort)
           rejectTask(new Error('session insights cancelled'))
         }
       }
@@ -487,6 +485,7 @@ export function apply(ctx) {
         const viewHint = options.no_open
           ? ''
           : '\nOpen the report file in a local browser to view it; the HTML works offline and nothing is uploaded.'
+        const reportText = path => options.no_open ? path : `Session insights report: ${path}${viewHint}`
         if (options.deterministic) {
           const result = await deterministicReport(
             ctx,
@@ -496,7 +495,7 @@ export function apply(ctx) {
           )
           return {
             kind: 'success',
-            text: `Session insights report: ${result.report}${viewHint}`,
+            text: reportText(result.report),
           }
         }
         const result = await prepare(ctx, options, signal, scheduleAnalysis)
@@ -508,7 +507,7 @@ export function apply(ctx) {
           )
           return {
             kind: 'success',
-            text: `Session insights report: ${report.report}${viewHint}`,
+            text: reportText(report.report),
           }
         }
         if (!invocation.agent?.followup)

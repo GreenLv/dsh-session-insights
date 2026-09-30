@@ -306,7 +306,14 @@ test('--no-open returns a bare path line without any view hint', async () => {
     assert.match(open.text.split('\n')[0], /^Session insights report: \S+$/)
     assert.match(open.text, /Open the report file in a local browser/)
     const closed = await registered.commands[0].handler({ rawInput: '--deterministic --locale en --no-open', signal, agent: registered.agent })
-    assert.match(closed.text, /^Session insights report: \S+$/)
+    assert.equal(closed.kind, 'success')
+    assert.ok(closed.text.endsWith('/report.html'))
+    assert.equal(closed.text.split('\n').length, 1)
+    await access(closed.text)
+    const metrics = await registered.commands[0].handler({ rawInput: '--privacy metrics --locale en --no-open', signal, agent: registered.agent })
+    assert.equal(metrics.kind, 'success')
+    assert.equal(metrics.text.split('\n').length, 1)
+    await access(metrics.text)
     assert.ok(!closed.text.includes('Open the report file'), 'no view hint may be appended with --no-open')
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME

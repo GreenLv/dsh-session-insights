@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import tracemalloc
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -37,6 +38,48 @@ def compress(frames: list[bytes]) -> bytes:
 
 
 class ReadBudgetTests(unittest.TestCase):
+    def test_streaming_decode_refuses_before_expanding_known_or_unknown_frames(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            header = (json.dumps(records()[0]) + "\n").encode()
+            for known in [True, False]:
+                compressor = zstandard.ZstdCompressor(write_content_size=known, write_checksum=True)
+                payload = compressor.compress(header) + compressor.compress(b"x" * (8 * 1024 * 1024))
+                path = write_raw(home, "session.v4.jsonl.zstd", payload)
+                tracemalloc.start()
+                try:
+                    with mock.patch.object(analyzer, "MAX_DECODED_LOG_BYTES", 4096):
+                        with self.assertRaises(analyzer.DshSessionLogResourceLimit):
+                            analyzer.read_dsh_jsonl_lines(path)
+                    _, peak = tracemalloc.get_traced_memory()
+                    self.assertLess(peak, 2 * 1024 * 1024, f"whole frame expanded: known={known}")
+                finally:
+                    tracemalloc.stop()
+
+    def test_partial_line_limit_stops_before_reading_the_remaining_stream(self):
+        stream = mock.Mock()
+        stream.read.side_effect = [b"x" * 32] * 100 + [b""]
+        with mock.patch.object(analyzer, "MAX_LOG_LINE_BYTES", 16):
+            with self.assertRaises(analyzer.DshSessionLogResourceLimit):
+                analyzer._read_capped_lines(stream)
+        self.assertEqual(stream.read.call_count, 1)
+
+    def test_unknown_size_multiframe_checksums_and_all_tail_truncations(self):
+        with tempfile.TemporaryDirectory() as temp:
+            rows = [json.dumps(item).encode() + b"\n" for item in records()]
+            compressor = zstandard.ZstdCompressor(write_content_size=False, write_checksum=True)
+            first = compressor.compress(rows[0])
+            second = compressor.compress(b"".join(rows[1:]))
+            path = write_raw(Path(temp), "session.v4.jsonl.zstd", first + second)
+            self.assertEqual(len(analyzer.read_dsh_jsonl_lines(path)), len(rows))
+            for removed in range(1, len(second)):
+                path.write_bytes((first + second)[:-removed])
+                self.assertIsNone(analyzer.read_dsh_jsonl_lines(path), removed)
+            broken = bytearray(first + second)
+            broken[-1] ^= 0x80
+            path.write_bytes(broken)
+            self.assertIsNone(analyzer.read_dsh_jsonl_lines(path))
+
     def test_decoded_byte_budget_refuses_with_explainable_error(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)

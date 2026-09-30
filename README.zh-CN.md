@@ -41,7 +41,7 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 **DSH 兼容性：** 软件包要求 `>=0.2.0-rc.2`；DSH `0.2.0-rc.1` 低于支持下限，后续版本按声明的范围准入，不依赖静态版本表。契约与服务测试覆盖合成 V4 输入；具体制品的宿主、模型、平台与页面验收结果分别记录。详见 [DSH 兼容性](#dsh-兼容性)。
 
-把 0.6.0 Bundle 安装到 DSH profile，再启动该 profile：
+0.6.0 当前为未发布候选；发布核实前，请使用下方的本地源码安装步骤。发布后可把对应 Bundle 安装到 DSH profile，再启动该 profile：
 
 ```bash
 dsh plugin --profile web add dsh-session-insights@0.6.0
@@ -69,7 +69,7 @@ npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 
 
 ### 官方 Desktop
 
-同一 Bundle 可在官方 DeepSeek Desktop（RC.2 及以上）中运行。Desktop 通过自带的应用 carrier、内置 Node 运行时和命令图管理插件——不使用 Web profile 的 npm CLI，不修改 `app.asar`，也不依赖 Python。安装、升级、重装与卸载请通过 Desktop 的插件管理界面（或应用内插件命令）正常进行；Windows 上如重装时提示文件被占用（`EPERM`），请先完全退出应用（含托盘与 child host）再重试——失败的安装会保留原有状态。插件读取 Desktop 提供的 `DSH_HOME`，含中文或空格的路径是安全的；报表查看与 Web runtime 一致：命令返回 HTML 路径，用本地浏览器打开即可（`--no-open` 可省略查看提示）。
+Desktop 共用 Node 分析实现，其插件 profile 由官方 Electron 应用管理；npm CLI 会拒绝 `--profile desktop`。请通过应用内的插件管理或应用自带的命令 carrier 安装或卸载 Bundle。macOS carrier 位于 `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`，安装调用为 `plugin --profile desktop add <package>`。使用未发布候选前，请查看[候选验收记录](docs/acceptance/v0.6.0-candidate.md)中各平台已观察到的结果。Windows 如因文件占用出现 `EPERM`，应在重装前关闭主程序及其 child host。命令返回 HTML 路径后，可用本地浏览器查看；传入 `--no-open` 时只返回路径，不附查看提示。
 
 ## 获取渠道
 
@@ -198,7 +198,7 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 ## DSH 兼容性
 
-每个产品版本只适配一个经过验证的 DSH 版本。不维护历史宿主，也不会在新版 DSH 发布后自动将其视为已支持。旧版宿主请升级到下面注明的版本。
+最低支持宿主与实际测试版本分开记录。声明范围准入 RC.2 及以上版本，包括后续预发布版本；输入格式和 API 检查仍会拒绝不兼容的操作。准入规则不代表未来宿主已经过实测。
 
 本版要求 DSH `>=0.2.0-rc.2`，拒绝更旧宿主；输入格式仍为 V4。原生分析读取宿主恢复后的 V4 快照；可选 Python CLI 只读取 `session.v4.jsonl` 和 `session.v4.jsonl.zstd`。旧原始日志需先由上游 DSH 迁移。当前文件损坏或存在高于 V4 的代数时，不会回退读取旧文件。
 
@@ -208,7 +208,7 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 DSH 把定时消息写为 user role、`source.kind=schedule` 的消息；RC.2 新增异步问答回复，`source.kind=user-question-reply`。两者都不算用户工作：都单独计入注入上下文、不进入对话证据、纠正/验收信号与完成推断，也不能构成任何授权。只有 `source.kind=user` 的人类消息才贡献正文证据。官方恢复结果使用结构化错误码 `TOOL_OUTCOME_UNKNOWN` 和 `TOOL_NOT_STARTED`，与确认失败分开统计：`tool_recovery` 按 `{outcome_unknown, not_started}` 在每个会话和总量中单独计数。`TOOL_OUTCOME_UNKNOWN` 表示已记录的调用没有持久化的最终结果，工具可能已产生副作用；`TOOL_NOT_STARTED` 表示日志中没有该调用开始的记录。两者都不计入工具失败或验证失败，也不证明工具执行过或没有执行。仅正文提到恢复码的文本仍按一般结果规则分类。重试可能改变数据的操作前，应先核实外部状态。
 
-0.5.1 的候选审查范围记录在 [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md)。[0.5.0 发布验收记录](docs/acceptance/v0.5.0-release.md)和[冻结的 0.5.0 候选记录](docs/acceptance/v0.5.0-rc2-candidate.md)只适用于那个 0.5.0 实现及其注明的宿主。历史验收只适用于各自注明的实现。
+0.6.0 的独立复核和待验收项记录在 [docs/acceptance/v0.6.0-candidate.md](docs/acceptance/v0.6.0-candidate.md)。0.5.1 的候选审查范围记录在 [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md)。[0.5.0 发布验收记录](docs/acceptance/v0.5.0-release.md)和[冻结的 0.5.0 候选记录](docs/acceptance/v0.5.0-rc2-candidate.md)只适用于那个 0.5.0 实现及其注明的宿主。历史验收只适用于各自注明的实现。
 
 ## 会话日志代际
 

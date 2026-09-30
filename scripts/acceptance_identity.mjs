@@ -30,7 +30,11 @@ export async function inspectRuntime(root) {
   const manifest = JSON.parse(await readFile(anchor, 'utf8'))
   const identities = [], seen = new Set()
   async function visit(name, from) {
-    const req = createRequire(from), entry = await realpath(req.resolve(name))
+    const req = createRequire(from)
+    let resolved
+    try { resolved = req.resolve(name + '/package.json') }
+    catch { resolved = req.resolve(name) }
+    const entry = await realpath(resolved)
     let dir = dirname(entry), metadata, packagePath
     for (;;) {
       packagePath = join(dir, 'package.json')
@@ -42,12 +46,16 @@ export async function inspectRuntime(root) {
     }
     if (seen.has(packagePath)) return
     seen.add(packagePath)
-    if (name.startsWith('@deepseek-ai/dsh-') && metadata.version !== TARGET) throw new Error('mixed DSH runtime closure')
+    if ((name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-')) && metadata.version !== TARGET) throw new Error('mixed DSH runtime closure')
     if (name === '@deepseek-ai/cordis' && metadata.version !== '4.0.4') throw new Error('unexpected Cordis runtime')
     identities.push({name, version: metadata.version, files: await fileManifest(dir)})
     for (const dependency of Object.keys({...metadata.dependencies, ...metadata.peerDependencies})) {
       if (!dependency.startsWith('@deepseek-ai/dsh-') && dependency !== '@deepseek-ai/cordis') continue
-      try { createRequire(packagePath).resolve(dependency) }
+      try {
+        const dependencyRequire = createRequire(packagePath)
+        try { dependencyRequire.resolve(dependency + '/package.json') }
+        catch { dependencyRequire.resolve(dependency) }
+      }
       catch { if (metadata.peerDependenciesMeta?.[dependency]?.optional) continue; throw new Error('required DSH peer missing') }
       await visit(dependency, packagePath)
     }

@@ -41,7 +41,7 @@ The `0.6.0` Bundle requires DSH `>=0.2.0-rc.2` and Node.js `^22.19.0 || >=24.0.0
 
 **DSH compatibility:** The package requires `>=0.2.0-rc.2`; DSH `0.2.0-rc.1` is below the supported floor and later releases are admitted by the declared range, not by static version tables. Contract and service tests cover synthetic V4 input. Consult the acceptance record for artifact-specific host, model, platform and browser results. See [DSH compatibility](#dsh-compatibility).
 
-Install the matching 0.6.0 Bundle into your DSH profile:
+0.6.0 is currently an unreleased candidate. Use the local checkout instructions below until its release is verified. After publication, install the matching Bundle into your DSH profile:
 
 ```bash
 dsh plugin --profile web add dsh-session-insights@0.6.0
@@ -69,7 +69,7 @@ The npm package has no install or build lifecycle script. The registry command i
 
 ### Official Desktop
 
-The same Bundle runs in the official DeepSeek Desktop app (RC.2 or newer), which manages plugins through its own app carrier, bundled Node runtime and command graph — no Web-profile CLI, no `app.asar` edits and no Python requirement. Install, upgrade, reinstall and remove the Bundle through the Desktop plugin management UI (or the app's plugin commands) while the app is running normally; on Windows, quit the app completely (including the tray/child host) before reinstalling if a file is reported as in use (`EPERM`), then retry — a failed install leaves the previous state intact. The plugin reads the Desktop-provided `DSH_HOME`, so paths with Chinese characters or spaces are safe; report viewing follows the same rule as the Web runtime: the command reports the HTML path and you open it with your local browser (or pass `--no-open` to suppress the hint).
+Desktop uses the same Node analysis implementation. Its plugin profile is managed by the official Electron application; the npm CLI rejects `--profile desktop`. Use the app's plugin controls or its bundled command carrier to manage the Bundle. On macOS that carrier is `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`; invoke it with `plugin --profile desktop add <package>`. Check the [candidate acceptance record](docs/acceptance/v0.6.0-candidate.md) for the observed results on each platform before using an unpublished candidate. On Windows, close the main app and its child host before reinstalling when files are in use (`EPERM`). Report viewing uses the HTML path returned by the command; open it in your local browser, or pass `--no-open` for a path without the viewing hint.
 
 ## Availability
 
@@ -198,7 +198,7 @@ Historical 0.2.0 package, CI, native macOS, and focused native Windows evidence 
 
 ## DSH compatibility
 
-Each product release targets one verified DSH version. We do not maintain historical hosts or treat a newer DSH release as supported before validation. Upgrade an older host to the version named below.
+The minimum supported host is fixed separately from the versions actually tested. The declared range admits DSH releases at or above RC.2, including later prereleases. Input-format and API checks still reject incompatible operations; admission is not evidence that a future host has been tested.
 
 This version requires DSH `>=0.2.0-rc.2` and refuses older hosts; input remains V4. Native analysis uses host-restored V4 snapshots; the optional Python CLI reads only `session.v4.jsonl` and `session.v4.jsonl.zstd`. Migrate older raw logs with upstream DSH before using the CLI. It never falls back to an older generation when the current file is corrupt or newer than V4.
 
@@ -208,7 +208,7 @@ Tool workload includes recorded programmatic tool calling (PTC) inner calls. The
 
 DSH writes scheduled prompts as user-role messages with source kind `schedule`, and RC.2 adds asynchronous question replies with source kind `user-question-reply`. Neither is treated as user work: both are counted separately as injected context, excluded from conversation evidence, corrections, acceptance signals and completion inference, and can never authorize an action. Only human user messages with source kind `user` contribute body evidence. Official recovery results with the structured error codes `TOOL_OUTCOME_UNKNOWN` and `TOOL_NOT_STARTED` are classified separately from confirmed failures: `tool_recovery` counts `{outcome_unknown, not_started}` per session and in totals. `TOOL_OUTCOME_UNKNOWN` means a recorded call's completed outcome was not durably recorded, so the tool may have produced side effects; `TOOL_NOT_STARTED` means the log has no record of the call starting. Neither state is counted as a tool failure or a failed verification, and neither proves that a tool executed or that it did nothing. Text that merely mentions a recovery code is classified by the ordinary result rules. Verify external state before retrying an operation that can change data.
 
-The 0.5.1 candidate review scope is recorded in [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md). The [0.5.0 release acceptance](docs/acceptance/v0.5.0-release.md) and the [frozen 0.5.0 candidate record](docs/acceptance/v0.5.0-rc2-candidate.md) apply only to that 0.5.0 implementation and its named host. Historical acceptance records apply only to their named implementations.
+The 0.6.0 independent review and pending gates are recorded in [docs/acceptance/v0.6.0-candidate.md](docs/acceptance/v0.6.0-candidate.md). The 0.5.1 candidate review scope is recorded in [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md). The [0.5.0 release acceptance](docs/acceptance/v0.5.0-release.md) and the [frozen 0.5.0 candidate record](docs/acceptance/v0.5.0-rc2-candidate.md) apply only to that 0.5.0 implementation and its named host. Historical acceptance records apply only to their named implementations.
 
 ## Session log generations
 

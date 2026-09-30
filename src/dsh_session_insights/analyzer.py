@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
-import io
 import importlib.resources
 import json
 import math
@@ -1642,6 +1641,8 @@ MAX_LOG_LINES = 200_000
 MAX_LOG_LINE_BYTES = 32 * 1024 * 1024
 MAX_HEADER_FRAME_BYTES = 4 * 1024 * 1024
 _DECODE_CHUNK_BYTES = 1024 * 1024
+MAX_ZSTD_WINDOW_BYTES = 64 * 1024 * 1024
+_ZSTD_BLOCK_BYTES = 128 * 1024
 
 
 class DshSessionLogResourceLimit(ValueError):
@@ -1649,14 +1650,15 @@ class DshSessionLogResourceLimit(ValueError):
 
 
 def _read_capped_lines(stream: Any) -> list[str]:
+    return _read_capped_chunks(iter(lambda: stream.read(_DECODE_CHUNK_BYTES), b""))
+
+
+def _read_capped_chunks(chunks: Any) -> list[str]:
     """Stream-split a decoded byte stream into JSONL lines under read budgets."""
     lines: list[str] = []
     total = 0
     pending = bytearray()
-    while True:
-        chunk = stream.read(_DECODE_CHUNK_BYTES)
-        if not chunk:
-            break
+    for chunk in chunks:
         total += len(chunk)
         if total > MAX_DECODED_LOG_BYTES:
             raise DshSessionLogResourceLimit(
@@ -1680,6 +1682,10 @@ def _read_capped_lines(stream: Any) -> list[str]:
                 )
             lines.append(line.decode("utf-8"))
         del pending[:start]
+        if len(pending) > MAX_LOG_LINE_BYTES:
+            raise DshSessionLogResourceLimit(
+                f"log line exceeds {MAX_LOG_LINE_BYTES} bytes; refusing to truncate"
+            )
     if pending:
         if len(pending) > MAX_LOG_LINE_BYTES:
             raise DshSessionLogResourceLimit(
@@ -1712,56 +1718,98 @@ def read_dsh_jsonl_lines(path: Path) -> list[str] | None:
             return None
     zstandard = get_zstandard()
     try:
-        encoded = path.read_bytes()
-    except OSError:
+        with path.open("rb") as stream:
+            return _read_capped_chunks(_iter_zstd_blocks(stream, zstandard))
+    except (OSError, EOFError, UnicodeDecodeError, zstandard.ZstdError):
         return None
-    if len(encoded) > MAX_DECODED_LOG_BYTES:
-        raise DshSessionLogResourceLimit(
-            f"encoded log exceeds {MAX_DECODED_LOG_BYTES} bytes; refusing to truncate"
-        )
-    # Decode frame by frame: a truncated final frame reports eof=False instead
-    # of raising, so it is detected here and the file is recorded unreadable —
-    # the tail is never silently dropped.
-    frames: list[bytes] = []
-    pending = encoded
-    try:
-        while pending:
-            decompressor = zstandard.ZstdDecompressor().decompressobj()
-            try:
-                chunk = decompressor.decompress(pending)
-            except zstandard.ZstdError:
-                return None
-            except Exception as exc:
-                if exc.__class__.__module__ in {"zstandard", "zstd"}:
-                    return None
-                raise
-            if not decompressor.eof:
-                return None
-            frames.append(chunk)
-            if sum(map(len, frames)) > MAX_DECODED_LOG_BYTES:
+
+
+def _iter_zstd_blocks(stream: Any, zstandard: Any) -> Any:
+    """Decode at most one 128 KiB Zstandard block per call, retaining EOF checks.
+
+    Block framing follows the official Zstandard format. The library validates
+    headers, compressed data, checksums and EOF; this reader only limits each
+    input call so decompressobj cannot allocate a whole expanded frame first.
+    https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md
+    """
+    encoded = 0
+    decoded = 0
+    frame_index = 0
+
+    def exact(size: int) -> bytes:
+        nonlocal encoded
+        data = stream.read(size)
+        encoded += len(data)
+        if encoded > MAX_DECODED_LOG_BYTES:
+            raise DshSessionLogResourceLimit(
+                f"encoded log exceeds {MAX_DECODED_LOG_BYTES} bytes; refusing to truncate"
+            )
+        if len(data) != size:
+            raise EOFError("truncated Zstandard frame")
+        return data
+
+    while True:
+        # Frame headers occupy at most 18 bytes including the magic number.
+        start = stream.tell()
+        probe = stream.read(18)
+        if not probe:
+            if frame_index == 0:
+                raise EOFError("empty Zstandard log")
+            return
+        header_size = zstandard.frame_header_size(probe)
+        stream.seek(start)
+        header = exact(header_size)
+        parameters = zstandard.get_frame_parameters(header)
+        if parameters.window_size > MAX_ZSTD_WINDOW_BYTES:
+            raise DshSessionLogResourceLimit(
+                f"Zstandard window exceeds {MAX_ZSTD_WINDOW_BYTES} bytes; refusing to truncate"
+            )
+        known_size = parameters.content_size not in {
+            zstandard.CONTENTSIZE_UNKNOWN, zstandard.CONTENTSIZE_ERROR
+        }
+        if known_size and parameters.content_size > MAX_DECODED_LOG_BYTES - decoded:
+            raise DshSessionLogResourceLimit(
+                f"decoded log exceeds {MAX_DECODED_LOG_BYTES} bytes; refusing to truncate"
+            )
+        if frame_index == 0 and known_size and parameters.content_size > MAX_HEADER_FRAME_BYTES:
+            raise DshSessionLogResourceLimit(
+                f"V4 header frame exceeds {MAX_HEADER_FRAME_BYTES} bytes"
+            )
+        obj = zstandard.ZstdDecompressor().decompressobj()
+        obj.decompress(header)
+        first = bytearray()
+        while True:
+            block_header = exact(3)
+            value = int.from_bytes(block_header, "little")
+            last, kind, size = value & 1, (value >> 1) & 3, value >> 3
+            if kind == 3 or size > _ZSTD_BLOCK_BYTES:
+                raise zstandard.ZstdError("invalid Zstandard block header")
+            payload = exact(1 if kind == 1 else size)
+            chunk = obj.decompress(block_header + payload)
+            decoded += len(chunk)
+            if decoded > MAX_DECODED_LOG_BYTES:
                 raise DshSessionLogResourceLimit(
                     f"decoded log exceeds {MAX_DECODED_LOG_BYTES} bytes; refusing to truncate"
                 )
-            pending = decompressor.unused_data
-    except zstandard.ZstdError:
-        return None
-    except Exception as exc:
-        if exc.__class__.__module__ in {"zstandard", "zstd"}:
-            return None
-        raise
-    if not frames:
-        return None
-    first = frames[0]
-    if len(first) > MAX_HEADER_FRAME_BYTES:
-        raise DshSessionLogResourceLimit(
-            f"V4 header frame exceeds {MAX_HEADER_FRAME_BYTES} bytes"
-        )
-    if not first or first.count(b"\n") != 1 or not first.endswith(b"\n"):
-        raise ValueError("V4 first frame must contain exactly the header line")
-    try:
-        return _read_capped_lines(io.BytesIO(b"".join(frames)))
-    except UnicodeDecodeError:
-        return None
+            if frame_index == 0:
+                first.extend(chunk)
+                if len(first) > MAX_HEADER_FRAME_BYTES:
+                    raise DshSessionLogResourceLimit(
+                        f"V4 header frame exceeds {MAX_HEADER_FRAME_BYTES} bytes"
+                    )
+            elif chunk:
+                yield chunk
+            if last:
+                break
+        if parameters.has_checksum:
+            obj.decompress(exact(4))
+        if not obj.eof:
+            raise EOFError("truncated Zstandard frame")
+        if frame_index == 0:
+            if not first or first.count(b"\n") != 1 or not first.endswith(b"\n"):
+                raise ValueError("V4 first frame must contain exactly the header line")
+            yield bytes(first)
+        frame_index += 1
 
 
 def dsh_content_text(value: Any) -> str:

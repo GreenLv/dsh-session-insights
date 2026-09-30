@@ -73,7 +73,7 @@ test('notice helper creates immutable unique producer-owned user messages',()=>{
  assert.notEqual(a.id,b.id);assert.equal(a.source.kind,'session-insights');assert.equal(a.role,'user');assert.ok(Object.isFrozen(a));assert.ok(!('plugin' in a.source))
 })
 test('selection accepts 2000 but rejects 2001 snapshots and handles empty collections',async()=>{
- const run=async count=>{const data=Array.from({length:count},(_,i)=>({header:{...snapshot().session,id:`s${i}`}}));let releases=0;const sessionQuery={async listSessions(){return data},async observeSession(id){return {header:data.find(r=>r.header.id===id).header,events:[],inheritedEventCount:0,[Symbol.dispose](){releases++}}}};try{return await _test.collectSnapshots({sessionQuery},options)}finally{assert.equal(releases,count)}}
+ const run=async count=>{const data=Array.from({length:count},(_,i)=>({header:{...snapshot().session,id:`s${i}`}}));let releases=0;const sessionQuery={async listSessions(){return data},async observeSession(id){return {header:data.find(r=>r.header.id===id).header,events:[],inheritedEventCount:0,[Symbol.dispose](){releases++}}}};try{return await _test.collectSnapshots({sessionQuery},options)}finally{assert.equal(releases,Math.min(count,2000))}}
  assert.equal((await run(0)).length,0);assert.equal((await run(2000)).length,2000);await assert.rejects(run(2001),/bound/)
 })
 test('image offload, schedule context and opaque events never introduce body evidence',()=>{

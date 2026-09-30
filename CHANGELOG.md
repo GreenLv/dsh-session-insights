@@ -4,7 +4,7 @@
 
 Public releases are listed newest first.
 
-## 0.6.0 - 2026-09-30
+## 0.6.0 - Unreleased
 
 Requires DSH `>=0.2.0-rc.2`; DSH `0.2.0-rc.1` is below the supported floor. Input remains V4. Desktop support, resume scoping and native acceptance are recorded separately per artifact.
 
@@ -16,6 +16,8 @@ Requires DSH `>=0.2.0-rc.2`; DSH `0.2.0-rc.1` is below the supported floor. Inpu
 - Bound Python session-log reads: streaming JSONL with hard budgets for decoded bytes, line count and single-line size, frame-by-frame zstd decoding that detects truncated final frames, refusal of oversized header frames and high compression ratios, and explicit `resource_limited_files` coverage instead of silent truncation or older-generation fallback. Corrupt UTF-8 is reported as unreadable instead of crashing the run.
 - Classify RC.2 asynchronous question replies (`source.kind=user-question-reply`) and scheduled prompts (`schedule`) as injected context in the native reader: counted separately, excluded from body evidence, corrections, acceptance signals and completion inference, and never treated as authorization.
 - Give `--no-open` a verifiable meaning: the command output stays a bare path line with no view hint, no opened files, no resident server and no upload; the default output appends one view hint naming the report file. Documented viewing steps for the Web runtime and the official Desktop keep the offline HTML as the only report surface.
+
+- Independent review fixes project-filtered preparation, keeps each scheduler slot until Worker termination, validates recorded selection fingerprints, and checks compressed-log budgets during block decoding. Completed `--no-open` results contain only the report path.
 
 ## 0.5.1 - 2026-09-29
 
