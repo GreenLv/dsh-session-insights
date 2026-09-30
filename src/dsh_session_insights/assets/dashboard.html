@@ -190,6 +190,10 @@
       grid-auto-rows: 1fr;
       gap: 14px;
     }
+    .glance-grid > :only-child, .insight-grid > :only-child,
+    .work-area-grid > :only-child, .recommendation-grid > :only-child {
+      grid-column: 1 / -1;
+    }
     .glance-item, .insight-card, .work-area-card, .recommendation-card {
       padding: 17px;
       background: var(--card);
@@ -416,7 +420,7 @@
       .shell { width: min(100% - 20px, 1180px); padding-top: 18px; }
       .toolbar, .kpis { grid-template-columns: 1fr; }
       .usage-grid { grid-template-columns: 1fr; }
-      .actions { grid-column: auto; }
+      .actions { grid-column: auto; flex-wrap: wrap; }
       .actions button { flex: 1 1 auto; max-width: none; }
       .bar-row { grid-template-columns: 1fr auto; }
       .bar-track { grid-column: 1 / -1; grid-row: 2; }
