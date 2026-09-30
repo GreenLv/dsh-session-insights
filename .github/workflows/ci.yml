@@ -56,7 +56,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm ci --ignore-scripts
       - run: npm ci --prefix tests/dsh-runtime --ignore-scripts
-      - run: node scripts/verify_session_contract.mjs --fixture --runtime tests/dsh-runtime --expected-dsh-version 0.2.0-rc.1 --required
+      - run: node scripts/verify_session_contract.mjs --fixture --runtime tests/dsh-runtime --expected-dsh-version 0.2.0-rc.2 --required
       - run: node scripts/dsh-repair-fixtures.mjs tests/dsh-runtime --check
       - run: node scripts/dsh-contract-tests.mjs tests/dsh-runtime
       - run: node scripts/dsh-services.mjs tests/dsh-runtime

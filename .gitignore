@@ -11,3 +11,6 @@ reports/
 *.data.json
 
 node_modules/
+
+# Local development task plans stay out of the public tree.
+docs/DEVELOPMENT_PLAN_*.md

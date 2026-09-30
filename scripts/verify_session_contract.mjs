@@ -4,7 +4,7 @@ import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const TARGET = '0.2.0-rc.1'
+const TARGET = '0.2.0-rc.2'
 import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
 async function loadValidators(runtime) {

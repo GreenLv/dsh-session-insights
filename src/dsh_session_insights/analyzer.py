@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
+import io
 import importlib.resources
 import json
 import math
@@ -25,7 +26,7 @@ from .v4 import IDENTITY, validate_records
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.5.1-v4-dsh020rc1.2"
+ANALYZER_VERSION = "0.6.0-v4-dsh020rc2.1"
 FAILURE_RULE_VERSION = "5.1.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
@@ -532,6 +533,7 @@ def parse_coverage_state() -> dict[str, Any]:
         "skipped_project": 0,
         "missing_metadata": 0,
         "unreadable_files": 0,
+        "resource_limited_files": 0,
         "malformed_lines": 0,
         "partial_sessions": 0,
         "unknown_record_types": Counter(),
@@ -543,6 +545,7 @@ def cached_parse_delta(coverage: dict[str, Any]) -> dict[str, Any]:
     return {
         "missing_metadata": int(coverage["missing_metadata"]),
         "unreadable_files": int(coverage["unreadable_files"]),
+        "resource_limited_files": int(coverage.get("resource_limited_files", 0)),
         "malformed_lines": int(coverage["malformed_lines"]),
         "unknown_record_types": Counter(coverage["unknown_record_types"]),
         "surface_replacements": int(coverage.get("surface_replacements", 0)),
@@ -1631,36 +1634,134 @@ def dsh_log_compression(path: Path) -> str:
     return "zstd" if path.name.endswith(".zstd") else "none"
 
 
+# Hard read budgets for one session log. A log that exceeds any budget is
+# refused with an explainable error (counted as a resource-limited file), never
+# silently truncated and never replaced by an older generation.
+MAX_DECODED_LOG_BYTES = 512 * 1024 * 1024
+MAX_LOG_LINES = 200_000
+MAX_LOG_LINE_BYTES = 32 * 1024 * 1024
+MAX_HEADER_FRAME_BYTES = 4 * 1024 * 1024
+_DECODE_CHUNK_BYTES = 1024 * 1024
+
+
+class DshSessionLogResourceLimit(ValueError):
+    """One session log exceeds a hard read budget; refuse instead of truncating."""
+
+
+def _read_capped_lines(stream: Any) -> list[str]:
+    """Stream-split a decoded byte stream into JSONL lines under read budgets."""
+    lines: list[str] = []
+    total = 0
+    pending = bytearray()
+    while True:
+        chunk = stream.read(_DECODE_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_DECODED_LOG_BYTES:
+            raise DshSessionLogResourceLimit(
+                f"decoded log exceeds {MAX_DECODED_LOG_BYTES} bytes; refusing to truncate"
+            )
+        pending += chunk
+        start = 0
+        while True:
+            index = pending.find(b"\n", start)
+            if index < 0:
+                break
+            line = bytes(pending[start:index])
+            start = index + 1
+            if len(line) > MAX_LOG_LINE_BYTES:
+                raise DshSessionLogResourceLimit(
+                    f"log line exceeds {MAX_LOG_LINE_BYTES} bytes; refusing to truncate"
+                )
+            if len(lines) >= MAX_LOG_LINES:
+                raise DshSessionLogResourceLimit(
+                    f"log exceeds {MAX_LOG_LINES} lines; refusing to truncate"
+                )
+            lines.append(line.decode("utf-8"))
+        del pending[:start]
+    if pending:
+        if len(pending) > MAX_LOG_LINE_BYTES:
+            raise DshSessionLogResourceLimit(
+                f"log line exceeds {MAX_LOG_LINE_BYTES} bytes; refusing to truncate"
+            )
+        if len(lines) >= MAX_LOG_LINES:
+            raise DshSessionLogResourceLimit(
+                f"log exceeds {MAX_LOG_LINES} lines; refusing to truncate"
+            )
+        lines.append(bytes(pending).decode("utf-8"))
+    return lines
+
+
 def read_dsh_jsonl_lines(path: Path) -> list[str] | None:
     """Read one selected generation, or `None` when it cannot be decoded.
 
     A corrupt generation is reported by the caller as an unreadable file. It is
-    never silently replaced by an older generation.
+    never silently replaced by an older generation. Decoding is streaming and
+    bounded by `MAX_DECODED_LOG_BYTES`, `MAX_LOG_LINES` and `MAX_LOG_LINE_BYTES`
+    so highly compressed or pathological logs are refused with an explainable
+    error instead of exhausting the host.
     """
     if dsh_log_compression(path) == "none":
         try:
-            return path.read_text(encoding="utf-8").splitlines()
+            with path.open("rb") as stream:
+                return _read_capped_lines(stream)
         except OSError:
+            return None
+        except UnicodeDecodeError:
             return None
     zstandard = get_zstandard()
     try:
         encoded = path.read_bytes()
-        first = zstandard.ZstdDecompressor().decompressobj().decompress(encoded)
-        if not first or first.count(b"\n") != 1 or not first.endswith(b"\n"):
-            raise ValueError("V4 first frame must contain exactly the header line")
-        import io
-        raw = zstandard.ZstdDecompressor().stream_reader(io.BytesIO(encoded)).read()
-        return raw.decode("utf-8").splitlines()
     except OSError:
         return None
+    if len(encoded) > MAX_DECODED_LOG_BYTES:
+        raise DshSessionLogResourceLimit(
+            f"encoded log exceeds {MAX_DECODED_LOG_BYTES} bytes; refusing to truncate"
+        )
+    # Decode frame by frame: a truncated final frame reports eof=False instead
+    # of raising, so it is detected here and the file is recorded unreadable —
+    # the tail is never silently dropped.
+    frames: list[bytes] = []
+    pending = encoded
+    try:
+        while pending:
+            decompressor = zstandard.ZstdDecompressor().decompressobj()
+            try:
+                chunk = decompressor.decompress(pending)
+            except zstandard.ZstdError:
+                return None
+            except Exception as exc:
+                if exc.__class__.__module__ in {"zstandard", "zstd"}:
+                    return None
+                raise
+            if not decompressor.eof:
+                return None
+            frames.append(chunk)
+            if sum(map(len, frames)) > MAX_DECODED_LOG_BYTES:
+                raise DshSessionLogResourceLimit(
+                    f"decoded log exceeds {MAX_DECODED_LOG_BYTES} bytes; refusing to truncate"
+                )
+            pending = decompressor.unused_data
     except zstandard.ZstdError:
-        # The decompressor's C extension reports as module `zstd`, so a corrupt
-        # frame must be caught by type rather than by its module name.
         return None
     except Exception as exc:
         if exc.__class__.__module__ in {"zstandard", "zstd"}:
             return None
         raise
+    if not frames:
+        return None
+    first = frames[0]
+    if len(first) > MAX_HEADER_FRAME_BYTES:
+        raise DshSessionLogResourceLimit(
+            f"V4 header frame exceeds {MAX_HEADER_FRAME_BYTES} bytes"
+        )
+    if not first or first.count(b"\n") != 1 or not first.endswith(b"\n"):
+        raise ValueError("V4 first frame must contain exactly the header line")
+    try:
+        return _read_capped_lines(io.BytesIO(b"".join(frames)))
+    except UnicodeDecodeError:
+        return None
 
 
 def dsh_content_text(value: Any) -> str:
@@ -1790,7 +1891,7 @@ def new_dsh_session(
     session["ptc"] = {}
     session["child_sessions"] = set()
     session["tool_execution"] = dict(outer_calls=0, inner_calls=0, outer_failures=0, inner_failures=0, inner_incomplete=0)
-    # Official host recovery results (DSH 0.2.0-rc.1) are uncertainty records,
+    # Official host recovery results (DSH >= 0.2.0-rc.2) are uncertainty records,
     # never confirmed failures; they are counted separately per status.
     session["tool_recovery"] = {"outcome_unknown": 0, "not_started": 0}
     session["recovery_seen"] = set()
@@ -2151,7 +2252,13 @@ def parse_dsh_session_file(
     compression = 'zstd' if path.name.endswith('.zstd') else 'none'
     if parse_dsh_generation_filename(path.name, compression) != 4:
         raise ValueError("only session.v4 logs are supported; migrate upstream")
-    lines = read_dsh_jsonl_lines(path)
+    try:
+        lines = read_dsh_jsonl_lines(path)
+    except DshSessionLogResourceLimit:
+        # Explainable refusal: the log exceeds a hard read budget. It is not
+        # truncated, not replaced by an older generation and visible in coverage.
+        coverage["resource_limited_files"] += 1
+        return None
     if lines is None:
         coverage["unreadable_files"] += 1
         return None
@@ -3058,6 +3165,7 @@ def build_report(
         "skipped_project": 0,
         "missing_metadata": 0,
         "unreadable_files": 0,
+        "resource_limited_files": 0,
         "malformed_lines": 0,
         "partial_sessions": 0,
         "unknown_record_types": Counter(),
@@ -3396,6 +3504,11 @@ def build_report(
         warning("有效会话少于 5 个；请将行为结论视为小样本快照。", "Fewer than five sessions are in scope; treat behavioral conclusions as a small-sample snapshot.")
     if coverage["malformed_lines"] or coverage["unknown_record_types"] or coverage["unreadable_files"]:
         warning("存在损坏行、未知记录类型或不可读文件；形成明确结论前请先检查覆盖情况。", "Malformed lines, unknown record types, or unreadable files were observed; inspect coverage before drawing firm conclusions.")
+    if coverage.get("resource_limited_files"):
+        warning(
+            f"有 {coverage['resource_limited_files']} 个会话文件超出读取资源上限，已被拒绝读取（未截断、未回退旧文件）；请缩小范围或分批分析。",
+            f"{coverage['resource_limited_files']} session logs exceeded a read budget and were refused (not truncated, no older-generation fallback); narrow the scope or analyze in batches.",
+        )
     if coverage["partial_sessions"]:
         warning(f"有 {coverage['partial_sessions']} 个 rollout 含未结束任务标记；这不自动等于整个任务族失败。", f"{coverage['partial_sessions']} rollouts contain unfinished-task markers; this does not automatically mean their task families failed.")
     shadowed = sum(session.get("semantic_shadowed_messages", 0) for session in sessions)

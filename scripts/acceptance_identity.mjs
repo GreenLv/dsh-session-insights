@@ -8,7 +8,7 @@ import {execFile} from 'node:child_process'
 import {promisify} from 'node:util'
 export const run = promisify(execFile)
 export const digest = value => createHash('sha256').update(value).digest('hex')
-export const TARGET = '0.2.0-rc.1'
+export const TARGET = '0.2.0-rc.2'
 
 export async function fileManifest(root) {
   const files = []

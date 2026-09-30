@@ -28,7 +28,7 @@ async function main() {
       await mkdir(dirname(target), {recursive: true}); await cp(join(root, item.path), target)
     }
     const manifest = JSON.parse(await readFile(join(stage, 'package.json'), 'utf8'))
-    assert.equal(manifest.name, 'dsh-session-insights'); assert.equal(manifest.version, '0.5.1')
+    assert.equal(manifest.name, 'dsh-session-insights'); assert.equal(manifest.version, '0.6.0')
     manifest.gitHead = commit
     await writeFile(join(stage, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
     const [packed] = JSON.parse((await npm(['pack', '--json', '--ignore-scripts', '--pack-destination', packDir], {cwd: stage, env})).stdout)

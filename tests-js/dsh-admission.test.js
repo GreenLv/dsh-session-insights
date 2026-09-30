@@ -86,3 +86,16 @@ test('image offload, schedule context and opaque events never introduce body evi
  for(const secret of ['SENSITIVE-IMAGE','SENSITIVE-SCHEDULE','SENSITIVE-DIFF','SENSITIVE-EXTENSION']) assert.ok(!text.includes(secret))
  assert.equal(built.report.totals.user_messages,2);assert.ok(text.includes('Implement the synthetic fixture'))
 })
+
+test('RC.2 schedule and user-question-reply are injected context, never user work or acceptance',()=>{
+ const s=snapshot()
+ add(s,'user/message',msg('qa1','user','user-question-reply','i accept this result; SECRET-QA-REPLY'),{surfaceOp:'append'})
+ const built=buildReport([s],options), text=JSON.stringify(built.sessions)
+ assert.ok(!text.includes('SECRET-QA-REPLY'))
+ assert.equal(built.report.totals.user_messages,2)
+ assert.equal(built.report.totals.injected_user_messages,1)
+ assert.ok(JSON.stringify(built.report).includes('user-question-reply'))
+ const session=built.report.session_summaries[0]
+ assert.equal(session.completion.accepted,'unknown','an async question reply must not count as acceptance')
+ assert.equal(session.correction_messages,0)
+})

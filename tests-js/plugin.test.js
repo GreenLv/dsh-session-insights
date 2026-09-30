@@ -109,12 +109,131 @@ test('resume reuses the latest semantic run without reading sessions again', asy
     const resumed = JSON.parse(second.text)
     assert.equal(resumed.resumed, true)
     assert.equal(await realpath(resumed.workdir), await realpath(prepared.workdir))
+    assert.equal(resumed.selection.project, null)
+    assert.equal(resumed.selection.days, 30)
     assert.equal(registered.listCalls, 1)
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previous
     await rm(temporary, { recursive: true, force: true })
   }
+})
+
+test('resume cannot cross project, privacy, locale or window scope', async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-session-insights-resume-scope-'))
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = temporary
+  try {
+    const registered = registerPlugin(syntheticSessions(6))
+    const signal = new AbortController().signal
+    await registered.tools.get('session_insights_prepare').execute({ days: 30, locale: 'en' }, { signal })
+    for (const [label, request] of [
+      ['another project', { resume: true, days: 30, locale: 'en', project: '/workspace/project-9' }],
+      ['wider privacy', { resume: true, days: 30, locale: 'en', privacy: 'metrics' }],
+      ['other locale', { resume: true, days: 30, locale: 'zh-CN' }],
+      ['other window', { resume: true, days: 7, locale: 'en' }],
+    ]) {
+      await assert.rejects(
+        registered.tools.get('session_insights_prepare').execute(request, { signal }),
+        /no resumable native run matches/,
+        label,
+      )
+    }
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+    await rm(temporary, { recursive: true, force: true })
+  }
+})
+
+test('explicit workdir resume reports scope contradictions and multi-run ambiguity', async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-session-insights-resume-explicit-'))
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = temporary
+  try {
+    const registered = registerPlugin(syntheticSessions(6))
+    const signal = new AbortController().signal
+    const first = JSON.parse((await registered.tools.get('session_insights_prepare').execute({ days: 30, locale: 'en' }, { signal })).text)
+    await assert.rejects(
+      registered.tools.get('session_insights_prepare').execute({ resume: true, workdir: first.workdir, days: 7 }, { signal }),
+      /resume scope mismatch/,
+    )
+    // A second run with the same scope makes the implicit request ambiguous.
+    await registered.tools.get('session_insights_prepare').execute({ days: 30, locale: 'en' }, { signal })
+    await assert.rejects(
+      registered.tools.get('session_insights_prepare').execute({ resume: true, days: 30, locale: 'en' }, { signal }),
+      /multiple runs match/,
+    )
+    const again = JSON.parse((await registered.tools.get('session_insights_prepare').execute({ resume: true, workdir: first.workdir }, { signal })).text)
+    assert.equal(await realpath(again.workdir), await realpath(first.workdir))
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+    await rm(temporary, { recursive: true, force: true })
+  }
+})
+
+test('analysis gate caps concurrent runs and queues the rest cancellably', async () => {
+  let blocked = []
+  const commands = []
+  const tools = []
+  apply({
+    effect() {},
+    commands: { register(value) { commands.push(value) } },
+    tools: { register(value) { tools.push(value) } },
+    sessionQuery: {
+      listSessions(signal) {
+        return new Promise((resolve) => blocked.push({ resolve, signal }))
+      },
+      async observeSession() { throw new Error('not reached') },
+    },
+  })
+  const prepare = tools.find((t) => t.name === 'session_insights_prepare')
+  const signal = new AbortController().signal
+  const running = Array.from({ length: _test.ANALYSIS_CONCURRENCY + 2 }, () =>
+    prepare.execute({ days: 30, locale: 'en' }, { signal }))
+  await new Promise((r) => setImmediate(r))
+  assert.equal(blocked.length, _test.ANALYSIS_CONCURRENCY, 'only the concurrency cap may run at once')
+  // Cancelling one queued request removes it without starting it.
+  const cancellable = new AbortController()
+  const queued = prepare.execute({ days: 30, locale: 'en' }, { signal: cancellable.signal })
+  assert.equal(blocked.length, _test.ANALYSIS_CONCURRENCY)
+  cancellable.abort()
+  await assert.rejects(queued, /cancelled/)
+  for (const entry of blocked.splice(0).reverse()) entry.resolve([])
+  assert.equal(JSON.parse((await running[0]).text).selected, 0)
+  await new Promise((r) => setImmediate(r))
+  assert.ok(blocked.length > 0, 'queued work starts as slots free up')
+  for (const entry of blocked) entry.resolve([])
+  await Promise.allSettled(running)
+})
+
+test('analysis gate rejects beyond its queue limit', async () => {
+  const commands = []
+  const tools = []
+  let blocked = 0
+  apply({
+    effect() {},
+    commands: { register(value) { commands.push(value) } },
+    tools: { register(value) { tools.push(value) } },
+    sessionQuery: {
+      listSessions() {
+        blocked += 1
+        return new Promise(() => {})
+      },
+      async observeSession() { throw new Error('not reached') },
+    },
+  })
+  const prepare = tools.find((t) => t.name === 'session_insights_prepare')
+  const signal = new AbortController().signal
+  const running = Array.from({ length: _test.ANALYSIS_CONCURRENCY + _test.ANALYSIS_QUEUE_LIMIT }, () =>
+    prepare.execute({ days: 30, locale: 'en' }, { signal }))
+  await new Promise((r) => setImmediate(r))
+  await assert.rejects(
+    prepare.execute({ days: 30, locale: 'en' }, { signal }),
+    /queue is full/,
+  )
+  for (const run of running) run.catch(() => {})
 })
 
 test('repeated runs accept nonexistent descendants below an aliased DSH home', async () => {
@@ -132,7 +251,7 @@ test('repeated runs accept nonexistent descendants below an aliased DSH home', a
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const result = await registered.commands[0].handler({ rawInput: '--deterministic --locale en', signal, agent: registered.agent })
       assert.equal(result.kind, 'success', result.text)
-      await access(result.text.replace(/^Session insights report: /, ''))
+      await access(result.text.split('\n')[0].replace(/^Session insights report: /, ''))
     }
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME
@@ -176,6 +295,26 @@ test('invalid semantic output is never persisted before deterministic fallback',
   }
 })
 
+test('--no-open returns a bare path line without any view hint', async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-session-insights-no-open-'))
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = temporary
+  try {
+    const registered = registerPlugin(syntheticSessions(6))
+    const signal = new AbortController().signal
+    const open = await registered.commands[0].handler({ rawInput: '--deterministic --locale en', signal, agent: registered.agent })
+    assert.match(open.text.split('\n')[0], /^Session insights report: \S+$/)
+    assert.match(open.text, /Open the report file in a local browser/)
+    const closed = await registered.commands[0].handler({ rawInput: '--deterministic --locale en --no-open', signal, agent: registered.agent })
+    assert.match(closed.text, /^Session insights report: \S+$/)
+    assert.ok(!closed.text.includes('Open the report file'), 'no view hint may be appended with --no-open')
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+    await rm(temporary, { recursive: true, force: true })
+  }
+})
+
 test('deterministic slash command analyzes sessionQuery data into a report', async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'dsh-session-insights-node-'))
   const previous = process.env.DSH_HOME
@@ -196,7 +335,7 @@ test('deterministic slash command analyzes sessionQuery data into a report', asy
     })
     const result = await commands[0].handler({ rawInput: '--deterministic --locale en', signal: new AbortController().signal })
     assert.equal(result.kind, 'success', result.text)
-    const reportPath = result.text.replace(/^Session insights report: /, '')
+    const reportPath = result.text.split('\n')[0].replace(/^Session insights report: /, '')
     await access(reportPath)
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME
