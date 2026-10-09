@@ -33,9 +33,17 @@ CONTENT_RULES = {
 NEGATIVE_CONTRACT_ALLOWLIST = {
     "tests/test_cli_install.py": {"credential-assignment", "legacy-home-field", "legacy-product"},
     "tests/helpers.py": {"credential-assignment"},
-    "tests/test_public_tree_audit.py": {"private-user-path"},
+    "tests/test_public_tree_audit.py": {"private-user-path", "legacy-product"},
     "scripts/build_fixture.py": {"private-key"},
     "scripts/audit_public_tree.py": set(CONTENT_RULES),
+}
+# Preserve the approved marketplace entry's explicit unsupported-host disclosure.
+# Only this exact sentence in this file is exempt; other matches still fail.
+CONTENT_EXEMPTIONS = {
+    ("marketplace/agensi/SKILL.md", "legacy-product"): (
+        "Unzipping the skill into Claude, Cursor, Codex or another agent does not "
+        "install DSH or make its session services available.",
+    ),
 }
 
 
@@ -43,7 +51,10 @@ def scan_text(path: str, text: str) -> list[dict[str, str]]:
     findings = []
     allowed = NEGATIVE_CONTRACT_ALLOWLIST.get(path, set())
     for rule, pattern in CONTENT_RULES.items():
-        if rule not in allowed and pattern.search(text):
+        rule_text = text
+        for disclosure in CONTENT_EXEMPTIONS.get((path, rule), ()):
+            rule_text = rule_text.replace(disclosure, "")
+        if rule not in allowed and pattern.search(rule_text):
             findings.append({"path": path, "rule": rule})
     return findings
 

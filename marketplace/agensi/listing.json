@@ -1,0 +1,66 @@
+{
+  "name": "DSH Session Insights — DeepSeek Harness Retrospectives",
+  "summary": "Turn DeepSeek Harness sessions into a local HTML workflow review: projects, tool failures, retries and improvements. Requires DSH.",
+  "description": "## Review your DeepSeek Harness workflow\n\nRun /session-insights to turn DSH session history into a local HTML dashboard and companion JSON. Review project and workflow patterns, tool failures, retries, completion evidence, and recommendations tied to the selected sessions.\n\n## Requirements and installation\n\nRequires DeepSeek Harness >=0.2.0-rc.2 and Node.js ^22.19.0 or >=24.0.0. The native Bundle needs DSH's commands, tools and sessionQuery services. It does not require Python.\n\nFor DSH Web, install with `dsh plugin --profile web add dsh-session-insights@0.5.2`, start DSH Web, then enter `/session-insights --days 30 --locale en` in the DSH composer. Official Desktop uses its own plugin controls or bundled command carrier; see the source README.\n\nThis ZIP preserves the published Bundle source and adds a marketplace entry SKILL.md. Follow the DSH installation route; dropping SKILL.md into another agent does not install DSH or provide its session services. Other agents' logs are outside this tool's scope.\n\n## Privacy and model usage\n\nAdd `--deterministic` for offline analysis. The default model-assisted workflow sends bounded, sanitized evidence through the current DSH agent to its configured model provider; that provider's data handling and usage charges apply. Redaction reduces disclosure but is not a guarantee that evidence contains no secrets. Reports and companion JSON remain local.\n\n## Free and open source\n\nVersion 0.5.2, MIT licensed. The ZIP includes LICENSE. Public source, complete installation instructions and future releases: https://github.com/GreenLv/dsh-session-insights\n\nThe dashboard screenshot included in the ZIP comes from fully synthetic test data, not a private user's sessions. This is a workflow retrospective, not live telemetry, token billing or a quality score for your work.",
+  "pricingType": "free",
+  "price": "",
+  "subscriptionPriceMonthly": "",
+  "annualBillingEnabled": false,
+  "compatibilityNote": "DSH only: DeepSeek Harness >=0.2.0-rc.2 and Node.js ^22.19.0 or >=24.0.0. Install the DSH Bundle using its host-specific route. A generic agent's skills folder cannot supply DSH session services.",
+  "tags": [
+    "llm-ops"
+  ],
+  "keywords": [],
+  "useCases": [
+    "Review the last 30 days of DeepSeek Harness work by project and workflow.",
+    "Investigate tool failures, retries and unfinished work using session evidence.",
+    "Keep an offline HTML dashboard and companion JSON for a DSH workflow retrospective."
+  ],
+  "docsUrl": "https://github.com/GreenLv/dsh-session-insights",
+  "knownLimitations": "Requires DSH session services; does not analyze non-DSH logs. Generic marketplace installation hints do not replace DSH Bundle installation. Token totals are not billing. Semantic analysis uses the configured model provider; deterministic mode is offline. Analysis is bounded to 2,000 snapshots and 64 MiB of serialized input per run. The optional Python CLI and its managed skill require a separate installation.",
+  "usageExample": "",
+  "sampleInput": "Review my last 30 days of DeepSeek Harness work and help me understand project patterns, tool failures and retries.",
+  "sampleOutput": "The download includes an English dashboard screenshot generated from fully synthetic test sessions. It illustrates the report layout; it is not a transcript or an analysis of your sessions. Your run writes its own local HTML dashboard and companion JSON.",
+  "currentVersion": "1.0",
+  "declaredPermissions": {
+    "tools": [
+      "terminal",
+      "file_read",
+      "file_write",
+      "env_vars",
+      "network"
+    ],
+    "hosts": [
+      "registry.npmjs.org"
+    ],
+    "fileScopes": [],
+    "notes": "Installation uses the DSH plugin manager and npm registry. Native analysis reads selected DSH sessionQuery snapshots and writes marked reports under DSH_HOME/insights/runs; DSH_HOME is used only to locate local storage. Deterministic analysis is offline. Semantic analysis uses the current DSH agent's configured provider; this package collects no separate API key. The optional Python CLI is a distinct route."
+  },
+  "mcpEnabled": true,
+  "logoUrl": "",
+  "screenshotUrls": [],
+  "demoVideoUrl": "",
+  "supportMethod": "",
+  "faqItems": [
+    {
+      "question": "What does DSH Session Insights produce?",
+      "answer": "It reviews selected DeepSeek Harness session history and writes a local HTML workflow dashboard and companion JSON. The report covers project and workflow patterns, tool failures, retries, completion evidence and recommendations grounded in the selected sessions."
+    },
+    {
+      "question": "What are the requirements and installation route?",
+      "answer": "Requires DeepSeek Harness >=0.2.0-rc.2 and Node.js ^22.19.0 or >=24.0.0. Install the DSH Bundle using the host-specific route in the GitHub README. A generic agent's skills folder does not provide DSH's commands, tools or sessionQuery services, and this tool does not analyze other agents' logs."
+    },
+    {
+      "question": "How does it handle privacy and model usage?",
+      "answer": "Use --deterministic for offline analysis. The default model-assisted workflow sends bounded, sanitized evidence through the current DSH agent to its configured model provider; that provider's data handling and usage charges apply. Redaction reduces disclosure but does not guarantee that evidence contains no secrets. Reports and companion JSON remain local."
+    },
+    {
+      "question": "Does it analyze every session or guarantee complete coverage?",
+      "answer": "No. Analysis is scoped to the selected DSH sessions and is bounded to 2,000 snapshots and 64 MiB of serialized input per run. It is a workflow retrospective, not live telemetry, token billing or a quality score. Read the report's coverage and limitations when interpreting its findings."
+    },
+    {
+      "question": "Is the download free, and what does it include?",
+      "answer": "Yes. The MIT-licensed ZIP contains the published dsh-session-insights 0.5.2 Bundle source, LICENSE, README documentation, a marketplace SKILL.md entry and an English dashboard screenshot generated from fully synthetic test data. Source and future releases are available at https://github.com/GreenLv/dsh-session-insights."
+    }
+  ]
+}

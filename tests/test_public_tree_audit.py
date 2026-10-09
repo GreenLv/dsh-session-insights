@@ -24,6 +24,28 @@ class PublicTreeAuditTests(unittest.TestCase):
         result = AUDIT.audit(ROOT)
         self.assertEqual(result["status"], "pass", result["findings"])
 
+    def test_marketplace_disclosure_exemption_is_exact_and_scoped(self):
+        path = "marketplace/agensi/SKILL.md"
+        disclosure = (
+            "Unzipping the skill into Claude, Cursor, Codex or another agent does not "
+            "install DSH or make its session services available."
+        )
+        self.assertEqual(AUDIT.scan_text(path, disclosure), [])
+        for candidate_path, content in (
+            (path, disclosure + "\nUse Codex session logs."),
+            (path, disclosure.replace("does not", "does")),
+            ("README.md", disclosure),
+        ):
+            with self.subTest(path=candidate_path, content=content):
+                self.assertIn(
+                    {"path": candidate_path, "rule": "legacy-product"},
+                    AUDIT.scan_text(candidate_path, content),
+                )
+        self.assertIn(
+            {"path": path, "rule": "private-user-path"},
+            AUDIT.scan_text(path, disclosure + "\n/Users/synthetic-user/work"),
+        )
+
     def test_declared_image_assets_pass_while_other_binaries_fail(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
