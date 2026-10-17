@@ -10,7 +10,7 @@ from test_021_events import config, snapshot
 import test_native_parity
 
 ROOT = Path(__file__).parents[1]
-VECTORS = json.loads((ROOT / 'tests/fixtures/rc21-review-vectors.json').read_text())
+VECTORS = json.loads((ROOT / 'tests/fixtures/rc21-review-vectors.json').read_text(encoding='utf-8'))
 
 
 def cwd_snapshot(vector):

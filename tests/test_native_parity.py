@@ -73,7 +73,7 @@ class NativeParityTests(unittest.TestCase):
 
     def test_official_extended_v4_ptc_dynamic_tools_and_surface_parity(self):
         from dsh_session_insights.v4 import validate_records
-        rows = [json.loads(line) for line in (ROOT/'tests/fixtures/rc2-extended/session.v4.jsonl').read_text().splitlines()]
+        rows = [json.loads(line) for line in (ROOT/'tests/fixtures/rc2-extended/session.v4.jsonl').read_text(encoding='utf-8').splitlines()]
         validate_records(rows, analyzer.DSH_KNOWN_RECORD_TYPES, physical=True)
         snapshot = {'session': rows[0], 'events': rows[1:], 'inheritedEventCount': 0}
         for privacy in ('local', 'redacted', 'metrics'):
@@ -91,7 +91,7 @@ class NativeParityTests(unittest.TestCase):
         """0.2.1-rc.2 job/cwd/plugin records must agree across implementations."""
         root = ROOT / 'tests/fixtures/rc21'
         for case in ('job-lifecycle', 'job-pending', 'inherited', 'mixed-v4', 'web-model', 'subagent', 'team', 'job-inherited-open', 'job-observability', 'subagent-child'):
-            snapshot = json.loads((root / case / 'snapshot.json').read_text())
+            snapshot = json.loads((root / case / 'snapshot.json').read_text(encoding='utf-8'))
             for privacy in ('local', 'redacted', 'metrics'):
                 for locale in ('en', 'zh-CN'):
                     with self.subTest(case=case, privacy=privacy, locale=locale):

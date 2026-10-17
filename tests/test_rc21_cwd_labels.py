@@ -1,5 +1,7 @@
 """Host-independent cwd display family, through public report projections."""
 import json
+import io
+import runpy
 import re
 import subprocess
 import unittest
@@ -12,7 +14,7 @@ from test_021_events import config, snapshot
 import test_native_parity
 
 ROOT = Path(__file__).parents[1]
-VECTORS = json.loads((ROOT / 'tests/fixtures/rc21-cwd-label-vectors.json').read_text())
+VECTORS = json.loads((ROOT / 'tests/fixtures/rc21-cwd-label-vectors.json').read_text(encoding='utf-8'))
 CONTEXTS = ('origin', 'own', 'inherited', 'inherited-own')
 
 
@@ -47,6 +49,34 @@ def expected_directory_labels(vector, context):
 
 
 class Rc21CwdLabelFamilyTests(unittest.TestCase):
+    def test_fixture_imports_use_utf8_under_non_utf8_defaults(self):
+        original_open = io.open
+        fixture = ROOT / 'tests/fixtures/rc21-cwd-label-vectors.json'
+        for codec in ('cp1252', 'cp936'):
+            def locale_open(file, mode='r', buffering=-1, encoding=None,
+                            errors=None, newline=None, closefd=True, opener=None):
+                if 'b' not in mode and encoding in (None, 'locale'):
+                    encoding = codec
+                return original_open(file, mode, buffering, encoding, errors,
+                                     newline, closefd, opener)
+            with self.subTest(codec=codec), patch('io.open', side_effect=locale_open):
+                # Control: the omitted/locale codec corrupts this UTF-8 fixture
+                # or fails decoding. The actual test modules must still import
+                # exactly the original Unicode oracle, including U+2026.
+                try:
+                    wrong = json.loads(fixture.read_text(encoding='locale'))
+                except UnicodeDecodeError:
+                    pass
+                else:
+                    self.assertNotEqual(wrong, VECTORS)
+                loaded = runpy.run_path(str(ROOT / 'tests/test_rc21_cwd_labels.py'))
+                self.assertEqual(loaded['VECTORS'], VECTORS)
+                expected = next(case['label'] for case in loaded['VECTORS'] if case['name'] == 'long-leaf')
+                self.assertEqual(len(expected), 600)
+                self.assertEqual(ord(expected[-1]), 0x2026)
+                review = runpy.run_path(str(ROOT / 'tests/test_rc21_review.py'))
+                self.assertIn('cwd', review['VECTORS'])
+
     def test_label_oracle_avoids_host_filesystem_path_semantics(self):
         # This is the actual cross-platform counterexample, on every test host.
         self.assertEqual(PureWindowsPath('//server/share').name, '')

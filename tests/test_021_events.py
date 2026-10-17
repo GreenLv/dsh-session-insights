@@ -87,7 +87,7 @@ class Rc21VocabularyAdmissionTests(unittest.TestCase):
         self.assertEqual(validate_records(rows, analyzer.DSH_KNOWN_RECORD_TYPES), 0)
 
     def test_mixed_representation_keeps_physical_source_ranges(self):
-        rows = [json.loads(line) for line in (RC21 / "mixed-v4" / "session.v4.jsonl").read_text().splitlines()]
+        rows = [json.loads(line) for line in (RC21 / "mixed-v4" / "session.v4.jsonl").read_text(encoding='utf-8').splitlines()]
         self.assertTrue(any(isinstance(item, list) for row in rows for item in row.get("sourceEventSeqs", [])))
         validate_records(rows, analyzer.DSH_KNOWN_RECORD_TYPES, physical=True)
         coverage = analyzer.parse_coverage_state()
@@ -145,7 +145,7 @@ def assert_subset(testcase, expected, actual, path="view"):
 
 class Rc21JobAndWorkingDirectorySemanticsTests(unittest.TestCase):
     def test_fixture_expectations_match(self):
-        expectations = {item["name"]: item["expected"] for item in json.loads((RC21 / "expectations.json").read_text())}
+        expectations = {item["name"]: item["expected"] for item in json.loads((RC21 / "expectations.json").read_text(encoding='utf-8'))}
         for case, expected in expectations.items():
             with self.subTest(case=case):
                 parsed_session, coverage = parsed(case)
