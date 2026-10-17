@@ -1,9 +1,9 @@
 // Bounded admission for host-delivered V4 logical snapshots. The official
-// RC.2-or-newer catalog remains the full fixture/physical-contract validator;
-// a recorded target version below 0.2.0-rc.2 is refused.
+// 0.2.1-rc.2-or-newer catalog remains the full fixture/physical-contract
+// validator; a recorded target version below 0.2.1-rc.2 is refused.
 import rules from './rules.js'
-export const MINIMUM_DSH_VERSION = '0.2.0-rc.2'
-export const INPUT_IDENTITY = Object.freeze({target_dsh_version: '0.2.0-rc.2', input_format_version: 4, analyzer_semantics: 'v4-dsh020rc2.1'})
+export const MINIMUM_DSH_VERSION = '0.2.1-rc.2'
+export const INPUT_IDENTITY = Object.freeze({target_dsh_version: '0.2.1-rc.2', input_format_version: 4, analyzer_semantics: 'v4-dsh021rc2.1'})
 const surfaceTypes = new Set(['user/message', 'assistant/message', 'system/message', 'developer/message', 'tool/result'])
 export function validateV4(snapshot) {
   if (snapshot?.session?.version !== 4 || !Array.isArray(snapshot.events)) throw new Error(`DSH >=${MINIMUM_DSH_VERSION} V4 snapshot required; migrate old logs upstream`)

@@ -4,6 +4,30 @@
 
 这里按时间倒序记录公开版本。
 
+## 0.6.0 - Unreleased
+
+适配 DSH 0.2.1-rc.2。下限提升到 `>=0.2.1-rc.2`，拒绝 0.2.0-rc.2 与 0.2.1-rc.1。会话格式仍为 V4，但宿主新增了必需事件词汇与新的完成/委派语义，升级后请新建分析运行。本版本仍是候选记录：双平台原生、真实模型/UI 与精确制品验收待后续完成。
+
+### 新增
+
+- Node 与 Python 校验器均接受 0.2.1-rc.2 必需事件 `job/registered`、`job/settled`、`working-directory/change`；fixture 由精确宿主 `Session` 写入器生成，并经官方严格 catalog 恢复。未知必需事件仍拒绝，未知 ignorable 事件仍安全跳过。
+- 按会话与总计报告后台 job 生命周期：registered/settled/completed/failed/killed/pending、继承与继承未决、按 kind/cause、teardown、未上报生产者结果、异常时长/明细、未配对结算，以及自有 job 仍在运行时结束的轮次。注册表结果不会被表述为用户任务完成或资源释放。
+- 委派与完成分开计数：`subagent`/`subagent_fork`/`workflow`/`spawn_teammate` 的派发工具结果、运行时 `subagent-settled` 通知、`tool-jobs` 完成通知、入站/出站 relay、workflow run/agent 记录，以及 Team 名册/任务快照。投递、Inbox 接收与父轮结束都不构成完成证据。
+- 新增带标签的工作目录轨迹与 header 来源归属、自有/继承分段、跨项目活动、平台路径形态（posix、home-prefix、drive、UNC、relative）、重复/相对/非法变化异常，并按隐私模式输出。原始路径不进入 redacted/metrics 报告；项目筛选与恢复仍采用不可变 header 口径。
+- 识别 `web_search` 与 `web_fetch` 为记录的工具调用（一次多查询搜索仍为一次调用），保留历史 `web.*` 搜索别名，并保持 PTC 外层/内层分离。记录 `model/selection` 与 reasoning effort、`llm/retry` 计划/实际重试与 chain id，以及每会话 token 来源（`input_tokens`/`total_tokens` 为派生和，原始分桶为记录值）。
+- 第三方 `plugin:` 记录保持不透明：仅保留类型/数量覆盖，不进入 payload、用户意图、模型上下文或完成证据。
+- 刷新 fixture、peer 范围（DSH `>=0.2.1-rc.2`、Cordis `~4.0.5`），fixture runtime 精确固定 0.2.1-rc.2 与 Cordis 4.0.5与契约工具；新增 local/redacted/metrics 隐私与中英 locale 的 Node/Python 一致性覆盖。
+
+### 变更
+
+- `INPUT_IDENTITY`/分析语义更新为 `v4-dsh021rc2.1`；不同语义的确定性缓存与旧运行恢复按设计失效。
+- npm/Python/Bundle/Skill 身份为 0.6.0，DSH engines/peers 下限为 `>=0.2.1-rc.2`。
+
+### 待办
+
+- macOS 与 Windows 的原生 Web/Headless/Desktop 验收、真实模型/UI 证据与精确制品验收由后续原生验收会话完成。见 `docs/acceptance/v0.6.0-rc2.1-candidate.md`。
+
+
 ## 0.5.2 - 2026-09-30
 
 本补丁延续 0.5.x 的宿主适配系列，修复恢复范围选择并限制分析资源消耗。要求 DSH `>=0.2.0-rc.2`，不再支持 RC.1。从 0.5.1 升级后请新建分析运行；已有报告保留。单独安装的 Python CLI 或 Skill 需要分别更新。原生验收按制品记录。

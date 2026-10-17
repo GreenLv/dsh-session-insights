@@ -10,10 +10,13 @@ const req=createRequire(join(root,'package.json'))
 const hostReq=createRequire(await realpath(join(root,'node_modules/@deepseek-ai/dsh/package.json')))
 const bootPath=hostReq.resolve('@deepseek-ai/dsh-app-boot')
 const {evaluatePluginCompatibility,getDshRuntimeVersion}=await import(pathToFileURL(bootPath).href)
-assert.equal(getDshRuntimeVersion(),'0.2.0-rc.2')
+assert.equal(getDshRuntimeVersion(),'0.2.1-rc.2')
 const manifest=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'))
-const admitted=['0.2.0-rc.2','0.2.0-rc.3','0.2.0','0.2.1-rc.1','0.3.0-rc.1','1.0.0','0.2.0-rc.2+build.7']
+// Floor 0.2.1-rc.2, later RCs, stable, future minor/major and build metadata
+// are admitted by the declared range. 0.2.0-rc.2 and 0.2.1-rc.1 are refused.
+const admitted=['0.2.1-rc.2','0.2.1-rc.3','0.2.1','0.3.0-rc.1','0.3.0','1.0.0','0.2.1-rc.2+build.7']
 for(const version of admitted)assert.equal(evaluatePluginCompatibility(manifest,{},version),undefined,version)
-assert.ok(evaluatePluginCompatibility(manifest,{},'0.2.0-rc.1'))
+const belowFloor=['0.2.0-rc.1','0.2.0-rc.2','0.2.0','0.2.1-rc.1']
+for(const version of belowFloor)assert.ok(evaluatePluginCompatibility(manifest,{},version),version)
 for(const version of ['not-a-version','0.2'])assert.throws(()=>evaluatePluginCompatibility(manifest,{},version))
-console.log(JSON.stringify({status:'pass',consumer:'official dsh-app-boot',consumer_version:getDshRuntimeVersion(),admitted,rejected:['0.2.0-rc.1','not-a-version','0.2'],scope:'version admission with constructed metadata; future host execution not claimed'}))
+console.log(JSON.stringify({status:'pass',consumer:'official dsh-app-boot',consumer_version:getDshRuntimeVersion(),admitted,rejected:['0.2.0-rc.1','0.2.0-rc.2','0.2.0','0.2.1-rc.1','not-a-version','0.2'],scope:'version admission with constructed metadata; future host execution not claimed'}))

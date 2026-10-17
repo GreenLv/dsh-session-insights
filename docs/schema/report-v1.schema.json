@@ -133,6 +133,226 @@
             "type": "integer",
             "minimum": 0
           }
+        },
+        "jobs": {
+          "type": "object",
+          "description": "Per-session job counts summed; registry outcome is not user-task completion.",
+          "additionalProperties": true,
+          "required": [
+            "registered",
+            "settled",
+            "completed",
+            "failed",
+            "killed",
+            "pending"
+          ],
+          "properties": {
+            "registered": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "settled": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "completed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "killed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pending": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "inherited": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "inherited_pending": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "producer_reported": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unreported": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "teardown": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "duration_negative": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "detail_present": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "busy_turn_ends": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unpaired_settlement": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "by_kind": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "by_cause": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "measurement": {
+              "type": "string"
+            },
+            "completion_scope": {
+              "type": "string"
+            }
+          }
+        },
+        "working_directory_changes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Own working-directory changes in the window."
+        },
+        "working_directory_inherited_changes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Inherited (fork-prefix) working-directory changes."
+        },
+        "cross_project_sessions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sessions whose recorded trajectory covers more than one project."
+        },
+        "cwd_invalid_changes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Working-directory changes with an empty/invalid cwd, counted as integrity anomalies."
+        },
+        "cwd_changes_same_as_previous": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Working-directory changes equal to the current value; the host suppresses these."
+        },
+        "cwd_platform_forms": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "delegation": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "dispatches": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "settlements": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "completion_notices": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "relays_received": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "relays_sent": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dispatches_by_tool": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "measurement": {
+              "type": "string"
+            }
+          }
+        },
+        "team": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "members": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tasks": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "task_transitions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "mailbox_legacy": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "members_by_phase": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "tasks_by_status": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "measurement": {
+              "type": "string"
+            }
+          }
+        },
+        "plugin_records": {
+          "type": "object",
+          "description": "Opaque plugin record types and counts; payloads are never retained.",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "llm_retries_performed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "llm/retry-started attempts that actually began."
+        },
+        "llm_retry_chains": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Distinct retryId chains across selected sessions."
         }
       }
     },
@@ -202,6 +422,412 @@
           "child_sessions": {
             "type": "integer",
             "minimum": 0
+          },
+          "jobs": {
+            "type": "object",
+            "description": "Background-job lifecycle (DSH 0.2.1-rc.2). A registry settlement is not user-task completion or resource release.",
+            "required": [
+              "registered",
+              "settled",
+              "completed",
+              "failed",
+              "killed",
+              "pending",
+              "inherited"
+            ],
+            "properties": {
+              "registered": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "settled": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "completed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "killed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "pending": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "inherited": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "inherited_pending": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "producer_reported": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "unreported": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "teardown": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "duration_negative": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "detail_present": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "busy_turn_ends": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "unpaired_settlement": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "by_kind": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "by_cause": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "items": {
+                "type": "array",
+                "maxItems": 20,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "job_id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "running",
+                        "completed",
+                        "failed",
+                        "killed"
+                      ]
+                    },
+                    "cause": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "producer",
+                        "kill",
+                        "teardown",
+                        null
+                      ]
+                    },
+                    "settled": {
+                      "type": "boolean"
+                    },
+                    "producer_reported": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "inherited": {
+                      "type": "boolean"
+                    },
+                    "duration_ms": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "working_directory": {
+            "type": "object",
+            "description": "Labelled cwd trajectory. The immutable header cwd remains the origin/filter criterion; raw paths are not exposed in redacted/metrics modes.",
+            "properties": {
+              "changes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "inherited_changes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "trajectory": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "projects_visited": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "cross_project": {
+                "type": "boolean"
+              },
+              "origin_label": {
+                "type": "string"
+              },
+              "effective_at_cut": {
+                "type": "string"
+              },
+              "own_labels": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "inherited_labels": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "platform_forms": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "changes_same_as_previous": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "invalid_changes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "relative_changes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "attribution": {
+                "type": "string"
+              }
+            }
+          },
+          "delegation": {
+            "type": "object",
+            "description": "Dispatch/settlement/relay evidence; delivery and parent turn end are not completion.",
+            "properties": {
+              "dispatches": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "dispatches_by_tool": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "settlements": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "completion_notices": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "relays_received": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "relays_sent": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "workflow_runs_started": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "workflow_runs_ended": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "workflow_agents_started": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "workflow_agents_ended": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "measurement": {
+                "type": "string"
+              }
+            }
+          },
+          "team": {
+            "type": "object",
+            "description": "Last-wins Team roster/task snapshots; not Lead task completion.",
+            "properties": {
+              "members": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "members_by_phase": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "tasks": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tasks_by_status": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "task_transitions": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "mailbox_legacy": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "subagent": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "First child-owned subagent descriptor; absent when the session is not a subagent.",
+            "properties": {
+              "version": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "mode": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "provider": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "agent_provider": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "agent_model": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "token_measurement": {
+            "type": "object",
+            "description": "Provenance of token counters. `input_tokens` and `total_tokens` are derived sums.",
+            "properties": {
+              "input_tokens": {
+                "type": "string",
+                "enum": [
+                  "recorded",
+                  "derived"
+                ]
+              },
+              "uncached_input_tokens": {
+                "type": "string",
+                "enum": [
+                  "recorded",
+                  "derived"
+                ]
+              },
+              "cached_input_tokens": {
+                "type": "string",
+                "enum": [
+                  "recorded",
+                  "derived"
+                ]
+              },
+              "output_tokens": {
+                "type": "string",
+                "enum": [
+                  "recorded",
+                  "derived"
+                ]
+              },
+              "reasoning_output_tokens": {
+                "type": "string",
+                "enum": [
+                  "recorded",
+                  "derived"
+                ]
+              },
+              "cache_write_tokens": {
+                "type": "string",
+                "enum": [
+                  "recorded",
+                  "derived"
+                ]
+              },
+              "total_tokens": {
+                "type": "string",
+                "enum": [
+                  "recorded",
+                  "derived"
+                ]
+              },
+              "usage_samples": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "usage_total_samples": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
           }
         }
       }

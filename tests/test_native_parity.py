@@ -79,3 +79,20 @@ class NativeParityTests(unittest.TestCase):
         for privacy in ('local', 'redacted', 'metrics'):
             for locale in ('en', 'zh-CN'):
                 self.compare([snapshot], privacy, locale)
+
+    def test_rc21_cwd_platform_vectors_parity(self):
+        from test_021_events import cwd_platform_snapshot
+        snapshot = cwd_platform_snapshot()
+        for privacy in ('local', 'redacted', 'metrics'):
+            with self.subTest(privacy=privacy):
+                self.compare([snapshot], privacy, 'en')
+
+    def test_rc21_job_cwd_and_plugin_records_parity(self):
+        """0.2.1-rc.2 job/cwd/plugin records must agree across implementations."""
+        root = ROOT / 'tests/fixtures/rc21'
+        for case in ('job-lifecycle', 'job-pending', 'inherited', 'mixed-v4', 'web-model', 'subagent', 'team', 'job-inherited-open', 'job-observability', 'subagent-child'):
+            snapshot = json.loads((root / case / 'snapshot.json').read_text())
+            for privacy in ('local', 'redacted', 'metrics'):
+                for locale in ('en', 'zh-CN'):
+                    with self.subTest(case=case, privacy=privacy, locale=locale):
+                        self.compare([snapshot], privacy, locale)

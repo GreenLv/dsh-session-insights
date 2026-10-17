@@ -321,6 +321,8 @@ const counters = [
   'failed_patches',
   'subagents',
   'web_searches',
+  'web_fetches',
+  'model_selections',
   'mcp_calls',
   'skill_calls',
   'aborted_turns',
@@ -334,6 +336,7 @@ const counters = [
   'verification_failures',
   'accepted_evidence',
   'llm_retries',
+  'llm_retries_performed',
   'denied_approvals',
   'system_messages',
   'injected_user_messages',
@@ -351,6 +354,7 @@ const maps = [
   'verification_kinds',
   'skill_counts',
   'mcp_server_counts',
+  'reasoning_efforts',
   'file_extensions',
   'skill_mentions',
   'injected_source_kinds',
@@ -383,6 +387,73 @@ const timestamp = (value) =>
   Math.abs(value) < 8.64e15
     ? value
     : null
+const pathKey = (value) => {
+  const path = String(value).replace(/\\/g, '/').replace(/\/+$/, '')
+  return /^[A-Za-z]:\//.test(path) ? path.toLowerCase() : path
+}
+const finiteNumber = (value) => typeof value === 'number' && Number.isFinite(value)
+const JOB_TERMINAL_STATUSES = new Set(['completed', 'failed', 'killed'])
+const DELEGATION_TOOL_NAMES = new Set(['subagent', 'subagent_fork', 'workflow', 'spawn_teammate'])
+const JOB_SETTLE_CAUSES = new Set(['producer', 'kill', 'teardown'])
+function jobRegistration(d) {
+  const jobId = d.jobId, owner = d.owner, kind = d.kind, label = d.label,
+    startedAt = d.startedAt, toolCall = d.toolCall
+  if (typeof jobId !== 'string' || !jobId) throw new Error('invalid job identity: jobId')
+  if (typeof owner !== 'string' || !owner) throw new Error('invalid job identity: owner')
+  if (typeof kind !== 'string' || !kind) throw new Error('invalid job identity: kind')
+  if (label !== undefined && label !== null && typeof label !== 'string') throw new Error('invalid job identity: label')
+  if (!finiteNumber(startedAt)) throw new Error('invalid job identity: startedAt')
+  let call = null
+  if (toolCall !== undefined && toolCall !== null) {
+    if (!object(toolCall)) throw new Error('invalid job tool call identity')
+    const callId = toolCall.callId, rootCallId = toolCall.rootCallId
+    if (typeof callId !== 'string' || !callId || typeof rootCallId !== 'string' || !rootCallId)
+      throw new Error('invalid job tool call identity')
+    call = {callId, rootCallId}
+  }
+  return {job_id: jobId, owner, kind, label: label || '', started_at: startedAt,
+    tool_call: call, settled: false, status: 'running', cause: null,
+    producer_reported: null, finished_at: null, detail: '', inherited: false}
+}
+function registerJob(s, d, inherited = false) {
+  const record = jobRegistration(d)
+  if (s.jobs.has(record.job_id)) throw new Error('duplicate job registration')
+  record.inherited = inherited
+  s.jobs.set(record.job_id, record)
+}
+function settleJob(s, d) {
+  const record = jobRegistration(d)
+  const prior = s.jobs.get(record.job_id)
+  if (!prior) {
+    // Registration is a best-effort host append; a lost registration must not
+    // make an otherwise readable session refuse. Count the anomaly instead.
+    s.unpaired_job_settlements++
+    return
+  }
+  if (prior.settled) throw new Error('duplicate job settlement')
+  const {finishedAt, status, cause, producerReported, detail} = d
+  if (!finiteNumber(finishedAt)) throw new Error('invalid job settlement: finishedAt')
+  if (!JOB_TERMINAL_STATUSES.has(status)) throw new Error('invalid job settlement: status')
+  if (!JOB_SETTLE_CAUSES.has(cause)) throw new Error('invalid job settlement: cause')
+  if (typeof producerReported !== 'boolean') throw new Error('invalid job settlement: producerReported')
+  if (detail !== undefined && detail !== null && typeof detail !== 'string') throw new Error('invalid job settlement: detail')
+  for (const key of ['owner', 'kind', 'started_at', 'tool_call'])
+    if (canonical(prior[key]) !== canonical(record[key])) throw new Error('job settlement identity conflict')
+  Object.assign(prior, {settled: true, status, cause, producer_reported: producerReported,
+    finished_at: finishedAt, detail: detail || ''})
+}
+function recordWorkingDirectory(s, d, seq, inherited = false) {
+  if (typeof d.cwd !== 'string' || !d.cwd.trim()) {
+    count(s.cwd_anomalies, 'invalid')
+    return
+  }
+  const key = pathKey(d.cwd)
+  if (!key.startsWith('/') && !/^[A-Za-z]:\//.test(key) && !key.startsWith('//'))
+    count(s.cwd_anomalies, 'relative')
+  if (key === s.cwd_segments.at(-1).key) count(s.cwd_anomalies, 'duplicate')
+  s.working_directory_changes++
+  s.cwd_segments.push({seq, key, label: projectLabel(d.cwd), inherited})
+}
 export function parseSnapshot(snapshot, opts, coverage) {
   if (
     !object(snapshot) ||
@@ -455,6 +526,21 @@ export function parseSnapshot(snapshot, opts, coverage) {
     // never confirmed failures; they are counted separately per status.
     tool_recovery: {outcome_unknown: 0, not_started: 0},
     recovery_seen: new Set(), settled_calls: new Set(), scoped_calls: new Map(),
+    llm_retry_chains: new Set(),
+    jobs: new Map(),
+    cwd_segments: [{seq: -1, key: pathKey(cwd), label: projectLabel(cwd), inherited: false}],
+    working_directory_changes: 0,
+    unpaired_job_settlements: 0,
+    jobs_busy_turn_ends: 0,
+    cwd_anomalies: new Map(),
+    delegation: {
+      dispatches: 0, dispatches_by_tool: new Map(), settlements: 0,
+      completion_notices: 0, relays_received: 0, relays_sent: 0,
+      workflow_runs_started: 0, workflow_runs_ended: 0,
+      workflow_agents_started: 0, workflow_agents_ended: 0,
+    },
+    subagent_descriptor: null,
+    team: {members: new Map(), tasks: new Map(), mailbox_legacy: 0, task_transitions: 0},
   }
   const analysisPrivacy =
     opts.privacy === 'metrics'
@@ -488,12 +574,19 @@ export function parseSnapshot(snapshot, opts, coverage) {
       seq = Number.isInteger(r.seq) ? r.seq : null,
       at = timestamp(r.time)
     if (!rules.DSH_KNOWN_RECORD_TYPES.includes(type)) {
-      coverage.unknown_record_types[
-        sanitize(type || '<missing>', 'redacted', 100)
-      ] =
-        (coverage.unknown_record_types[
+      // Third-party `plugin:` records are ignorable by contract; retain only
+      // the opaque type and count, never the payload.
+      if (typeof type === 'string' && type.startsWith('plugin:')) {
+        const key = sanitize(type, 'redacted', 100)
+        coverage.plugin_records[key] = (coverage.plugin_records[key] || 0) + 1
+      } else {
+        coverage.unknown_record_types[
           sanitize(type || '<missing>', 'redacted', 100)
-        ] || 0) + 1
+        ] =
+          (coverage.unknown_record_types[
+            sanitize(type || '<missing>', 'redacted', 100)
+          ] || 0) + 1
+      }
       continue
     }
     if (type === 'session') {
@@ -556,9 +649,45 @@ export function parseSnapshot(snapshot, opts, coverage) {
         if (inner) s.ptc.set(d.subCallId,{...d,settled:false,inherited:true})
       }
       if (type === 'tool/ptc-dispatch' && s.ptc.has(d.subCallId)) s.ptc.get(d.subCallId).settled=true
+      if (type === 'job/registered') registerJob(s, d, true)
+      if (type === 'job/settled') settleJob(s, d)
+      if (type === 'working-directory/change') recordWorkingDirectory(s, d, seq, true)
       continue
     }
-    if (type === 'subagent/catalog') { s.children.add(d.childId); continue }
+    if (type === 'job/registered') { registerJob(s, d); continue }
+    if (type === 'job/settled') { settleJob(s, d); continue }
+    if (type === 'working-directory/change') { recordWorkingDirectory(s, d, seq); continue }
+    if (type === 'subagent/catalog') { if (typeof d.childId === 'string' && d.childId) s.children.add(d.childId); continue }
+    if (type === 'subagent/descriptor') {
+      if (s.subagent_descriptor === null)
+        s.subagent_descriptor = {
+          version: d.version ?? null, mode: d.mode ?? null, provider: d.provider ?? null,
+          agent_provider: d.agentProvider ?? null, agent_model: d.agentModel ?? null,
+        }
+      continue
+    }
+    if (type.startsWith('tool-workflow/') && ['run-start','run-end','agent-start','agent-end'].includes(type.slice('tool-workflow/'.length))) {
+      const key = {
+        'tool-workflow/run-start': 'workflow_runs_started',
+        'tool-workflow/run-end': 'workflow_runs_ended',
+        'tool-workflow/agent-start': 'workflow_agents_started',
+        'tool-workflow/agent-end': 'workflow_agents_ended',
+      }[type]
+      s.delegation[key]++
+      continue
+    }
+    if (['team/member','team/task','team/message/queued','team/message/delivered'].includes(type)) {
+      if (type === 'team/member') {
+        if (object(d.member) && typeof d.member.id === 'string' && d.member.id)
+          s.team.members.set(d.member.id, {...d.member})
+      } else if (type === 'team/task') {
+        if (object(d.task) && typeof d.task.id === 'string' && d.task.id) {
+          s.team.tasks.set(d.task.id, {...d.task})
+          s.team.task_transitions++
+        }
+      } else s.team.mailbox_legacy++
+      continue
+    }
     if (type === 'tool/ptc-dispatch-start' || type === 'tool/ptc-dispatch') {
       const key = d.subCallId, prior = s.ptc.get(key)
       if (!key || !d.rootCallId || !d.parentCallId || !d.name) throw new Error('invalid PTC identity')
@@ -579,6 +708,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
       s.task_started++
       if (at !== null) s.turn_starts.set(key, at)
     } else if (type === 'turn/end' && d.turn != null) {
+      if ([...s.jobs.values()].some(job => !job.settled && !job.inherited)) s.jobs_busy_turn_ends++
       const key = String(d.turn),
         start = s.turn_starts.get(key)
       if (start !== undefined && at !== null)
@@ -592,7 +722,11 @@ export function parseSnapshot(snapshot, opts, coverage) {
     } else if (type === 'user/message') {
       if (object(d.source) && d.source.kind !== 'user') {
         s.injected_user_messages++
-        count(s.injected_source_kinds, String(d.source.kind || 'unknown'))
+        const kind = String(d.source.kind || 'unknown'), form = String(d.source.form || '')
+        count(s.injected_source_kinds, kind)
+        if (kind === 'subagent-settled') s.delegation.settlements++
+        else if (kind === 'tool-jobs' && form === 'notice') s.delegation.completion_notices++
+        else if (kind === 'agent-message' && form === 'relay') s.delegation.relays_received++
         continue
       }
       const raw = cleanContext(outputText(d.content || d.message || ''))
@@ -701,7 +835,11 @@ export function parseSnapshot(snapshot, opts, coverage) {
         ['spawn_agent', 'create_agent', 'subagent', 'workflow', 'spawn_teammate'].includes(name)
       )
         s.subagents++
+      if (name === 'send_message') s.delegation.relays_sent++
       if (/web.*(run|search|query)/i.test(name)) s.web_searches++
+      // DSH 0.2.1-rc.2 exposes web_fetch as a distinct tool; one search call
+      // with many sources is still one call.
+      if (/web.*fetch/i.test(name)) s.web_fetches++
       if (/^mcp|mcp__/i.test(raw)) {
         s.mcp_calls++
         count(
@@ -796,6 +934,10 @@ export function parseSnapshot(snapshot, opts, coverage) {
       s.settled_calls.add(scope)
       const call = s.calls.get(id) || { tool: 'unknown' },
         value = d.message || d
+      if (DELEGATION_TOOL_NAMES.has(String(call.tool || ''))) {
+        s.delegation.dispatches++
+        count(s.delegation.dispatches_by_tool, String(call.tool))
+      }
       const txt = outputText(value),
         permission =
           ['FS_SANDBOX_DENIED', 'AUTO_REVIEW_DENIED'].includes(d.error?.code) || s.rejected.has(id)
@@ -884,7 +1026,10 @@ export function parseSnapshot(snapshot, opts, coverage) {
       } else if (['approved', 'allowed'].includes(outcome) && call) s.rejected.delete(String(call))
     } else if (type === 'llm/retry') {
       s.llm_retries++
+      if (typeof d.retryId === 'string' && d.retryId) s.llm_retry_chains.add(d.retryId)
       count(s.failure_causes, 'llm_retry')
+    } else if (type === 'llm/retry-started') {
+      s.llm_retries_performed++
     } else if (type === 'session/title' && typeof d.title === 'string') {
       if (d.source?.kind === 'provider') s.provider_title = d.title
       else if (!s.fallback_title) s.fallback_title = d.title
@@ -894,14 +1039,103 @@ export function parseSnapshot(snapshot, opts, coverage) {
       seq !== null
     )
       s.inherited_event_count = seq
+    else if (type === 'model/selection') {
+      if (typeof d.provider === 'string' && d.provider && typeof d.model === 'string' && d.model)
+        count(s.provider_models, JSON.stringify([d.provider, d.model]))
+      s.model_selections++
+      if (typeof d.reasoningEffort === 'string' && d.reasoningEffort)
+        count(s.reasoning_efforts, d.reasoningEffort)
+    }
     else if (type === 'request/header' || type === 'request/context') {
       const c = type === 'request/header' ? d.header?.config : d
       if (c?.provider && c?.model)
         count(s.provider_models, JSON.stringify([c.provider, c.model]))
     }
   }
+  s.job_counts = {
+    registered: 0, settled: 0, completed: 0, failed: 0, killed: 0,
+    pending: 0, inherited: 0, inherited_pending: 0, producer_reported: 0,
+    unreported: 0, teardown: 0, duration_negative: 0, detail_present: 0,
+    busy_turn_ends: s.jobs_busy_turn_ends, unpaired_settlement: s.unpaired_job_settlements,
+    by_kind: new Map(), by_cause: new Map(),
+  }
+  for (const job of s.jobs.values()) {
+    s.job_counts.registered++
+    count(s.job_counts.by_kind, String(job.kind))
+    if (job.inherited) s.job_counts.inherited++
+    if (job.settled) {
+      s.job_counts.settled++
+      s.job_counts[job.status]++
+      if (job.cause) count(s.job_counts.by_cause, String(job.cause))
+      if (job.cause === 'teardown') s.job_counts.teardown++
+      if (job.producer_reported === true) s.job_counts.producer_reported++
+      else if (job.producer_reported === false) s.job_counts.unreported++
+      if (finiteNumber(job.finished_at) && job.finished_at < job.started_at) s.job_counts.duration_negative++
+      if (job.detail) s.job_counts.detail_present++
+    } else {
+      s.job_counts.pending++
+      if (job.inherited) s.job_counts.inherited_pending++
+    }
+  }
+  {
+    const keys = [], projects = [], own = [], inherited = [],
+      ownKeys = [], inheritedKeys = []
+    for (const segment of s.cwd_segments) {
+      if (!keys.includes(segment.key)) { keys.push(segment.key); projects.push(segment.label) }
+      const bucketKeys = segment.inherited ? inheritedKeys : ownKeys
+      const bucket = segment.inherited ? inherited : own
+      if (!bucketKeys.includes(segment.key)) { bucketKeys.push(segment.key); bucket.push(segment.label) }
+    }
+    s.cwd_projects = projects
+    s.cwd_cross_project = keys.length > 1
+    s.cwd_changes_inherited = s.cwd_segments.filter(segment => segment.inherited).length
+    s.cwd_changes = Math.max(0, s.working_directory_changes - s.cwd_changes_inherited)
+    s.cwd_origin_label = s.cwd_segments[0]?.label || 'unknown'
+    s.cwd_effective_at_cut = inherited.at(-1) || (s.cwd_segments[0]?.label || 'unknown')
+    s.cwd_own_labels = own
+    s.cwd_inherited_labels = inherited
+    const forms = new Map()
+    for (const segment of s.cwd_segments) {
+      const key = segment.key
+      const form = key.startsWith('//') ? 'unc' : /^[A-Za-z]:\//.test(key) ? 'drive'
+        : key.startsWith('/') ? (/^\/(?:Users|home)\//.test(key) ? 'home_prefix' : 'posix') : 'relative'
+      count(forms, form)
+    }
+    s.cwd_platform_forms = forms
+    s.cwd_changes_same_as_previous = s.cwd_anomalies.get('duplicate') || 0
+    s.cwd_invalid_changes = s.cwd_anomalies.get('invalid') || 0
+    s.cwd_relative_changes = s.cwd_anomalies.get('relative') || 0
+  }
+  {
+    const membersByPhase = new Map(), tasksByStatus = new Map()
+    for (const member of s.team.members.values()) count(membersByPhase, String(member.phase || 'unknown'))
+    for (const task of s.team.tasks.values()) count(tasksByStatus, String(task.status || 'unknown'))
+    s.team_summary = {
+      members: s.team.members.size,
+      members_by_phase: membersByPhase,
+      tasks: s.team.tasks.size,
+      tasks_by_status: tasksByStatus,
+      task_transitions: s.team.task_transitions,
+      mailbox_legacy: s.team.mailbox_legacy,
+    }
+    s.delegation.dispatches_by_tool = new Map(s.delegation.dispatches_by_tool)
+  }
   s.tool_execution.inner_incomplete = [...s.ptc.values()].filter(p => !p.settled && !p.inherited).length
   s.tokens = tokensFor(s.usage)
+  {
+    const samples = [...s.usage.values()].map((entry) => entry.value).filter((value) => object(value))
+    s.token_measurement = {
+      input_tokens: 'derived',
+      uncached_input_tokens: 'recorded',
+      cached_input_tokens: 'recorded',
+      output_tokens: 'recorded',
+      reasoning_output_tokens: 'recorded',
+      cache_write_tokens: 'recorded',
+      total_tokens: 'derived',
+      usage_samples: samples.length,
+      usage_total_samples: samples.filter((usage) => finiteNumber(usage.totalTokens)).length,
+    }
+  }
   s.repeated_retries =
     s.unchanged_retries + s.state_change_retries + s.polling_retries
   s.status =
@@ -1028,6 +1262,50 @@ function publicSession(s, opts) {
     tool_execution: s.tool_execution,
     tool_recovery: { ...s.tool_recovery },
     child_sessions: s.children.size,
+    jobs: {
+      ...s.job_counts,
+      by_kind: dict(s.job_counts.by_kind),
+      by_cause: dict(s.job_counts.by_cause),
+      items: [...s.jobs.values()].slice(0, 20).map(job => ({
+        job_id: identifier(job.job_id, opts, 'job'),
+        kind: opts.privacy === 'metrics' ? 'omitted' : sanitize(job.kind, opts.privacy, 40),
+        status: job.status,
+        cause: job.cause,
+        settled: job.settled,
+        producer_reported: job.producer_reported,
+        inherited: job.inherited,
+        duration_ms: job.finished_at === null ? null : Math.max(0, job.finished_at - job.started_at),
+        label: opts.privacy === 'metrics' ? 'omitted' : sanitize(job.label, opts.privacy, 80),
+      })),
+    },
+    working_directory: {
+      changes: s.cwd_changes,
+      inherited_changes: s.cwd_changes_inherited,
+      trajectory: s.cwd_segments.map(segment => segment.label),
+      projects_visited: s.cwd_projects,
+      cross_project: s.cwd_cross_project,
+      origin_label: s.cwd_origin_label,
+      effective_at_cut: s.cwd_effective_at_cut,
+      own_labels: s.cwd_own_labels,
+      inherited_labels: s.cwd_inherited_labels,
+      platform_forms: dict(s.cwd_platform_forms),
+      changes_same_as_previous: s.cwd_changes_same_as_previous,
+      invalid_changes: s.cwd_invalid_changes,
+      relative_changes: s.cwd_relative_changes,
+      attribution: 'header-origin-with-change-trajectory',
+    },
+    delegation: {
+      ...s.delegation,
+      dispatches_by_tool: dict(s.delegation.dispatches_by_tool),
+      measurement: 'recorded-source-kinds; delivery and turn end are not completion',
+    },
+    team: {
+      ...s.team_summary,
+      members_by_phase: dict(s.team_summary.members_by_phase),
+      tasks_by_status: dict(s.team_summary.tasks_by_status),
+    },
+    subagent: s.subagent_descriptor === null ? null : {...s.subagent_descriptor},
+    llm_retry_chains: s.llm_retry_chains.size,
     injected_source_kinds: dict(s.injected_source_kinds),
     median_prompt_chars: Math.trunc(median(s.prompt_lengths)),
     failure_causes: dict(s.failure_causes),
@@ -1054,6 +1332,8 @@ function publicSession(s, opts) {
     median_assistant_latency_seconds: round(median(s.assistant_latencies)),
     median_user_response_seconds: round(median(s.user_responses)),
     tokens: s.tokens,
+    token_measurement: {...s.token_measurement},
+    reasoning_efforts: dict(s.reasoning_efforts),
     top_tools: ranked(s.tool_counts)
       .slice(0, 5)
       .map(([n]) => n),
@@ -1100,6 +1380,7 @@ export function buildReport(snapshots, input = {}) {
     malformed_lines: 0,
     partial_sessions: 0,
     unknown_record_types: Object.create(null),
+    plugin_records: Object.create(null),
     deterministic_cache: {
       enabled: false,
       hits: 0,
@@ -1135,6 +1416,56 @@ export function buildReport(snapshots, input = {}) {
     },
     tokens: aggregateTokens(sessions),
   }
+  const jobCount = (key) => sessions.reduce((n, s) => n + (s.job_counts?.[key] || 0), 0)
+  const kindTotals = new Map(), causeTotals = new Map()
+  for (const s of sessions) {
+    for (const [k, v] of s.job_counts.by_kind) count(kindTotals, k, v)
+    for (const [k, v] of s.job_counts.by_cause) count(causeTotals, k, v)
+  }
+  totals.jobs = {
+    registered: jobCount('registered'), settled: jobCount('settled'),
+    completed: jobCount('completed'), failed: jobCount('failed'),
+    killed: jobCount('killed'), pending: jobCount('pending'),
+    inherited: jobCount('inherited'), inherited_pending: jobCount('inherited_pending'),
+    producer_reported: jobCount('producer_reported'), unreported: jobCount('unreported'),
+    teardown: jobCount('teardown'), duration_negative: jobCount('duration_negative'),
+    detail_present: jobCount('detail_present'), busy_turn_ends: jobCount('busy_turn_ends'),
+    unpaired_settlement: jobCount('unpaired_settlement'),
+    by_kind: dict(kindTotals), by_cause: dict(causeTotals),
+    measurement: 'recorded',
+    completion_scope: 'registry-or-producer-outcome; not user-task completion or resource release',
+  }
+  totals.working_directory_changes = sessions.reduce((n, s) => n + (s.cwd_changes || 0), 0)
+  totals.working_directory_inherited_changes = sessions.reduce((n, s) => n + (s.cwd_changes_inherited || 0), 0)
+  totals.cross_project_sessions = sessions.filter((s) => s.cwd_cross_project).length
+  totals.cwd_invalid_changes = sessions.reduce((n, s) => n + (s.cwd_invalid_changes || 0), 0)
+  totals.cwd_changes_same_as_previous = sessions.reduce((n, s) => n + (s.cwd_changes_same_as_previous || 0), 0)
+  const formTotals = new Map()
+  for (const s of sessions) for (const [k, v] of s.cwd_platform_forms) count(formTotals, k, v)
+  totals.cwd_platform_forms = dict(formTotals)
+  const delegationKeys = ['dispatches','settlements','completion_notices','relays_received','relays_sent',
+    'workflow_runs_started','workflow_runs_ended','workflow_agents_started','workflow_agents_ended']
+  totals.delegation = Object.fromEntries(delegationKeys.map((key) => [key, sessions.reduce((n, s) => n + (s.delegation[key] || 0), 0)]))
+  const dispatchTotals = new Map()
+  for (const s of sessions) for (const [k, v] of s.delegation.dispatches_by_tool) count(dispatchTotals, k, v)
+  totals.delegation.dispatches_by_tool = dict(dispatchTotals)
+  totals.delegation.measurement = 'recorded-source-kinds; delivery and turn end are not completion'
+  const memberPhaseTotals = new Map(), taskStatusTotals = new Map()
+  for (const s of sessions) {
+    for (const [k, v] of s.team_summary.members_by_phase) count(memberPhaseTotals, k, v)
+    for (const [k, v] of s.team_summary.tasks_by_status) count(taskStatusTotals, k, v)
+  }
+  totals.team = {
+    members: sessions.reduce((n, s) => n + s.team_summary.members, 0),
+    tasks: sessions.reduce((n, s) => n + s.team_summary.tasks, 0),
+    task_transitions: sessions.reduce((n, s) => n + s.team_summary.task_transitions, 0),
+    mailbox_legacy: sessions.reduce((n, s) => n + s.team_summary.mailbox_legacy, 0),
+    members_by_phase: dict(memberPhaseTotals),
+    tasks_by_status: dict(taskStatusTotals),
+    measurement: 'last-wins roster/task snapshots; not Lead task completion',
+  }
+  totals.llm_retry_chains = new Set(sessions.flatMap((s) => [...s.llm_retry_chains])).size
+  totals.plugin_records = {...coverage.plugin_records}
   const projects = [...groupBy(sessions, 'project')]
     .map(([project, ss]) => ({
       project,
@@ -1547,7 +1878,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.5.2-v4-dsh020rc2.1',
+    analyzer_version: '0.6.0-v4-dsh021rc2.1',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),

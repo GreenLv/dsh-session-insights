@@ -25,11 +25,11 @@ from .v4 import IDENTITY, validate_records
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.5.2-v4-dsh020rc2.1"
+ANALYZER_VERSION = "0.6.0-v4-dsh021rc2.1"
 FAILURE_RULE_VERSION = "5.1.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
-DETERMINISTIC_CACHE_VERSION = 4
+DETERMINISTIC_CACHE_VERSION = 5
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
 
 # Session-log generations understood by this reader. Native V3 is the current
@@ -114,11 +114,33 @@ DSH_V3_RECORD_TYPES = {
     "tool/ptc-dispatch-start",
 }
 DSH_V4_RECORD_TYPES = {"developer/message", "image/offload", "workspace/changes"}
-DSH_KNOWN_RECORD_TYPES = DSH_BASE_RECORD_TYPES | DSH_V3_RECORD_TYPES | DSH_V4_RECORD_TYPES
+# Host 0.2.1-rc.2 extends the same V4 format with background-job lifecycle and
+# a durable working-directory projection. The format version stays 4, so a
+# version-number check alone cannot detect this vocabulary growth.
+DSH_V4_EXT_RECORD_TYPES = {
+    "job/registered",
+    "job/settled",
+    "working-directory/change",
+}
+DSH_KNOWN_RECORD_TYPES = (
+    DSH_BASE_RECORD_TYPES
+    | DSH_V3_RECORD_TYPES
+    | DSH_V4_RECORD_TYPES
+    | DSH_V4_EXT_RECORD_TYPES
+)
 
 # The four message-producing event types. Only these may carry `surfaceOp`,
 # and only these project to an LLM message.
 DSH_SURFACE_RECORD_TYPES = {"developer/message", "system/message", "user/message", "assistant/message", "tool/result"}
+
+# Host 0.2.1-rc.2 background-job vocabulary. `job/settled` is a registry
+# settlement, not proof that a user task finished or that resources were
+# released; `producerReported` records only the producer's acknowledgement.
+JOB_TERMINAL_STATUSES = frozenset({"completed", "failed", "killed"})
+JOB_SETTLE_CAUSES = frozenset({"producer", "kill", "teardown"})
+# Default tool names that dispatch work into another runtime unit. Job `kind`
+# stays opaque; these names are the producing side, not a job-kind allowlist.
+DELEGATION_TOOL_NAMES = frozenset({"subagent", "subagent_fork", "workflow", "spawn_teammate"})
 
 # `user/message.data.source.kind` values that mark a direct human prompt. The
 # source union is merge-extensible, so every other kind (plugin, goal,
@@ -520,7 +542,7 @@ def file_sha256(path: Path) -> str:
 
 def apply_coverage_delta(coverage: dict[str, Any], delta: dict[str, Any]) -> None:
     for key, value in delta.items():
-        if key == "unknown_record_types":
+        if key in {"unknown_record_types", "plugin_records"}:
             coverage[key].update(value)
         else:
             coverage[key] += int(value)
@@ -536,6 +558,7 @@ def parse_coverage_state() -> dict[str, Any]:
         "malformed_lines": 0,
         "partial_sessions": 0,
         "unknown_record_types": Counter(),
+        "plugin_records": Counter(),
         "surface_replacements": 0,
     }
 
@@ -547,6 +570,7 @@ def cached_parse_delta(coverage: dict[str, Any]) -> dict[str, Any]:
         "resource_limited_files": int(coverage.get("resource_limited_files", 0)),
         "malformed_lines": int(coverage["malformed_lines"]),
         "unknown_record_types": Counter(coverage["unknown_record_types"]),
+        "plugin_records": Counter(coverage.get("plugin_records", {})),
         "surface_replacements": int(coverage.get("surface_replacements", 0)),
     }
 
@@ -621,7 +645,8 @@ def project_label(cwd: str) -> str:
     value = cwd.strip().rstrip("/\\")
     if not value:
         return "unknown"
-    if re.match(r"^[A-Za-z]:\\", value):
+    if re.match(r"^[A-Za-z]:[\\/]", value) or value.startswith("\\\\"):
+        # Drive and UNC paths use Windows separators even on a POSIX host.
         label = PureWindowsPath(value).name
     else:
         label = Path(value).name
@@ -1095,6 +1120,9 @@ def new_session(meta: dict[str, Any], timestamp: datetime, path: Path, config: A
         "failed_patches": 0,
         "subagents": 0,
         "web_searches": 0,
+        "web_fetches": 0,
+        "model_selections": 0,
+        "reasoning_efforts": Counter(),
         "mcp_calls": 0,
         "skill_calls": 0,
         "skill_counts": Counter(),
@@ -1139,6 +1167,8 @@ def new_session(meta: dict[str, Any], timestamp: datetime, path: Path, config: A
         "fallback_title": "",
         "turn_started_at": {},
         "llm_retries": 0,
+        "llm_retries_performed": 0,
+        "llm_retry_chains": set(),
         "denied_approvals": 0,
         "approval_requests": {},
         "rejected_approval_call_ids": set(),
@@ -1481,6 +1511,10 @@ def process_call(
         session["subagents"] += 1
     if "web" in lowered and any(term in lowered for term in ("run", "search", "query")):
         session["web_searches"] += 1
+    # Fetch is a distinct tool in DSH 0.2.1-rc.2 and any earlier `web.fetch`
+    # alias; one search call returning many sources is still one call.
+    if "web" in lowered and "fetch" in lowered:
+        session["web_fetches"] += 1
     if lowered.startswith("mcp") or "mcp__" in raw_name.casefold():
         session["mcp_calls"] += 1
         server = mcp_server_name(name) or mcp_server_name(raw_name) or name
@@ -1890,6 +1924,24 @@ def finalize_dsh_tokens(session: dict[str, Any]) -> None:
         + cache_write_tokens
     )
     session["tokens"] = tokens
+    samples = [entry["usage"] for entry in session["usage_by_step"].values() if isinstance(entry.get("usage"), dict)]
+    session["token_measurement"] = {
+        # Per-step values are recorded by the host. `total_tokens` is a
+        # consistent derived sum (uncached + cached + output + cache-write), so
+        # it is never presented as a provider-reported total.
+        "input_tokens": "derived",
+        "uncached_input_tokens": "recorded",
+        "cached_input_tokens": "recorded",
+        "output_tokens": "recorded",
+        "reasoning_output_tokens": "recorded",
+        "cache_write_tokens": "recorded",
+        "total_tokens": "derived",
+        "usage_samples": len(samples),
+        "usage_total_samples": sum(
+            1 for usage in samples
+            if isinstance(usage.get("totalTokens"), (int, float)) and not isinstance(usage.get("totalTokens"), bool)
+        ),
+    }
 
 
 def new_dsh_session(
@@ -1957,6 +2009,41 @@ def new_dsh_session(
     session["compaction_shadowed_events"] = 0
     session["semantic_shadowed_messages"] = 0
     session["inherited_event_count"] = 0
+    # Host 0.2.1-rc.2 durable registries. Jobs are keyed by their unique jobId;
+    # the trajectory starts with the header cwd as the origin segment. Raw cwd
+    # values stay in private session state; public views carry project labels.
+    session["jobs"] = {}
+    session["cwd_segments"] = [{
+        "seq": -1,
+        "key": normalize_path(cwd),
+        "label": project_label(cwd),
+        "inherited": False,
+    }]
+    session["working_directory_changes"] = 0
+    # Integrity anomalies are counted rather than hidden; only structurally
+    # impossible identities refuse the whole session.
+    session["unpaired_job_settlements"] = 0
+    session["jobs_busy_turn_ends"] = 0
+    session["cwd_anomalies"] = Counter()
+    session["delegation"] = {
+        "dispatches": 0,
+        "dispatches_by_tool": Counter(),
+        "settlements": 0,
+        "completion_notices": 0,
+        "relays_received": 0,
+        "relays_sent": 0,
+        "workflow_runs_started": 0,
+        "workflow_runs_ended": 0,
+        "workflow_agents_started": 0,
+        "workflow_agents_ended": 0,
+    }
+    session["subagent_descriptor"] = None
+    session["team"] = {
+        "members": {},
+        "tasks": {},
+        "mailbox_legacy": 0,
+        "task_transitions": 0,
+    }
     return session
 
 
@@ -1988,6 +2075,126 @@ def apply_dsh_surface_shadow(session: dict[str, Any], record: dict[str, Any], co
     coverage["surface_replacements"] = coverage.get("surface_replacements", 0) + 1
 
 
+def _is_finite_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _job_registration(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate the registration facts shared by both job events.
+
+    A malformed required record is an explainable refusal, never a silent drop:
+    dropping it could change how the rest of the session is interpreted.
+    """
+    job_id = data.get("jobId")
+    owner = data.get("owner")
+    kind = data.get("kind")
+    label = data.get("label")
+    started_at = data.get("startedAt")
+    tool_call = data.get("toolCall")
+    if not isinstance(job_id, str) or not job_id:
+        raise ValueError("invalid job identity: jobId")
+    if not isinstance(owner, str) or not owner:
+        raise ValueError("invalid job identity: owner")
+    if not isinstance(kind, str) or not kind:
+        raise ValueError("invalid job identity: kind")
+    if label is not None and not isinstance(label, str):
+        raise ValueError("invalid job identity: label")
+    if not _is_finite_number(started_at):
+        raise ValueError("invalid job identity: startedAt")
+    call_identity = None
+    if tool_call is not None:
+        if not isinstance(tool_call, dict):
+            raise ValueError("invalid job tool call identity")
+        call_id, root_call_id = tool_call.get("callId"), tool_call.get("rootCallId")
+        if not isinstance(call_id, str) or not call_id or not isinstance(root_call_id, str) or not root_call_id:
+            raise ValueError("invalid job tool call identity")
+        call_identity = {"callId": call_id, "rootCallId": root_call_id}
+    return {
+        "job_id": job_id,
+        "owner": owner,
+        "kind": kind,
+        "label": label or "",
+        "started_at": started_at,
+        "tool_call": call_identity,
+        "settled": False,
+        "status": "running",
+        "cause": None,
+        "producer_reported": None,
+        "finished_at": None,
+        "detail": "",
+        "inherited": False,
+    }
+
+
+def register_job(session: dict[str, Any], data: dict[str, Any]) -> None:
+    record = _job_registration(data)
+    if record["job_id"] in session["jobs"]:
+        raise ValueError("duplicate job registration")
+    session["jobs"][record["job_id"]] = record
+
+
+def settle_job(session: dict[str, Any], data: dict[str, Any]) -> None:
+    record = _job_registration(data)
+    prior = session["jobs"].get(record["job_id"])
+    if prior is None:
+        # Host registration is a best-effort append; a lost registration must
+        # not make an otherwise readable session refuse. Count the anomaly.
+        session["unpaired_job_settlements"] += 1
+        return
+    if prior["settled"]:
+        # Registry settlement is first-wins; a second terminal record is
+        # corruption, not a duplicate observation to merge.
+        raise ValueError("duplicate job settlement")
+    finished_at = data.get("finishedAt")
+    status = data.get("status")
+    cause = data.get("cause")
+    producer_reported = data.get("producerReported")
+    detail = data.get("detail")
+    if not _is_finite_number(finished_at):
+        raise ValueError("invalid job settlement: finishedAt")
+    if status not in JOB_TERMINAL_STATUSES:
+        raise ValueError("invalid job settlement: status")
+    if cause not in JOB_SETTLE_CAUSES:
+        raise ValueError("invalid job settlement: cause")
+    if not isinstance(producer_reported, bool):
+        raise ValueError("invalid job settlement: producerReported")
+    if detail is not None and not isinstance(detail, str):
+        raise ValueError("invalid job settlement: detail")
+    for key in ("owner", "kind", "started_at", "tool_call"):
+        if prior[key] != record[key]:
+            raise ValueError("job settlement identity conflict")
+    prior.update(
+        settled=True,
+        status=status,
+        cause=cause,
+        producer_reported=producer_reported,
+        finished_at=finished_at,
+        detail=detail or "",
+    )
+
+
+def record_working_directory(session: dict[str, Any], data: dict[str, Any], seq: int | None) -> None:
+    cwd = data.get("cwd")
+    if not isinstance(cwd, str) or not cwd.strip():
+        session["cwd_anomalies"]["invalid"] += 1
+        return
+    key = normalize_path(cwd)
+    if not key.startswith("/") and not re.match(r"^[A-Za-z]:/", key) and not key.startswith("//"):
+        session["cwd_anomalies"]["relative"] += 1
+    previous = session["cwd_segments"][-1]["key"]
+    if key == previous:
+        # The host suppresses a change to the current directory; seeing one
+        # means a foreign writer or corruption.
+        session["cwd_anomalies"]["duplicate"] += 1
+    session["working_directory_changes"] += 1
+    session["cwd_segments"].append({
+        "seq": seq,
+        "key": key,
+        "label": project_label(cwd),
+        "inherited": False,
+    })
+
+
 def process_dsh_record(
     session: dict[str, Any],
     record_type: str,
@@ -1998,7 +2205,45 @@ def process_dsh_record(
     seq: int | None = None,
 ) -> None:
     if record_type == "subagent/catalog":
-        session["child_sessions"].add(data["childId"])
+        child_id = data.get("childId")
+        if isinstance(child_id, str) and child_id:
+            session["child_sessions"].add(child_id)
+        return
+    if record_type == "subagent/descriptor":
+        # First descriptor wins; it is child-owned identity, not completion.
+        if session["subagent_descriptor"] is None:
+            session["subagent_descriptor"] = {
+                "version": data.get("version"),
+                "mode": data.get("mode"),
+                "provider": data.get("provider"),
+                "agent_provider": data.get("agentProvider"),
+                "agent_model": data.get("agentModel"),
+            }
+        return
+    if record_type in {"tool-workflow/run-start", "tool-workflow/run-end", "tool-workflow/agent-start", "tool-workflow/agent-end"}:
+        key = {
+            "tool-workflow/run-start": "workflow_runs_started",
+            "tool-workflow/run-end": "workflow_runs_ended",
+            "tool-workflow/agent-start": "workflow_agents_started",
+            "tool-workflow/agent-end": "workflow_agents_ended",
+        }[record_type]
+        session["delegation"][key] += 1
+        return
+    if record_type in {"team/member", "team/task", "team/message/queued", "team/message/delivered"}:
+        # Team records carry the whole current snapshot, not a delta. Folding
+        # last-wins keeps roster/task state without treating any of it as task
+        # completion or user work.
+        if record_type == "team/member":
+            member = data.get("member")
+            if isinstance(member, dict) and isinstance(member.get("id"), str) and member["id"]:
+                session["team"]["members"][member["id"]] = dict(member)
+        elif record_type == "team/task":
+            task = data.get("task")
+            if isinstance(task, dict) and isinstance(task.get("id"), str) and task["id"]:
+                session["team"]["tasks"][task["id"]] = dict(task)
+                session["team"]["task_transitions"] += 1
+        else:
+            session["team"]["mailbox_legacy"] += 1
         return
     if record_type in {"tool/ptc-dispatch-start", "tool/ptc-dispatch"}:
         key = data.get("subCallId")
@@ -2025,6 +2270,10 @@ def process_dsh_record(
                 session["turn_started_at"][turn_key] = record_timestamp
         return
     if record_type == "turn/end":
+        # A parent turn can end while an owned job is still running; that is a
+        # recorded fact, not a failed job and not a completed user task.
+        if any(not job["settled"] and not job["inherited"] for job in session["jobs"].values()):
+            session["jobs_busy_turn_ends"] += 1
         turn = data.get("turn")
         if turn is not None:
             turn_key = str(turn)
@@ -2049,6 +2298,15 @@ def process_dsh_record(
         if data.get("inherited") is True and seq is not None:
             session["inherited_event_count"] = seq
         return
+    if record_type == "job/registered":
+        register_job(session, data)
+        return
+    if record_type == "job/settled":
+        settle_job(session, data)
+        return
+    if record_type == "working-directory/change":
+        record_working_directory(session, data, seq)
+        return
     if record_type == "user/message":
         if not dsh_user_message_is_human(data):
             # Synthetic `agent.inject()` context, goal rounds, skill catalogs
@@ -2059,6 +2317,15 @@ def process_dsh_record(
             kind = str(source.get("kind") or "unknown") if isinstance(source, dict) else "unknown"
             session["injected_user_messages"] += 1
             session["injected_source_kinds"][kind] += 1
+            form = str(source.get("form") or "") if isinstance(source, dict) else ""
+            if kind == "subagent-settled":
+                # A runtime-owned completion notice settles a delegation; it
+                # never counts as a user prompt or as task completion.
+                session["delegation"]["settlements"] += 1
+            elif kind == "tool-jobs" and form == "notice":
+                session["delegation"]["completion_notices"] += 1
+            elif kind == "agent-message" and form == "relay":
+                session["delegation"]["relays_received"] += 1
             return
         payload: dict[str, Any] = {"type": "user_message"}
         if isinstance(data.get("content"), list):
@@ -2142,6 +2409,8 @@ def process_dsh_record(
         lowered = name.casefold()
         if lowered in {"subagent", "workflow", "spawn_teammate"}:
             session["subagents"] += 1
+        if lowered == "send_message":
+            session["delegation"]["relays_sent"] += 1
         return
     if record_type == "tool/result":
         call_id = dsh_tool_call_id(data)
@@ -2206,6 +2475,12 @@ def process_dsh_record(
         ):
             cause_override = "permission_boundary"
         call = session["calls"].get(call_id, {})
+        tool_name = str(call.get("tool") or "")
+        if tool_name in DELEGATION_TOOL_NAMES:
+            # Dispatch acknowledgement only: the eventual subagent settlement
+            # notice, workflow run-end, or job settlement is separate evidence.
+            session["delegation"]["dispatches"] += 1
+            session["delegation"]["dispatches_by_tool"][tool_name] += 1
         # PTC ancestry is not proof of duplicated causality; count failed outcomes.
         process_call_output(
             session,
@@ -2255,9 +2530,27 @@ def process_dsh_record(
         elif outcome in {"approved", "allowed"} and call_id:
             session["rejected_approval_call_ids"].discard(call_id)
         return
+    if record_type == "model/selection":
+        provider = data.get("provider")
+        model = data.get("model")
+        if isinstance(provider, str) and provider and isinstance(model, str) and model:
+            session["provider_models"][(provider, model)] += 1
+        session["model_selections"] += 1
+        effort = data.get("reasoningEffort")
+        if isinstance(effort, str) and effort:
+            session["reasoning_efforts"][effort] += 1
+        return
     if record_type == "llm/retry":
+        # Scheduled retry (appended before backoff); not proof an attempt ran.
         session["llm_retries"] += 1
+        retry_id = data.get("retryId")
+        if isinstance(retry_id, str) and retry_id:
+            session["llm_retry_chains"].add(retry_id)
         session["failure_causes"]["llm_retry"] += 1
+        return
+    if record_type == "llm/retry-started":
+        # The next request attempt actually started after a successful wait.
+        session["llm_retries_performed"] += 1
         return
     if record_type == "session/title":
         title = data.get("title")
@@ -2275,9 +2568,121 @@ def process_dsh_record(
     # todo/write, step/start, step/end, session/end-seed, and aggregate chunks.
 
 
+def cwd_platform_form(key: str) -> str:
+    if not key:
+        return "empty"
+    if key.startswith("//"):
+        return "unc"
+    if re.match(r"^[A-Za-z]:/", key):
+        return "drive"
+    if key.startswith("/"):
+        return "home_prefix" if re.match(r"^/(?:Users|home)/", key) else "posix"
+    return "relative"
+
+
+def finalize_jobs(session: dict[str, Any]) -> None:
+    """Derive job counters from durable records, never from notices or prose.
+
+    `completed` is a registry/producer outcome. It does not certify resource
+    release, user-task completion, or that an async child produced a deliverable.
+    """
+    counts = {
+        "registered": 0,
+        "settled": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": 0,
+        "pending": 0,
+        "inherited": 0,
+        "inherited_pending": 0,
+        "producer_reported": 0,
+        "unreported": 0,
+        "teardown": 0,
+        "duration_negative": 0,
+        "detail_present": 0,
+        "busy_turn_ends": session.get("jobs_busy_turn_ends", 0),
+        "unpaired_settlement": session.get("unpaired_job_settlements", 0),
+        "by_kind": Counter(),
+        "by_cause": Counter(),
+    }
+    for job in session["jobs"].values():
+        counts["registered"] += 1
+        counts["by_kind"][str(job["kind"])] += 1
+        if job["inherited"]:
+            counts["inherited"] += 1
+        if job["settled"]:
+            counts["settled"] += 1
+            counts[str(job["status"])] += 1
+            if job["cause"]:
+                counts["by_cause"][str(job["cause"])] += 1
+            if job["cause"] == "teardown":
+                counts["teardown"] += 1
+            if job["producer_reported"] is True:
+                counts["producer_reported"] += 1
+            elif job["producer_reported"] is False:
+                counts["unreported"] += 1
+            if isinstance(job["finished_at"], (int, float)) and job["finished_at"] < job["started_at"]:
+                counts["duration_negative"] += 1
+            if job["detail"]:
+                counts["detail_present"] += 1
+        else:
+            counts["pending"] += 1
+            if job["inherited"]:
+                counts["inherited_pending"] += 1
+    session["job_counts"] = counts
+
+
+def finalize_working_directory(session: dict[str, Any]) -> None:
+    segments = session["cwd_segments"]
+    keys: list[str] = []
+    projects: list[str] = []
+    own: list[str] = []
+    inherited: list[str] = []
+    own_keys: list[str] = []
+    inherited_keys: list[str] = []
+    for segment in segments:
+        if segment["key"] not in keys:
+            keys.append(segment["key"])
+            projects.append(segment["label"])
+        bucket_keys, bucket = (inherited_keys, inherited) if segment["inherited"] else (own_keys, own)
+        if segment["key"] not in bucket_keys:
+            bucket_keys.append(segment["key"])
+            bucket.append(segment["label"])
+    session["cwd_projects"] = projects
+    session["cwd_cross_project"] = len(keys) > 1
+    session["cwd_changes_inherited"] = sum(1 for segment in segments if segment["inherited"])
+    session["cwd_changes"] = max(0, session["working_directory_changes"] - session["cwd_changes_inherited"])
+    session["cwd_origin_label"] = segments[0]["label"] if segments else "unknown"
+    session["cwd_effective_at_cut"] = inherited[-1] if inherited else (segments[0]["label"] if segments else "unknown")
+    session["cwd_own_labels"] = own
+    session["cwd_inherited_labels"] = inherited
+    session["cwd_platform_forms"] = Counter(cwd_platform_form(segment["key"]) for segment in segments)
+    session["cwd_changes_same_as_previous"] = session["cwd_anomalies"]["duplicate"]
+    session["cwd_invalid_changes"] = session["cwd_anomalies"]["invalid"]
+    session["cwd_relative_changes"] = session["cwd_anomalies"]["relative"]
+
+
+def finalize_delegation(session: dict[str, Any]) -> None:
+    delegation = session["delegation"]
+    delegation["dispatches_by_tool"] = dict(sorted(delegation["dispatches_by_tool"].items()))
+    team = session["team"]
+    session["team_summary"] = {
+        "members": len(team["members"]),
+        "members_by_phase": dict(sorted(Counter(str(member.get("phase") or "unknown") for member in team["members"].values()).items())),
+        "tasks": len(team["tasks"]),
+        "tasks_by_status": dict(sorted(Counter(str(task.get("status") or "unknown") for task in team["tasks"].values()).items())),
+        "task_transitions": team["task_transitions"],
+        "mailbox_legacy": team["mailbox_legacy"],
+    }
+    # Team snapshots are durable identity/state, never Lead task completion.
+
+
 def finalize_dsh_session(session: dict[str, Any], coverage: dict[str, Any]) -> dict[str, Any]:
     session["tool_execution"]["inner_incomplete"] = sum(not p["settled"] and not p.get("inherited") for p in session["ptc"].values())
     finalize_dsh_tokens(session)
+    finalize_jobs(session)
+    finalize_working_directory(session)
+    finalize_delegation(session)
     session["repeated_retries"] = (
         session["unchanged_retries"] + session["state_change_retries"] + session["polling_retries"]
     )
@@ -2349,7 +2754,13 @@ def parse_dsh_session_records(
             continue
         record_type = str(record.get("type") or "")
         if record_type not in DSH_KNOWN_RECORD_TYPES:
-            coverage["unknown_record_types"][record_type or "<missing>"] += 1
+            # Third-party `plugin:` records are ignorable by contract. Only the
+            # opaque type and count are retained; their payload never becomes
+            # user intent, task-completion evidence or model context.
+            if record_type.startswith("plugin:"):
+                coverage.setdefault("plugin_records", Counter())[record_type] += 1
+            else:
+                coverage["unknown_record_types"][record_type or "<missing>"] += 1
             continue
         record_timestamp = parse_dsh_timestamp(record.get("time"))
         record_seq = record.get("seq")
@@ -2406,12 +2817,19 @@ def parse_dsh_session_records(
             session["observed_end"] = max(session["observed_end"], record_timestamp)
         apply_dsh_surface_shadow(session, record, coverage)
         if record_seq is not None and record_seq < inherited_cut:
-            if record_type in {"tool/call", "tool/ptc-dispatch-start", "tool/ptc-dispatch", "approval/asked", "approval/decided"}:
+            if record_type in {"tool/call", "tool/ptc-dispatch-start", "tool/ptc-dispatch", "approval/asked", "approval/decided", "job/registered", "job/settled", "working-directory/change"}:
                 process_dsh_record(prefix_state, record_type, data, config, record_timestamp, seq=record_seq)
             continue
         if not prefix_transferred and prefix_state is not None:
             for key in ("calls", "approval_requests", "ptc", "rejected_approval_call_ids"): session[key].update(prefix_state[key])
             for entry in session["ptc"].values(): entry["inherited"] = True
+            # Inherited job history is retained for identity and outcome
+            # continuity but never counted as the child's own work.
+            for entry in prefix_state["jobs"].values(): entry["inherited"] = True
+            session["jobs"].update(prefix_state["jobs"])
+            inherited_segments = prefix_state["cwd_segments"][1:]
+            session["cwd_segments"].extend({**segment, "inherited": True} for segment in inherited_segments)
+            session["working_directory_changes"] += len(inherited_segments)
             prefix_transferred = True
         process_dsh_record(session, record_type, data, config, record_timestamp, seq=record_seq)
     if session is None:
@@ -2459,6 +2877,30 @@ def completion_view(session: dict[str, Any]) -> dict[str, str]:
         ),
         "accepted": "yes" if session["accepted_evidence"] > 0 else "unknown",
     }
+
+
+def job_public_items(session: dict[str, Any], config: AnalysisConfig) -> list[dict[str, Any]]:
+    """Bounded, privacy-shaped job rows; labels are report content, not IDs."""
+    metrics = config.metrics_only or config.privacy_mode == "metrics"
+    items: list[dict[str, Any]] = []
+    for job in list(session["jobs"].values())[:20]:
+        finished = job.get("finished_at")
+        items.append({
+            "job_id": stable_identifier(str(job["job_id"]), config, "job"),
+            "kind": "omitted" if metrics else excerpt_text(str(job["kind"]), config, 40),
+            "status": job["status"],
+            "cause": job["cause"],
+            "settled": bool(job["settled"]),
+            "producer_reported": job["producer_reported"],
+            "inherited": bool(job["inherited"]),
+            "duration_ms": (
+                max(0, int(finished - job["started_at"]))
+                if isinstance(finished, (int, float)) and not isinstance(finished, bool)
+                else None
+            ),
+            "label": "omitted" if metrics else excerpt_text(str(job["label"]), config, 80),
+        })
+    return items
 
 
 def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict[str, Any]:
@@ -2511,6 +2953,36 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "tool_execution": session["tool_execution"],
         "tool_recovery": dict(session.get("tool_recovery") or {"outcome_unknown": 0, "not_started": 0}),
         "child_sessions": len(session["child_sessions"]),
+        "jobs": {
+            **dict(session.get("job_counts") or {}),
+            "items": job_public_items(session, config),
+        },
+        "working_directory": {
+            "changes": session.get("cwd_changes", 0),
+            "inherited_changes": session.get("cwd_changes_inherited", 0),
+            "trajectory": [segment["label"] for segment in session.get("cwd_segments", [])],
+            "projects_visited": list(session.get("cwd_projects") or []),
+            "cross_project": bool(session.get("cwd_cross_project")),
+            "origin_label": session.get("cwd_origin_label"),
+            "effective_at_cut": session.get("cwd_effective_at_cut"),
+            "own_labels": list(session.get("cwd_own_labels") or []),
+            "inherited_labels": list(session.get("cwd_inherited_labels") or []),
+            "platform_forms": dict(sorted(session.get("cwd_platform_forms", {}).items())),
+            "changes_same_as_previous": session.get("cwd_changes_same_as_previous", 0),
+            "invalid_changes": session.get("cwd_invalid_changes", 0),
+            "relative_changes": session.get("cwd_relative_changes", 0),
+            "attribution": "header-origin-with-change-trajectory",
+        },
+        "delegation": {
+            **dict(session.get("delegation") or {}),
+            "measurement": "recorded-source-kinds; delivery and turn end are not completion",
+        },
+        "team": dict(session.get("team_summary") or {}),
+        "subagent": (
+            dict(session["subagent_descriptor"])
+            if isinstance(session.get("subagent_descriptor"), dict)
+            else None
+        ),
         "system_messages": session.get("system_messages", 0),
         "injected_user_messages": session.get("injected_user_messages", 0),
         "injected_source_kinds": dict(sorted(session.get("injected_source_kinds", {}).items())),
@@ -2532,6 +3004,9 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "failed_patches": session["failed_patches"],
         "subagents": session["subagents"],
         "web_searches": session["web_searches"],
+        "web_fetches": session["web_fetches"],
+        "model_selections": session["model_selections"],
+        "reasoning_efforts": dict(sorted(session["reasoning_efforts"].items())),
         "mcp_calls": session["mcp_calls"],
         "skill_calls": session["skill_calls"],
         "aborted_turns": session["aborted_turns"],
@@ -2562,6 +3037,7 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "median_assistant_latency_seconds": safe_round(statistics.median(session["assistant_latency_seconds"])) if session["assistant_latency_seconds"] else 0,
         "median_user_response_seconds": safe_round(statistics.median(session["user_response_seconds"])) if session["user_response_seconds"] else 0,
         "tokens": token_view(session["tokens"]),
+        "token_measurement": dict(session.get("token_measurement") or {}),
         "top_tools": [name for name, _ in session["tool_counts"].most_common(5)],
         "file_extensions": [name for name, _ in session["file_extensions"].most_common(5)],
         "skill_mentions": [name for name, _ in session["skill_mentions"].most_common(5)],
@@ -2570,6 +3046,8 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
     view["provider"] = provider
     view["model"] = model
     view["llm_retries"] = session["llm_retries"]
+    view["llm_retries_performed"] = session["llm_retries_performed"]
+    view["llm_retry_chains"] = len(session["llm_retry_chains"])
     view["denied_approvals"] = session["denied_approvals"]
     return view
 
@@ -3217,6 +3695,7 @@ def build_report(
         "malformed_lines": 0,
         "partial_sessions": 0,
         "unknown_record_types": Counter(),
+        "plugin_records": Counter(),
         "deterministic_cache": {"enabled": config.deterministic_cache, "hits": 0, "misses": 0, "invalidations": 0, "disabled": 0, "write_errors": 0},
         "generation_diagnostics": {},
         "surface_replacements": 0,
@@ -3271,6 +3750,7 @@ def build_report(
                 sessions.append(parsed)
     coverage["sessions_analyzed"] = len(sessions)
     coverage["unknown_record_types"] = dict(sorted(coverage["unknown_record_types"].items()))
+    coverage["plugin_records"] = dict(sorted(coverage.get("plugin_records", {}).items()))
 
     total_tokens = aggregate_tokens(sessions)
     totals = {
@@ -3288,6 +3768,8 @@ def build_report(
         "failed_patches": sum(session["failed_patches"] for session in sessions),
         "subagents": sum(session["subagents"] for session in sessions),
         "web_searches": sum(session["web_searches"] for session in sessions),
+        "web_fetches": sum(session["web_fetches"] for session in sessions),
+        "model_selections": sum(session["model_selections"] for session in sessions),
         "mcp_calls": sum(session["mcp_calls"] for session in sessions),
         "aborted_turns": sum(session["aborted_turns"] for session in sessions),
         "permission_blocks": sum(session["permission_blocks"] for session in sessions),
@@ -3299,6 +3781,8 @@ def build_report(
         "tokens": total_tokens,
     }
     totals["llm_retries"] = sum(session["llm_retries"] for session in sessions)
+    totals["llm_retries_performed"] = sum(session["llm_retries_performed"] for session in sessions)
+    totals["llm_retry_chains"] = len({chain for session in sessions for chain in session["llm_retry_chains"]})
     totals["denied_approvals"] = sum(session["denied_approvals"] for session in sessions)
     # Official recovery results are uncertainty records; neither status is a
     # structured failure, so they are reported outside tool_failures.
@@ -3314,6 +3798,74 @@ def build_report(
     totals["injected_user_messages"] = sum(session.get("injected_user_messages", 0) for session in sessions)
     totals["assistant_attempts"] = sum(session.get("assistant_attempts", 0) for session in sessions)
     totals["compaction_events"] = sum(session.get("compaction_events", 0) for session in sessions)
+    # Host 0.2.1-rc.2 background jobs. Recorded registry outcomes are reported
+    # separately from user-task completion; pending means registered without a
+    # durable settlement, not necessarily failed or still consuming resources.
+    job_totals = {
+        "registered": sum(session.get("job_counts", {}).get("registered", 0) for session in sessions),
+        "settled": sum(session.get("job_counts", {}).get("settled", 0) for session in sessions),
+        "completed": sum(session.get("job_counts", {}).get("completed", 0) for session in sessions),
+        "failed": sum(session.get("job_counts", {}).get("failed", 0) for session in sessions),
+        "killed": sum(session.get("job_counts", {}).get("killed", 0) for session in sessions),
+        "pending": sum(session.get("job_counts", {}).get("pending", 0) for session in sessions),
+        "inherited": sum(session.get("job_counts", {}).get("inherited", 0) for session in sessions),
+        "inherited_pending": sum(session.get("job_counts", {}).get("inherited_pending", 0) for session in sessions),
+        "producer_reported": sum(session.get("job_counts", {}).get("producer_reported", 0) for session in sessions),
+        "unreported": sum(session.get("job_counts", {}).get("unreported", 0) for session in sessions),
+        "teardown": sum(session.get("job_counts", {}).get("teardown", 0) for session in sessions),
+        "duration_negative": sum(session.get("job_counts", {}).get("duration_negative", 0) for session in sessions),
+        "detail_present": sum(session.get("job_counts", {}).get("detail_present", 0) for session in sessions),
+        "busy_turn_ends": sum(session.get("job_counts", {}).get("busy_turn_ends", 0) for session in sessions),
+        "unpaired_settlement": sum(session.get("job_counts", {}).get("unpaired_settlement", 0) for session in sessions),
+        "measurement": "recorded",
+        "completion_scope": "registry-or-producer-outcome; not user-task completion or resource release",
+    }
+    job_kinds: Counter[str] = Counter()
+    job_causes: Counter[str] = Counter()
+    for session in sessions:
+        job_kinds.update(session.get("job_counts", {}).get("by_kind", {}))
+        job_causes.update(session.get("job_counts", {}).get("by_cause", {}))
+    job_totals["by_kind"] = dict(sorted(job_kinds.items()))
+    job_totals["by_cause"] = dict(sorted(job_causes.items()))
+    totals["jobs"] = job_totals
+    totals["working_directory_changes"] = sum(session.get("cwd_changes", 0) for session in sessions)
+    totals["working_directory_inherited_changes"] = sum(session.get("cwd_changes_inherited", 0) for session in sessions)
+    totals["cross_project_sessions"] = sum(1 for session in sessions if session.get("cwd_cross_project"))
+    totals["cwd_invalid_changes"] = sum(session.get("cwd_invalid_changes", 0) for session in sessions)
+    totals["cwd_changes_same_as_previous"] = sum(session.get("cwd_changes_same_as_previous", 0) for session in sessions)
+    platform_forms: Counter[str] = Counter()
+    for session in sessions:
+        platform_forms.update(session.get("cwd_platform_forms", {}))
+    totals["cwd_platform_forms"] = dict(sorted(platform_forms.items()))
+    delegation_totals = {
+        key: sum(int(session.get("delegation", {}).get(key, 0)) for session in sessions)
+        for key in (
+            "dispatches", "settlements", "completion_notices", "relays_received", "relays_sent",
+            "workflow_runs_started", "workflow_runs_ended", "workflow_agents_started", "workflow_agents_ended",
+        )
+    }
+    dispatch_tools: Counter[str] = Counter()
+    for session in sessions:
+        dispatch_tools.update(session.get("delegation", {}).get("dispatches_by_tool", {}))
+    delegation_totals["dispatches_by_tool"] = dict(sorted(dispatch_tools.items()))
+    delegation_totals["measurement"] = "recorded-source-kinds; delivery and turn end are not completion"
+    totals["delegation"] = delegation_totals
+    team_totals = {
+        "members": sum(session.get("team_summary", {}).get("members", 0) for session in sessions),
+        "tasks": sum(session.get("team_summary", {}).get("tasks", 0) for session in sessions),
+        "task_transitions": sum(session.get("team_summary", {}).get("task_transitions", 0) for session in sessions),
+        "mailbox_legacy": sum(session.get("team_summary", {}).get("mailbox_legacy", 0) for session in sessions),
+        "measurement": "last-wins roster/task snapshots; not Lead task completion",
+    }
+    for key in ("members_by_phase", "tasks_by_status"):
+        merged: Counter[str] = Counter()
+        for session in sessions:
+            merged.update(session.get("team_summary", {}).get(key, {}))
+        team_totals[key] = dict(sorted(merged.items()))
+    totals["team"] = team_totals
+    # Third-party plugin records are ignorable and opaque; the report retains
+    # only their type and count, never their payload.
+    totals["plugin_records"] = dict(sorted(coverage.get("plugin_records", {}).items()))
 
     project_map: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for session in sessions:

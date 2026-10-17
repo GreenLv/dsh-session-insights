@@ -8,7 +8,7 @@ import {execFile} from 'node:child_process'
 import {promisify} from 'node:util'
 export const run = promisify(execFile)
 export const digest = value => createHash('sha256').update(value).digest('hex')
-export const TARGET = '0.2.0-rc.2'
+export const TARGET = '0.2.1-rc.2'
 
 export async function fileManifest(root) {
   const files = []
@@ -47,7 +47,7 @@ export async function inspectRuntime(root) {
     if (seen.has(packagePath)) return
     seen.add(packagePath)
     if ((name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-')) && metadata.version !== TARGET) throw new Error('mixed DSH runtime closure')
-    if (name === '@deepseek-ai/cordis' && metadata.version !== '4.0.4') throw new Error('unexpected Cordis runtime')
+    if (name === '@deepseek-ai/cordis' && metadata.version !== '4.0.5') throw new Error('unexpected Cordis runtime')
     identities.push({name, version: metadata.version, files: await fileManifest(dir)})
     for (const dependency of Object.keys({...metadata.dependencies, ...metadata.peerDependencies})) {
       if (!dependency.startsWith('@deepseek-ai/dsh-') && dependency !== '@deepseek-ai/cordis') continue

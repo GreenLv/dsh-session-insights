@@ -1,0 +1,339 @@
+{
+  "session": {
+    "version": 4,
+    "id": "synthetic-rc21-mixed-v4",
+    "createdAt": 1786423200000,
+    "cwd": "/synthetic/workspace/project-a",
+    "isSeeded": false,
+    "delegationDepth": 0,
+    "agentPreset": "standard"
+  },
+  "events": [
+    {
+      "data": {
+        "turn": 1
+      },
+      "seq": 0,
+      "time": 1786423201000,
+      "type": "turn/start"
+    },
+    {
+      "data": {
+        "step": 1,
+        "turn": 1
+      },
+      "seq": 1,
+      "time": 1786423202000,
+      "type": "step/start"
+    },
+    {
+      "data": {
+        "content": [
+          {
+            "text": "Implement the synthetic fixture and report evidence.",
+            "type": "text"
+          }
+        ],
+        "id": "fixture-msg-user-1",
+        "role": "user",
+        "source": {
+          "kind": "user"
+        }
+      },
+      "seq": 2,
+      "surfaceOp": "append",
+      "time": 1786423203000,
+      "type": "user/message"
+    },
+    {
+      "data": {
+        "message": {
+          "content": [
+            {
+              "text": "Implemented the bounded synthetic change.",
+              "type": "text"
+            },
+            {
+              "arguments": "{\"command\": \"python -m unittest\"}",
+              "id": "fixture-call-1",
+              "name": "bash",
+              "type": "tool-call"
+            }
+          ],
+          "id": "fixture-msg-assistant-1",
+          "role": "assistant",
+          "source": {
+            "kind": "model",
+            "model": "synthetic-model",
+            "provider": "synthetic-provider"
+          }
+        },
+        "step": 1,
+        "turn": 1,
+        "usage": {
+          "cacheReadTokens": 300,
+          "inputTokens": 120,
+          "outputTokens": 40,
+          "reasoningTokens": 20
+        },
+        "stream": []
+      },
+      "seq": 3,
+      "surfaceOp": "append",
+      "time": 1786423204000,
+      "type": "assistant/message"
+    },
+    {
+      "data": {
+        "arguments": "{\"command\": \"python -m unittest\"}",
+        "callId": "fixture-call-1",
+        "name": "bash",
+        "step": 1,
+        "turn": 1
+      },
+      "seq": 4,
+      "time": 1786423205000,
+      "type": "tool/call"
+    },
+    {
+      "data": {
+        "message": {
+          "content": [
+            {
+              "text": "Ran synthetic tests: OK",
+              "type": "text"
+            }
+          ],
+          "id": "fixture-msg-tool-1",
+          "role": "tool",
+          "source": {
+            "callId": "fixture-call-1",
+            "kind": "tool"
+          },
+          "toolCallId": "fixture-call-1",
+          "isError": false
+        },
+        "step": 1,
+        "turn": 1
+      },
+      "seq": 5,
+      "surfaceOp": "append",
+      "time": 1786423206000,
+      "type": "tool/result"
+    },
+    {
+      "data": {
+        "content": [
+          {
+            "text": "Keep the change narrow.",
+            "type": "text"
+          }
+        ],
+        "id": "fixture-msg-user-2",
+        "role": "user",
+        "source": {
+          "kind": "user"
+        }
+      },
+      "seq": 6,
+      "surfaceOp": "append",
+      "time": 1786423207000,
+      "type": "user/message"
+    },
+    {
+      "data": {
+        "step": 1,
+        "turn": 1
+      },
+      "seq": 7,
+      "time": 1786423208000,
+      "type": "step/end"
+    },
+    {
+      "data": {
+        "messageSeqs": [
+          2,
+          6
+        ],
+        "source": {
+          "kind": "provider",
+          "model": {
+            "model": "synthetic-model",
+            "provider": "synthetic-provider"
+          },
+          "provider": "synthetic-title"
+        },
+        "title": "Synthetic fixture task"
+      },
+      "seq": 8,
+      "time": 1786423209000,
+      "type": "session/title"
+    },
+    {
+      "data": {
+        "reason": {
+          "kind": "completed"
+        },
+        "turn": 1
+      },
+      "seq": 9,
+      "time": 1786423210000,
+      "type": "turn/end"
+    },
+    {
+      "type": "session/end-seed",
+      "seq": 10,
+      "time": 1786423211000,
+      "data": {}
+    },
+    {
+      "type": "turn/start",
+      "seq": 11,
+      "time": 1786423212000,
+      "data": {
+        "turn": 2
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 12,
+      "time": 1786423213000,
+      "data": {
+        "id": "mixed-first",
+        "role": "user",
+        "source": {
+          "kind": "user"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Synthetic first mixed request."
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 13,
+      "time": 1786423214000,
+      "data": {
+        "id": "mixed-second",
+        "role": "user",
+        "source": {
+          "kind": "user"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Synthetic second mixed request."
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 14,
+      "time": 1786423215000,
+      "data": {
+        "id": "mixed-third",
+        "role": "user",
+        "source": {
+          "kind": "user"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Synthetic third mixed request."
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 15,
+      "time": 1786423216000,
+      "data": {
+        "id": "mixed-replacement",
+        "role": "user",
+        "source": {
+          "kind": "user"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Synthetic replacement summary."
+          }
+        ]
+      },
+      "sourceEventSeqs": [
+        12,
+        13,
+        14
+      ],
+      "surfaceOp": {
+        "op": "replace",
+        "startSeq": 12,
+        "endSeq": 14
+      }
+    },
+    {
+      "type": "job/registered",
+      "seq": 16,
+      "time": 1786423217000,
+      "data": {
+        "jobId": "pwsh-5566778899aabbcc",
+        "owner": "synthetic-rc21-mixed-v4",
+        "kind": "pwsh",
+        "label": "Mixed representation pwsh job",
+        "startedAt": 1786423204000,
+        "toolCall": {
+          "callId": "fixture-call-1",
+          "rootCallId": "fixture-call-1"
+        }
+      }
+    },
+    {
+      "type": "working-directory/change",
+      "seq": 17,
+      "time": 1786423218000,
+      "data": {
+        "cwd": "/synthetic/workspace/project-b"
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 18,
+      "time": 1786423219000,
+      "data": {
+        "jobId": "pwsh-5566778899aabbcc",
+        "owner": "synthetic-rc21-mixed-v4",
+        "kind": "pwsh",
+        "label": "Mixed representation pwsh job",
+        "startedAt": 1786423204000,
+        "toolCall": {
+          "callId": "fixture-call-1",
+          "rootCallId": "fixture-call-1"
+        },
+        "finishedAt": 1786423206000,
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 19,
+      "time": 1786423220000,
+      "data": {
+        "turn": 2,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ],
+  "inheritedEventCount": 0
+}

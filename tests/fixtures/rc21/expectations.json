@@ -1,0 +1,416 @@
+[
+  {
+    "name": "job-lifecycle",
+    "expected": {
+      "jobs": {
+        "registered": 1,
+        "settled": 1,
+        "completed": 1,
+        "failed": 0,
+        "killed": 0,
+        "pending": 0,
+        "inherited": 0,
+        "producer_reported": 1,
+        "by_kind": {
+          "bash": 1
+        },
+        "by_cause": {
+          "producer": 1
+        }
+      },
+      "working_directory": {
+        "changes": 1,
+        "inherited_changes": 0,
+        "trajectory": [
+          "project-a",
+          "project-b"
+        ],
+        "projects_visited": [
+          "project-a",
+          "project-b"
+        ],
+        "cross_project": true,
+        "attribution": "header-origin-with-change-trajectory"
+      },
+      "plugin_records": {
+        "plugin:synthetic/observation": 1
+      },
+      "physical_ranges": false
+    }
+  },
+  {
+    "name": "job-pending",
+    "expected": {
+      "jobs": {
+        "registered": 3,
+        "settled": 2,
+        "completed": 0,
+        "failed": 1,
+        "killed": 1,
+        "pending": 1,
+        "inherited": 0,
+        "producer_reported": 1,
+        "by_kind": {
+          "bash": 1,
+          "workflow": 1,
+          "pty-send": 1
+        },
+        "by_cause": {
+          "producer": 1,
+          "kill": 1
+        }
+      },
+      "working_directory": {
+        "changes": 1,
+        "inherited_changes": 0,
+        "trajectory": [
+          "project-a",
+          "project-b"
+        ],
+        "projects_visited": [
+          "project-a",
+          "project-b"
+        ],
+        "cross_project": true,
+        "attribution": "header-origin-with-change-trajectory"
+      },
+      "plugin_records": {},
+      "physical_ranges": false
+    }
+  },
+  {
+    "name": "inherited",
+    "expected": {
+      "jobs": {
+        "registered": 2,
+        "settled": 2,
+        "completed": 2,
+        "failed": 0,
+        "killed": 0,
+        "pending": 0,
+        "inherited": 1,
+        "producer_reported": 2,
+        "by_kind": {
+          "workflow": 1,
+          "bash": 1
+        },
+        "by_cause": {
+          "producer": 2
+        }
+      },
+      "working_directory": {
+        "changes": 1,
+        "inherited_changes": 1,
+        "trajectory": [
+          "project-a",
+          "project-parent",
+          "project-b"
+        ],
+        "projects_visited": [
+          "project-a",
+          "project-parent",
+          "project-b"
+        ],
+        "cross_project": true,
+        "attribution": "header-origin-with-change-trajectory"
+      },
+      "plugin_records": {}
+    }
+  },
+  {
+    "name": "mixed-v4",
+    "expected": {
+      "jobs": {
+        "registered": 1,
+        "settled": 1,
+        "completed": 1,
+        "failed": 0,
+        "killed": 0,
+        "pending": 0,
+        "inherited": 0,
+        "producer_reported": 1,
+        "by_kind": {
+          "pwsh": 1
+        },
+        "by_cause": {
+          "producer": 1
+        }
+      },
+      "working_directory": {
+        "changes": 1,
+        "inherited_changes": 0,
+        "trajectory": [
+          "project-a",
+          "project-b"
+        ],
+        "projects_visited": [
+          "project-a",
+          "project-b"
+        ],
+        "cross_project": true,
+        "attribution": "header-origin-with-change-trajectory"
+      },
+      "plugin_records": {},
+      "physical_ranges": true
+    }
+  },
+  {
+    "name": "web-model",
+    "expected": {
+      "jobs": {
+        "registered": 0,
+        "settled": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": 0,
+        "pending": 0,
+        "inherited": 0,
+        "producer_reported": 0
+      },
+      "working_directory": {
+        "changes": 0,
+        "inherited_changes": 0,
+        "trajectory": [
+          "project-a"
+        ],
+        "projects_visited": [
+          "project-a"
+        ],
+        "cross_project": false,
+        "attribution": "header-origin-with-change-trajectory"
+      },
+      "plugin_records": {},
+      "tools": {
+        "web_searches": 1,
+        "web_fetches": 1,
+        "model_selections": 1
+      },
+      "physical_ranges": false
+    }
+  },
+  {
+    "name": "subagent",
+    "expected": {
+      "jobs": {
+        "registered": 0,
+        "settled": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": 0,
+        "pending": 0,
+        "inherited": 0,
+        "producer_reported": 0
+      },
+      "working_directory": {
+        "changes": 0,
+        "inherited_changes": 0,
+        "trajectory": [
+          "project-a"
+        ],
+        "projects_visited": [
+          "project-a"
+        ],
+        "cross_project": false,
+        "attribution": "header-origin-with-change-trajectory"
+      },
+      "plugin_records": {},
+      "delegation": {
+        "dispatches": 1,
+        "dispatches_by_tool": {
+          "subagent": 1
+        },
+        "settlements": 1,
+        "completion_notices": 0,
+        "relays_received": 0,
+        "relays_sent": 0
+      },
+      "tools": {
+        "user_messages": 3,
+        "injected_user_messages": 1
+      },
+      "physical_ranges": false
+    }
+  },
+  {
+    "name": "team",
+    "expected": {
+      "jobs": {
+        "registered": 0,
+        "settled": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": 0,
+        "pending": 0,
+        "inherited": 0,
+        "producer_reported": 0
+      },
+      "working_directory": {
+        "changes": 0,
+        "inherited_changes": 0,
+        "trajectory": [
+          "project-a"
+        ],
+        "projects_visited": [
+          "project-a"
+        ],
+        "cross_project": false,
+        "attribution": "header-origin-with-change-trajectory"
+      },
+      "plugin_records": {},
+      "delegation": {
+        "dispatches": 0,
+        "settlements": 0,
+        "completion_notices": 0,
+        "relays_received": 1,
+        "relays_sent": 1
+      },
+      "team": {
+        "members": 2,
+        "members_by_phase": {
+          "active": 1,
+          "failed": 1
+        },
+        "tasks": 2,
+        "tasks_by_status": {
+          "completed": 1,
+          "deleted": 1
+        },
+        "task_transitions": 4,
+        "mailbox_legacy": 2
+      },
+      "tools": {
+        "user_messages": 2,
+        "injected_user_messages": 1
+      },
+      "physical_ranges": false
+    }
+  },
+  {
+    "name": "job-inherited-open",
+    "expected": {
+      "jobs": {
+        "registered": 2,
+        "settled": 1,
+        "completed": 1,
+        "failed": 0,
+        "killed": 0,
+        "pending": 1,
+        "inherited": 1,
+        "inherited_pending": 1,
+        "producer_reported": 1,
+        "by_kind": {
+          "workflow": 1,
+          "bash": 1
+        },
+        "by_cause": {
+          "producer": 1
+        }
+      },
+      "working_directory": {
+        "changes": 0,
+        "inherited_changes": 0,
+        "trajectory": [
+          "project-a"
+        ],
+        "projects_visited": [
+          "project-a"
+        ],
+        "cross_project": false,
+        "attribution": "header-origin-with-change-trajectory"
+      },
+      "plugin_records": {},
+      "physical_ranges": false
+    }
+  },
+  {
+    "name": "job-observability",
+    "expected": {
+      "jobs": {
+        "registered": 2,
+        "settled": 2,
+        "completed": 1,
+        "failed": 1,
+        "killed": 0,
+        "pending": 0,
+        "inherited": 0,
+        "inherited_pending": 0,
+        "producer_reported": 1,
+        "unreported": 1,
+        "teardown": 1,
+        "duration_negative": 1,
+        "detail_present": 1,
+        "by_kind": {
+          "bash": 1,
+          "workflow": 1
+        },
+        "by_cause": {
+          "teardown": 1,
+          "producer": 1
+        }
+      },
+      "working_directory": {
+        "changes": 0,
+        "inherited_changes": 0,
+        "trajectory": [
+          "project-a"
+        ],
+        "projects_visited": [
+          "project-a"
+        ],
+        "cross_project": false,
+        "attribution": "header-origin-with-change-trajectory"
+      },
+      "plugin_records": {},
+      "delegation": {
+        "workflow_runs_started": 1,
+        "workflow_runs_ended": 1,
+        "workflow_agents_started": 1,
+        "workflow_agents_ended": 1,
+        "completion_notices": 1
+      },
+      "tools": {
+        "llm_retries": 2,
+        "llm_retries_performed": 1,
+        "llm_retry_chains": 1,
+        "injected_user_messages": 1
+      },
+      "physical_ranges": false
+    }
+  },
+  {
+    "name": "subagent-child",
+    "expected": {
+      "jobs": {
+        "registered": 0,
+        "settled": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": 0,
+        "pending": 0,
+        "inherited": 0,
+        "producer_reported": 0
+      },
+      "working_directory": {
+        "changes": 0,
+        "inherited_changes": 0,
+        "trajectory": [
+          "project-a"
+        ],
+        "projects_visited": [
+          "project-a"
+        ],
+        "cross_project": false,
+        "attribution": "header-origin-with-change-trajectory"
+      },
+      "plugin_records": {},
+      "subagent": {
+        "version": 3,
+        "mode": "one-shot",
+        "provider": "synthetic-provider",
+        "agent_provider": null,
+        "agent_model": null
+      },
+      "physical_ranges": false
+    }
+  }
+]

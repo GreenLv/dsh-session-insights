@@ -37,18 +37,18 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 ## 安装 Bundle
 
-`0.5.2` Bundle 需要 DSH `>=0.2.0-rc.2` 和 Node.js `^22.19.0 || >=24.0.0`，无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。
+`0.6.0` Bundle 需要 DSH `>=0.2.1-rc.2` 和 Node.js `^22.19.0 || >=24.0.0`，无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。
 
-**DSH 兼容性：** 软件包要求 `>=0.2.0-rc.2`；DSH `0.2.0-rc.1` 低于支持下限，后续版本按声明的范围准入，不依赖静态版本表。契约与服务测试覆盖合成 V4 输入；具体制品的宿主、模型、平台与页面验收结果分别记录。详见 [DSH 兼容性](#dsh-兼容性)。
+**DSH 兼容性：** 软件包要求 `>=0.2.1-rc.2`；DSH `0.2.0-rc.2` 与 `0.2.1-rc.1` 低于支持下限，后续版本按声明的范围准入，不依赖静态版本表。契约与服务测试覆盖合成 V4 输入；具体制品的宿主、模型、平台与页面验收结果分别记录；候选记录中的原生、模型、平台与精确制品项在完成前保持 pending。详见 [DSH 兼容性](#dsh-兼容性)。
 
-下方 registry 命令需要 `0.5.2` 已发布。验收候选时，请安装已审查的 tgz 或源码版本；使用 registry 命令前，请先在 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) 核实版本：
+下方 registry 命令需要 `0.6.0` 已发布。验收候选时，请安装已审查的 tgz 或源码版本；使用 registry 命令前，请先在 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) 核实版本：
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.5.2
+dsh plugin --profile web add dsh-session-insights@0.6.0
 dsh web
 ```
 
-从源码安装时，请把 `REVIEWED_REF` 替换为发布后的 `v0.5.2`，或候选制品清单中记录的完整提交号。安装前先选择该版本；仅克隆仓库会检出默认分支，它可能还是其他版本：
+从源码安装时，请把 `REVIEWED_REF` 替换为发布后的 `v0.6.0`，或候选制品清单中记录的完整提交号。安装前先选择该版本；仅克隆仓库会检出默认分支，它可能还是其他版本：
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
@@ -70,7 +70,7 @@ npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 
 
 ### 官方 Desktop
 
-Desktop 共用 Node 分析实现，其插件 profile 由官方 Electron 应用管理；npm CLI 会拒绝 `--profile desktop`。请通过应用内的插件管理或应用自带的命令 carrier 安装或卸载 Bundle。macOS carrier 位于 `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`，安装调用为 `plugin --profile desktop add <package>`。使用未发布候选前，请查看[候选验收记录](docs/acceptance/v0.5.2-candidate.md)中各平台已观察到的结果。Windows 如因文件占用出现 `EPERM`，应在重装前关闭主程序及其 child host。命令返回 HTML 路径后，可用本地浏览器查看；传入 `--no-open` 时只返回路径，不附查看提示。
+Desktop 共用 Node 分析实现，其插件 profile 由官方 Electron 应用管理；npm CLI 会拒绝 `--profile desktop`。请通过应用内的插件管理或应用自带的命令 carrier 安装或卸载 Bundle。macOS carrier 位于 `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`，安装调用为 `plugin --profile desktop add <package>`。使用未发布候选前，请查看[候选记录](docs/acceptance/v0.6.0-rc2.1-candidate.md)中已记录的源码检查与仍待完成的平台 gate。Windows 如因文件占用出现 `EPERM`，应在重装前关闭主程序及其 child host。命令返回 HTML 路径后，可用本地浏览器查看；传入 `--no-open` 时只返回路径，不附查看提示。
 
 ## 获取渠道
 
@@ -90,7 +90,7 @@ Bundle 在 Node.js worker 中分析 `sessionQuery` 快照，不再启动 Python 
 | 环境与凭据 | 宿主仅用 `DSH_HOME` 或操作系统用户目录定位存储。原生分析不探测解释器、不转发环境变量、不需要独立 API Key，也不调用凭据库。会话内容仍可能含有秘密，脱敏不能保证适合公开。 |
 | 网络与模型 | 确定性分析可离线运行。默认语义流程经当前 DSH agent 把清洗并限制范围的证据交给配置的模型提供方，遵循该提供方的数据处理规则和计费方式。添加 `--deterministic` 可跳过此阶段。 |
 
-Bundle 需要 Node.js `^22.19.0 || >=24.0.0`，以及 DSH 的 `commands`、`tools` 和 `sessionQuery` 服务，并使用声明的 `>=0.2.0-rc.2` DSH peer 依赖（含官方消息 helper）。服务缺失、worker 失败、不安全路径或无效语义输出都会使相关操作停止。模型输出先在内存校验再写入；无效的替换请求不会覆盖已有合法结果。显式回退会生成标记为降级的确定性报告。
+Bundle 需要 Node.js `^22.19.0 || >=24.0.0`，以及 DSH 的 `commands`、`tools` 和 `sessionQuery` 服务，并使用声明的 `>=0.2.1-rc.2` DSH peer 依赖（含官方消息 helper）。服务缺失、worker 失败、不安全路径或无效语义输出都会使相关操作停止。模型输出先在内存校验再写入；无效的替换请求不会覆盖已有合法结果。显式回退会生成标记为降级的确定性报告。
 
 每次最多分析 2,000 个选中快照，序列化输入上限为 64 MiB；超出时请缩短 `--days` 或按 `--project` 筛选。每个插件实例最多同时进行两个分析，更多请求进入可取消的排队队列，slash command 与 tool 并发调用不会无界地倍增 Worker；单个 Worker 的 `maxOldGenerationSizeMb` 只限制该 Worker 的 V8 old space，不是宿主 RSS 上限。新运行记录完整选择范围（归一化 project、时间窗长度、隐私对、depth、locale）；恢复必须绑定显式 run 且范围完全一致，因此恢复不会选中其他项目或更宽的隐私范围。缺少范围记录、或格式/分析语义身份不符的 manifest 会被拒绝；仅宿主版本号增长不会使语义相同的运行失效。新运行保留自身已验证输出供恢复使用，不跨运行复用语义缓存。
 
@@ -199,17 +199,19 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 ## DSH 兼容性
 
-最低支持宿主与实际测试版本分开记录。声明范围准入 RC.2 及以上版本，包括后续预发布版本；输入格式和 API 检查仍会拒绝不兼容的操作。准入规则不代表未来宿主已经过实测。
+最低支持宿主与实际测试版本分开记录。声明范围准入 0.2.1-rc.2 及以上版本，包括后续预发布版本；输入格式和 API 检查仍会拒绝不兼容的操作。准入规则不代表未来宿主已经过实测。
 
-本版要求 DSH `>=0.2.0-rc.2`，拒绝更旧宿主；输入格式仍为 V4。原生分析读取宿主恢复后的 V4 快照；可选 Python CLI 只读取 `session.v4.jsonl` 和 `session.v4.jsonl.zstd`。旧原始日志需先由上游 DSH 迁移。当前文件损坏或存在高于 V4 的代数时，不会回退读取旧文件。
+本版要求 DSH `>=0.2.1-rc.2`，拒绝更旧宿主；输入格式仍为 V4（0.2.1 宿主扩展了 V4 事件词汇，但格式号未变）。原生分析读取宿主恢复后的 V4 快照；可选 Python CLI 只读取 `session.v4.jsonl` 和 `session.v4.jsonl.zstd`。旧原始日志需先由上游 DSH 迁移。当前文件损坏或存在高于 V4 的代数时，不会回退读取旧文件。
 
 升级后请新建分析运行：旧 manifest 和缓存不符合新输入契约，不能继续 resume。已经输出的 HTML、JSON 和 Markdown 报告保留。单独安装的 CLI/Skill 需从同一版本更新；安装 Bundle 不会更新它们。
 
 工具工作量包含日志记录的程序化工具调用（PTC）内层调用。JSON 的 `tool_execution` 分别记录外层运输调用、内层执行、失败和未结束调用；每个失败调用结果计一次。若内层调用和外层程序都失败，则保留两个结果，不据此推断它们是否源于同一个原因。权限拒绝不算验证命令执行失败。developer 工具注册消息和定时注入不计人工请求。
 
-DSH 把定时消息写为 user role、`source.kind=schedule` 的消息；RC.2 新增异步问答回复，`source.kind=user-question-reply`。两者都不算用户工作：都单独计入注入上下文、不进入对话证据、纠正/验收信号与完成推断，也不能构成任何授权。只有 `source.kind=user` 的人类消息才贡献正文证据。官方恢复结果使用结构化错误码 `TOOL_OUTCOME_UNKNOWN` 和 `TOOL_NOT_STARTED`，与确认失败分开统计：`tool_recovery` 按 `{outcome_unknown, not_started}` 在每个会话和总量中单独计数。`TOOL_OUTCOME_UNKNOWN` 表示已记录的调用没有持久化的最终结果，工具可能已产生副作用；`TOOL_NOT_STARTED` 表示日志中没有该调用开始的记录。两者都不计入工具失败或验证失败，也不证明工具执行过或没有执行。仅正文提到恢复码的文本仍按一般结果规则分类。重试可能改变数据的操作前，应先核实外部状态。
+DSH 把定时消息写为 user role、`source.kind=schedule` 的消息；DSH 0.2.0-rc.2 新增异步问答回复，`source.kind=user-question-reply`。两者都不算用户工作：都单独计入注入上下文、不进入对话证据、纠正/验收信号与完成推断，也不能构成任何授权。只有 `source.kind=user` 的人类消息才贡献正文证据。官方恢复结果使用结构化错误码 `TOOL_OUTCOME_UNKNOWN` 和 `TOOL_NOT_STARTED`，与确认失败分开统计：`tool_recovery` 按 `{outcome_unknown, not_started}` 在每个会话和总量中单独计数。`TOOL_OUTCOME_UNKNOWN` 表示已记录的调用没有持久化的最终结果，工具可能已产生副作用；`TOOL_NOT_STARTED` 表示日志中没有该调用开始的记录。两者都不计入工具失败或验证失败，也不证明工具执行过或没有执行。仅正文提到恢复码的文本仍按一般结果规则分类。重试可能改变数据的操作前，应先核实外部状态。
 
-0.5.2 的独立复核和待验收项记录在 [docs/acceptance/v0.5.2-candidate.md](docs/acceptance/v0.5.2-candidate.md)。0.5.1 的候选审查范围记录在 [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md)。[0.5.0 发布验收记录](docs/acceptance/v0.5.0-release.md)和[冻结的 0.5.0 候选记录](docs/acceptance/v0.5.0-rc2-candidate.md)只适用于那个 0.5.0 实现及其注明的宿主。历史验收只适用于各自注明的实现。
+DSH 0.2.1-rc.2 仍使用会话格式 4，但新增了必需的 `job/registered`、`job/settled` 与 `working-directory/change` 记录。读取器接受这些记录，并把注册表结算仅视为生产者/注册表结果：它不证明用户任务完成、交付产出或资源已释放。已注册但未结算的 job 记为 pending（包括父轮已结束而子工作仍在运行）；注册缺失的结算按完整性异常计数，而不是让整个会话不可读。Team 名册/任务快照与入站 relay 作为委派证据计数，不算 Lead 的任务完成，也不当作用户提示。工作目录变化形成带标签的轨迹，而不可变的 header cwd 仍是会话来源项目，用于筛选与恢复；跨项目活动会显式呈现，原始路径不进入 redacted/metrics 报告。第三方 `plugin:` 记录只保留不透明类型/数量覆盖，不进入用户意图、模型上下文或完成证据。`web_search` 与 `web_fetch` 按记录的工具调用计数；一次搜索返回多个来源仍只算一次调用。Token 原始分桶为记录值；`input_tokens` 与 `total_tokens` 是由记录值派生的和，并已标注。
+
+0.6.0（DSH 0.2.1-rc.2）候选记录和待验收项记录在 [docs/acceptance/v0.6.0-rc2.1-candidate.md](docs/acceptance/v0.6.0-rc2.1-candidate.md)。0.5.2 的独立复核记录在 [docs/acceptance/v0.5.2-candidate.md](docs/acceptance/v0.5.2-candidate.md)。0.5.1 的候选审查范围记录在 [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md)。[0.5.0 发布验收记录](docs/acceptance/v0.5.0-release.md)和[冻结的 0.5.0 候选记录](docs/acceptance/v0.5.0-rc2-candidate.md)只适用于那个 0.5.0 实现及其注明的宿主。历史验收只适用于各自注明的实现。
 
 ## 会话日志代际
 

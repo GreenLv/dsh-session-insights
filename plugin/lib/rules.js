@@ -23,6 +23,8 @@ export default {
     "hook/invoked",
     "hook/result",
     "image/offload",
+    "job/registered",
+    "job/settled",
     "llm/retry",
     "llm/retry-started",
     "model/selection",
@@ -60,6 +62,7 @@ export default {
     "turn/start",
     "user/message",
     "web/deepseek-search-llm-request",
+    "working-directory/change",
     "workspace/changes"
   ],
   "WORK_AREA_RULES": [

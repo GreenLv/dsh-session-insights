@@ -1,0 +1,479 @@
+{
+  "session": {
+    "version": 4,
+    "id": "synthetic-rc21-team",
+    "createdAt": 1786423200000,
+    "cwd": "/synthetic/workspace/project-a",
+    "isSeeded": false,
+    "delegationDepth": 0,
+    "agentPreset": "standard"
+  },
+  "events": [
+    {
+      "data": {
+        "turn": 1
+      },
+      "seq": 0,
+      "time": 1786423201000,
+      "type": "turn/start"
+    },
+    {
+      "data": {
+        "step": 1,
+        "turn": 1
+      },
+      "seq": 1,
+      "time": 1786423202000,
+      "type": "step/start"
+    },
+    {
+      "data": {
+        "content": [
+          {
+            "text": "Implement the synthetic fixture and report evidence.",
+            "type": "text"
+          }
+        ],
+        "id": "fixture-msg-user-1",
+        "role": "user",
+        "source": {
+          "kind": "user"
+        }
+      },
+      "seq": 2,
+      "surfaceOp": "append",
+      "time": 1786423203000,
+      "type": "user/message"
+    },
+    {
+      "data": {
+        "message": {
+          "content": [
+            {
+              "text": "Implemented the bounded synthetic change.",
+              "type": "text"
+            },
+            {
+              "arguments": "{\"command\": \"python -m unittest\"}",
+              "id": "fixture-call-1",
+              "name": "bash",
+              "type": "tool-call"
+            }
+          ],
+          "id": "fixture-msg-assistant-1",
+          "role": "assistant",
+          "source": {
+            "kind": "model",
+            "model": "synthetic-model",
+            "provider": "synthetic-provider"
+          }
+        },
+        "step": 1,
+        "turn": 1,
+        "usage": {
+          "cacheReadTokens": 300,
+          "inputTokens": 120,
+          "outputTokens": 40,
+          "reasoningTokens": 20
+        },
+        "stream": []
+      },
+      "seq": 3,
+      "surfaceOp": "append",
+      "time": 1786423204000,
+      "type": "assistant/message"
+    },
+    {
+      "data": {
+        "arguments": "{\"command\": \"python -m unittest\"}",
+        "callId": "fixture-call-1",
+        "name": "bash",
+        "step": 1,
+        "turn": 1
+      },
+      "seq": 4,
+      "time": 1786423205000,
+      "type": "tool/call"
+    },
+    {
+      "data": {
+        "message": {
+          "content": [
+            {
+              "text": "Ran synthetic tests: OK",
+              "type": "text"
+            }
+          ],
+          "id": "fixture-msg-tool-1",
+          "role": "tool",
+          "source": {
+            "callId": "fixture-call-1",
+            "kind": "tool"
+          },
+          "toolCallId": "fixture-call-1",
+          "isError": false
+        },
+        "step": 1,
+        "turn": 1
+      },
+      "seq": 5,
+      "surfaceOp": "append",
+      "time": 1786423206000,
+      "type": "tool/result"
+    },
+    {
+      "data": {
+        "content": [
+          {
+            "text": "Keep the change narrow.",
+            "type": "text"
+          }
+        ],
+        "id": "fixture-msg-user-2",
+        "role": "user",
+        "source": {
+          "kind": "user"
+        }
+      },
+      "seq": 6,
+      "surfaceOp": "append",
+      "time": 1786423207000,
+      "type": "user/message"
+    },
+    {
+      "data": {
+        "step": 1,
+        "turn": 1
+      },
+      "seq": 7,
+      "time": 1786423208000,
+      "type": "step/end"
+    },
+    {
+      "data": {
+        "messageSeqs": [
+          2,
+          6
+        ],
+        "source": {
+          "kind": "provider",
+          "model": {
+            "model": "synthetic-model",
+            "provider": "synthetic-provider"
+          },
+          "provider": "synthetic-title"
+        },
+        "title": "Synthetic fixture task"
+      },
+      "seq": 8,
+      "time": 1786423209000,
+      "type": "session/title"
+    },
+    {
+      "data": {
+        "reason": {
+          "kind": "completed"
+        },
+        "turn": 1
+      },
+      "seq": 9,
+      "time": 1786423210000,
+      "type": "turn/end"
+    },
+    {
+      "type": "session/end-seed",
+      "seq": 10,
+      "time": 1786423211000,
+      "data": {}
+    },
+    {
+      "type": "turn/start",
+      "seq": 11,
+      "time": 1786423212000,
+      "data": {
+        "turn": 2
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 12,
+      "time": 1786423213000,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "team/member",
+      "seq": 13,
+      "time": 1786423214000,
+      "data": {
+        "version": 2,
+        "teamId": "team-synthetic",
+        "member": {
+          "id": "child-a",
+          "name": "Child A",
+          "description": "Synthetic Child A",
+          "provider": "synthetic-provider",
+          "context": "fresh",
+          "phase": "provisioning"
+        }
+      }
+    },
+    {
+      "type": "team/member",
+      "seq": 14,
+      "time": 1786423215000,
+      "data": {
+        "version": 2,
+        "teamId": "team-synthetic",
+        "member": {
+          "id": "child-a",
+          "name": "Child A",
+          "description": "Synthetic Child A",
+          "provider": "synthetic-provider",
+          "context": "fresh",
+          "phase": "active"
+        }
+      }
+    },
+    {
+      "type": "team/member",
+      "seq": 15,
+      "time": 1786423216000,
+      "data": {
+        "version": 2,
+        "teamId": "team-synthetic",
+        "member": {
+          "id": "child-b",
+          "name": "Child B",
+          "description": "Synthetic Child B",
+          "provider": "synthetic-provider",
+          "context": "fresh",
+          "phase": "failed",
+          "error": "synthetic failure"
+        }
+      }
+    },
+    {
+      "type": "team/task",
+      "seq": 16,
+      "time": 1786423217000,
+      "data": {
+        "version": 2,
+        "teamId": "team-synthetic",
+        "task": {
+          "id": "task-1",
+          "revision": 1,
+          "subject": "Synthetic task-1",
+          "description": "Synthetic team task",
+          "status": "pending",
+          "ownerId": "child-a",
+          "blockedBy": [],
+          "writeScopes": []
+        }
+      }
+    },
+    {
+      "type": "team/task",
+      "seq": 17,
+      "time": 1786423218000,
+      "data": {
+        "version": 2,
+        "teamId": "team-synthetic",
+        "task": {
+          "id": "task-1",
+          "revision": 2,
+          "subject": "Synthetic task-1",
+          "description": "Synthetic team task",
+          "status": "in_progress",
+          "ownerId": "child-a",
+          "blockedBy": [],
+          "writeScopes": []
+        }
+      }
+    },
+    {
+      "type": "team/task",
+      "seq": 18,
+      "time": 1786423219000,
+      "data": {
+        "version": 2,
+        "teamId": "team-synthetic",
+        "task": {
+          "id": "task-1",
+          "revision": 3,
+          "subject": "Synthetic task-1",
+          "description": "Synthetic team task",
+          "status": "completed",
+          "ownerId": "child-a",
+          "blockedBy": [],
+          "writeScopes": []
+        }
+      }
+    },
+    {
+      "type": "team/task",
+      "seq": 19,
+      "time": 1786423220000,
+      "data": {
+        "version": 2,
+        "teamId": "team-synthetic",
+        "task": {
+          "id": "task-2",
+          "revision": 1,
+          "subject": "Synthetic task-2",
+          "description": "Synthetic team task",
+          "status": "deleted",
+          "ownerId": "child-b",
+          "blockedBy": [],
+          "writeScopes": []
+        }
+      }
+    },
+    {
+      "type": "team/message/queued",
+      "seq": 20,
+      "time": 1786423221000,
+      "data": {
+        "version": 2,
+        "teamId": "team-synthetic",
+        "message": {
+          "id": "msg-1",
+          "senderId": "lead",
+          "senderName": "Lead",
+          "targetId": "child-a",
+          "content": [
+            {
+              "type": "text",
+              "text": "Synthetic team message"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "team/message/delivered",
+      "seq": 21,
+      "time": 1786423222000,
+      "data": {
+        "version": 2,
+        "teamId": "team-synthetic",
+        "messageId": "msg-1",
+        "targetId": "child-a"
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 22,
+      "time": 1786423223000,
+      "data": {
+        "id": "team-relay",
+        "role": "user",
+        "source": {
+          "kind": "agent-message",
+          "form": "relay",
+          "senderSessionId": "lead"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Team message from Lead: Synthetic team message"
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 23,
+      "time": 1786423224000,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "stream": [],
+        "message": {
+          "id": "assistant-send",
+          "role": "assistant",
+          "source": {
+            "kind": "model",
+            "provider": "synthetic-provider",
+            "model": "synthetic-model"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "Synthetic request."
+            },
+            {
+              "type": "tool-call",
+              "id": "send-1",
+              "name": "send_message",
+              "arguments": "{\"target\":\"child-a\",\"message\":\"synthetic\"}"
+            }
+          ]
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 24,
+      "time": 1786423225000,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "callId": "send-1",
+        "name": "send_message",
+        "arguments": "{\"target\":\"child-a\",\"message\":\"synthetic\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 25,
+      "time": 1786423226000,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "id": "result-send-1",
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "send-1"
+          },
+          "toolCallId": "send-1",
+          "isError": false,
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"messageId\":\"msg-2\"}"
+            }
+          ]
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 26,
+      "time": 1786423227000,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 27,
+      "time": 1786423228000,
+      "data": {
+        "turn": 2,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ],
+  "inheritedEventCount": 0
+}

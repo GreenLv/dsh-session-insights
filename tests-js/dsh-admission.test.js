@@ -99,3 +99,23 @@ test('RC.2 schedule and user-question-reply are injected context, never user wor
  assert.equal(session.completion.accepted,'unknown','an async question reply must not count as acceptance')
  assert.equal(session.correction_messages,0)
 })
+
+test('0.2.1-rc.2 job, working-directory and plugin records are admitted and stay opaque',()=>{
+  const rc21=name=>JSON.parse(readFileSync(new URL(`../tests/fixtures/rc21/${name}/snapshot.json`,import.meta.url),'utf8'))
+  for(const name of ['job-lifecycle','job-pending','inherited']){
+    const s=rc21(name)
+    validateV4(s)
+    const built=buildReport([structuredClone(s)],options)
+    assert.equal(built.report.totals.sessions,1,name)
+    const text=JSON.stringify(built.sessions)
+    assert.ok(!text.includes('plugin:synthetic/observation'),name)
+  }
+  // The host marks the third-party record ignorable; a required variant must
+  // still be refused by the production admission path.
+  const s=rc21('job-lifecycle'),required=structuredClone(s)
+  required.events.push({type:'plugin:synthetic/required',seq:required.events.length,time:0,data:{text:'REQUIRED-PLUGIN-BODY'}})
+  assert.throws(()=>buildReport([required],options),/unknown required/)
+  const ignorable=structuredClone(s)
+  ignorable.events.push({type:'opaque/observation',seq:ignorable.events.length,time:0,data:{text:'IGNORABLE-SECRET'},ignorable:true})
+  assert.ok(!JSON.stringify(buildReport([ignorable],options).sessions).includes('IGNORABLE-SECRET'))
+})
