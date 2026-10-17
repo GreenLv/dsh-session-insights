@@ -25,11 +25,11 @@ from .v4 import IDENTITY, validate_records
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.6.0-v4-dsh021rc2.1"
+ANALYZER_VERSION = "0.6.0-v4-dsh021rc2.2"
 FAILURE_RULE_VERSION = "5.1.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
-DETERMINISTIC_CACHE_VERSION = 5
+DETERMINISTIC_CACHE_VERSION = 6
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
 
 # Session-log generations understood by this reader. Native V3 is the current
@@ -2015,8 +2015,8 @@ def new_dsh_session(
     session["jobs"] = {}
     session["cwd_segments"] = [{
         "seq": -1,
-        "key": normalize_path(cwd),
-        "label": project_label(cwd),
+        "key": cwd_path_key(cwd),
+        "label": project_label(cwd.replace("\\", "/")),
         "inherited": False,
     }]
     session["working_directory_changes"] = 0
@@ -2135,6 +2135,21 @@ def register_job(session: dict[str, Any], data: dict[str, Any]) -> None:
 
 def settle_job(session: dict[str, Any], data: dict[str, Any]) -> None:
     record = _job_registration(data)
+    finished_at = data.get("finishedAt")
+    status = data.get("status")
+    cause = data.get("cause")
+    producer_reported = data.get("producerReported")
+    detail = data.get("detail")
+    if not _is_finite_number(finished_at):
+        raise ValueError("invalid job settlement: finishedAt")
+    if not isinstance(status, str) or status not in JOB_TERMINAL_STATUSES:
+        raise ValueError("invalid job settlement: status")
+    if not isinstance(cause, str) or cause not in JOB_SETTLE_CAUSES:
+        raise ValueError("invalid job settlement: cause")
+    if not isinstance(producer_reported, bool):
+        raise ValueError("invalid job settlement: producerReported")
+    if detail is not None and not isinstance(detail, str):
+        raise ValueError("invalid job settlement: detail")
     prior = session["jobs"].get(record["job_id"])
     if prior is None:
         # Host registration is a best-effort append; a lost registration must
@@ -2145,21 +2160,6 @@ def settle_job(session: dict[str, Any], data: dict[str, Any]) -> None:
         # Registry settlement is first-wins; a second terminal record is
         # corruption, not a duplicate observation to merge.
         raise ValueError("duplicate job settlement")
-    finished_at = data.get("finishedAt")
-    status = data.get("status")
-    cause = data.get("cause")
-    producer_reported = data.get("producerReported")
-    detail = data.get("detail")
-    if not _is_finite_number(finished_at):
-        raise ValueError("invalid job settlement: finishedAt")
-    if status not in JOB_TERMINAL_STATUSES:
-        raise ValueError("invalid job settlement: status")
-    if cause not in JOB_SETTLE_CAUSES:
-        raise ValueError("invalid job settlement: cause")
-    if not isinstance(producer_reported, bool):
-        raise ValueError("invalid job settlement: producerReported")
-    if detail is not None and not isinstance(detail, str):
-        raise ValueError("invalid job settlement: detail")
     for key in ("owner", "kind", "started_at", "tool_call"):
         if prior[key] != record[key]:
             raise ValueError("job settlement identity conflict")
@@ -2178,7 +2178,7 @@ def record_working_directory(session: dict[str, Any], data: dict[str, Any], seq:
     if not isinstance(cwd, str) or not cwd.strip():
         session["cwd_anomalies"]["invalid"] += 1
         return
-    key = normalize_path(cwd)
+    key = cwd_path_key(cwd)
     if not key.startswith("/") and not re.match(r"^[A-Za-z]:/", key) and not key.startswith("//"):
         session["cwd_anomalies"]["relative"] += 1
     previous = session["cwd_segments"][-1]["key"]
@@ -2190,7 +2190,7 @@ def record_working_directory(session: dict[str, Any], data: dict[str, Any], seq:
     session["cwd_segments"].append({
         "seq": seq,
         "key": key,
-        "label": project_label(cwd),
+        "label": project_label(cwd.replace("\\", "/")),
         "inherited": False,
     })
 
@@ -2568,6 +2568,17 @@ def process_dsh_record(
     # todo/write, step/start, step/end, session/end-seed, and aggregate chunks.
 
 
+def cwd_path_key(cwd: str) -> str:
+    """Trajectory identity only; keep the established project-filter contract."""
+    path = cwd.replace("\\", "/")
+    if path and not path.strip("/"):
+        return "/"
+    key = path.rstrip("/")
+    if re.match(r"^[A-Za-z]:/", path):
+        return (key + ("/" if re.fullmatch(r"[A-Za-z]:", key) else "")).lower()
+    return key
+
+
 def cwd_platform_form(key: str) -> str:
     if not key:
         return "empty"
@@ -2653,7 +2664,10 @@ def finalize_working_directory(session: dict[str, Any]) -> None:
     session["cwd_changes_inherited"] = sum(1 for segment in segments if segment["inherited"])
     session["cwd_changes"] = max(0, session["working_directory_changes"] - session["cwd_changes_inherited"])
     session["cwd_origin_label"] = segments[0]["label"] if segments else "unknown"
-    session["cwd_effective_at_cut"] = inherited[-1] if inherited else (segments[0]["label"] if segments else "unknown")
+    session["cwd_effective_at_cut"] = next(
+        (segment["label"] for segment in reversed(segments) if segment["inherited"]),
+        session["cwd_origin_label"],
+    )
     session["cwd_own_labels"] = own
     session["cwd_inherited_labels"] = inherited
     session["cwd_platform_forms"] = Counter(cwd_platform_form(segment["key"]) for segment in segments)
@@ -2829,7 +2843,9 @@ def parse_dsh_session_records(
             session["jobs"].update(prefix_state["jobs"])
             inherited_segments = prefix_state["cwd_segments"][1:]
             session["cwd_segments"].extend({**segment, "inherited": True} for segment in inherited_segments)
-            session["working_directory_changes"] += len(inherited_segments)
+            session["working_directory_changes"] += prefix_state["working_directory_changes"]
+            session["cwd_anomalies"].update(prefix_state["cwd_anomalies"])
+            session["unpaired_job_settlements"] += prefix_state["unpaired_job_settlements"]
             prefix_transferred = True
         process_dsh_record(session, record_type, data, config, record_timestamp, seq=record_seq)
     if session is None:

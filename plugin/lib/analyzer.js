@@ -388,8 +388,11 @@ const timestamp = (value) =>
     ? value
     : null
 const pathKey = (value) => {
-  const path = String(value).replace(/\\/g, '/').replace(/\/+$/, '')
-  return /^[A-Za-z]:\//.test(path) ? path.toLowerCase() : path
+  const path = String(value).replace(/\\/g, '/')
+  // Preserve absolute roots; trimming C:/ first would lose drive identity.
+  if (/^\/+$/.test(path)) return '/'
+  const key = path.replace(/\/+$/, '')
+  return /^[A-Za-z]:\//.test(path) ? (key + (/^[A-Za-z]:$/.test(key) ? '/' : '')).toLowerCase() : key
 }
 const finiteNumber = (value) => typeof value === 'number' && Number.isFinite(value)
 const JOB_TERMINAL_STATUSES = new Set(['completed', 'failed', 'killed'])
@@ -423,6 +426,12 @@ function registerJob(s, d, inherited = false) {
 }
 function settleJob(s, d) {
   const record = jobRegistration(d)
+  const {finishedAt, status, cause, producerReported, detail} = d
+  if (!finiteNumber(finishedAt)) throw new Error('invalid job settlement: finishedAt')
+  if (!JOB_TERMINAL_STATUSES.has(status)) throw new Error('invalid job settlement: status')
+  if (!JOB_SETTLE_CAUSES.has(cause)) throw new Error('invalid job settlement: cause')
+  if (typeof producerReported !== 'boolean') throw new Error('invalid job settlement: producerReported')
+  if (detail !== undefined && detail !== null && typeof detail !== 'string') throw new Error('invalid job settlement: detail')
   const prior = s.jobs.get(record.job_id)
   if (!prior) {
     // Registration is a best-effort host append; a lost registration must not
@@ -431,12 +440,6 @@ function settleJob(s, d) {
     return
   }
   if (prior.settled) throw new Error('duplicate job settlement')
-  const {finishedAt, status, cause, producerReported, detail} = d
-  if (!finiteNumber(finishedAt)) throw new Error('invalid job settlement: finishedAt')
-  if (!JOB_TERMINAL_STATUSES.has(status)) throw new Error('invalid job settlement: status')
-  if (!JOB_SETTLE_CAUSES.has(cause)) throw new Error('invalid job settlement: cause')
-  if (typeof producerReported !== 'boolean') throw new Error('invalid job settlement: producerReported')
-  if (detail !== undefined && detail !== null && typeof detail !== 'string') throw new Error('invalid job settlement: detail')
   for (const key of ['owner', 'kind', 'started_at', 'tool_call'])
     if (canonical(prior[key]) !== canonical(record[key])) throw new Error('job settlement identity conflict')
   Object.assign(prior, {settled: true, status, cause, producer_reported: producerReported,
@@ -1091,7 +1094,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
     s.cwd_changes_inherited = s.cwd_segments.filter(segment => segment.inherited).length
     s.cwd_changes = Math.max(0, s.working_directory_changes - s.cwd_changes_inherited)
     s.cwd_origin_label = s.cwd_segments[0]?.label || 'unknown'
-    s.cwd_effective_at_cut = inherited.at(-1) || (s.cwd_segments[0]?.label || 'unknown')
+    s.cwd_effective_at_cut = s.cwd_segments.findLast(segment => segment.inherited)?.label || s.cwd_origin_label
     s.cwd_own_labels = own
     s.cwd_inherited_labels = inherited
     const forms = new Map()
@@ -1878,7 +1881,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.6.0-v4-dsh021rc2.1',
+    analyzer_version: '0.6.0-v4-dsh021rc2.2',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),

@@ -1,0 +1,566 @@
+{
+  "cwd": [
+    {
+      "name": "return",
+      "inherited": [
+        "/synthetic/alpha",
+        "/synthetic/beta",
+        "/synthetic/alpha"
+      ],
+      "own": [],
+      "expected": {
+        "effective_at_cut": "alpha",
+        "inherited_changes": 3,
+        "changes": 0,
+        "trajectory": [
+          "project-a",
+          "alpha",
+          "beta",
+          "alpha"
+        ],
+        "projects_visited": [
+          "project-a",
+          "alpha",
+          "beta"
+        ],
+        "own_labels": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "revisits",
+      "inherited": [
+        "/synthetic/alpha",
+        "/synthetic/beta",
+        "/synthetic/alpha",
+        "/synthetic/gamma",
+        "/synthetic/beta"
+      ],
+      "own": [],
+      "expected": {
+        "effective_at_cut": "beta",
+        "inherited_changes": 5,
+        "changes": 0,
+        "trajectory": [
+          "project-a",
+          "alpha",
+          "beta",
+          "alpha",
+          "gamma",
+          "beta"
+        ],
+        "projects_visited": [
+          "project-a",
+          "alpha",
+          "beta",
+          "gamma"
+        ],
+        "own_labels": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "no-change",
+      "inherited": [],
+      "own": [],
+      "expected": {
+        "effective_at_cut": "project-a",
+        "inherited_changes": 0,
+        "changes": 0,
+        "trajectory": [
+          "project-a"
+        ],
+        "projects_visited": [
+          "project-a"
+        ],
+        "own_labels": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "own-after-return",
+      "inherited": [
+        "/synthetic/alpha",
+        "/synthetic/beta",
+        "/synthetic/alpha"
+      ],
+      "own": [
+        "/synthetic/delta"
+      ],
+      "expected": {
+        "effective_at_cut": "alpha",
+        "inherited_changes": 3,
+        "changes": 1,
+        "trajectory": [
+          "project-a",
+          "alpha",
+          "beta",
+          "alpha",
+          "delta"
+        ],
+        "projects_visited": [
+          "project-a",
+          "alpha",
+          "beta",
+          "delta"
+        ],
+        "own_labels": [
+          "project-a",
+          "delta"
+        ]
+      }
+    },
+    {
+      "name": "own-only",
+      "inherited": [],
+      "own": [
+        "/synthetic/delta"
+      ],
+      "expected": {
+        "effective_at_cut": "project-a",
+        "inherited_changes": 0,
+        "changes": 1,
+        "trajectory": [
+          "project-a",
+          "delta"
+        ],
+        "projects_visited": [
+          "project-a",
+          "delta"
+        ],
+        "own_labels": [
+          "project-a",
+          "delta"
+        ]
+      }
+    },
+    {
+      "name": "duplicate",
+      "inherited": [
+        "/synthetic/alpha",
+        "/synthetic/alpha"
+      ],
+      "own": [],
+      "expected": {
+        "effective_at_cut": "alpha",
+        "inherited_changes": 2,
+        "changes": 0,
+        "trajectory": [
+          "project-a",
+          "alpha",
+          "alpha"
+        ],
+        "projects_visited": [
+          "project-a",
+          "alpha"
+        ],
+        "own_labels": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "posix-root",
+      "inherited": [],
+      "own": [
+        "/",
+        "///"
+      ],
+      "expected": {
+        "platform_forms": {
+          "posix": 3
+        },
+        "relative_changes": 0,
+        "changes_same_as_previous": 1
+      }
+    },
+    {
+      "name": "drive-root",
+      "inherited": [],
+      "own": [
+        "C:/",
+        "c:\\\\"
+      ],
+      "expected": {
+        "platform_forms": {
+          "posix": 1,
+          "drive": 2
+        },
+        "relative_changes": 0,
+        "changes_same_as_previous": 1
+      }
+    },
+    {
+      "name": "drive-case",
+      "inherited": [],
+      "own": [
+        "C:/Work/Alpha/",
+        "c:\\work\\alpha"
+      ],
+      "expected": {
+        "platform_forms": {
+          "posix": 1,
+          "drive": 2
+        },
+        "changes_same_as_previous": 1
+      }
+    },
+    {
+      "name": "unc-root",
+      "inherited": [],
+      "own": [
+        "\\\\server\\share\\",
+        "//server/share"
+      ],
+      "expected": {
+        "platform_forms": {
+          "posix": 1,
+          "unc": 2
+        },
+        "changes_same_as_previous": 1
+      }
+    },
+    {
+      "name": "unc-case",
+      "inherited": [],
+      "own": [
+        "//server/share/Alpha/",
+        "//server/share/alpha"
+      ],
+      "expected": {
+        "platform_forms": {
+          "posix": 1,
+          "unc": 2
+        },
+        "changes_same_as_previous": 0
+      }
+    },
+    {
+      "name": "posix-case",
+      "inherited": [],
+      "own": [
+        "/synthetic/Alpha/",
+        "/synthetic/alpha"
+      ],
+      "expected": {
+        "platform_forms": {
+          "posix": 3
+        },
+        "changes_same_as_previous": 0
+      }
+    },
+    {
+      "name": "inherited-anomalies",
+      "inherited": [
+        "/synthetic/alpha",
+        "/synthetic/alpha",
+        "",
+        "../relative"
+      ],
+      "own": [
+        "/synthetic/delta"
+      ],
+      "expected": {
+        "effective_at_cut": "relative",
+        "inherited_changes": 3,
+        "changes": 1,
+        "changes_same_as_previous": 1,
+        "invalid_changes": 1,
+        "relative_changes": 1
+      }
+    }
+  ],
+  "settlement": [
+    {
+      "name": "finishedAt-True-0",
+      "field": "finishedAt",
+      "value": 0,
+      "accepted": true
+    },
+    {
+      "name": "finishedAt-True-1",
+      "field": "finishedAt",
+      "value": -1,
+      "accepted": true
+    },
+    {
+      "name": "finishedAt-True-2",
+      "field": "finishedAt",
+      "value": 1786423220000,
+      "accepted": true
+    },
+    {
+      "name": "finishedAt-True-3",
+      "field": "finishedAt",
+      "value": 1.5,
+      "accepted": true
+    },
+    {
+      "name": "finishedAt-False-0",
+      "field": "finishedAt",
+      "value": null,
+      "accepted": false
+    },
+    {
+      "name": "finishedAt-False-1",
+      "field": "finishedAt",
+      "value": true,
+      "accepted": false
+    },
+    {
+      "name": "finishedAt-False-2",
+      "field": "finishedAt",
+      "value": "invalid",
+      "accepted": false
+    },
+    {
+      "name": "finishedAt-False-3",
+      "field": "finishedAt",
+      "value": {},
+      "accepted": false
+    },
+    {
+      "name": "finishedAt-False-4",
+      "field": "finishedAt",
+      "value": [],
+      "accepted": false
+    },
+    {
+      "name": "finishedAt-missing",
+      "field": "finishedAt",
+      "missing": true,
+      "accepted": false
+    },
+    {
+      "name": "status-True-0",
+      "field": "status",
+      "value": "completed",
+      "accepted": true
+    },
+    {
+      "name": "status-True-1",
+      "field": "status",
+      "value": "failed",
+      "accepted": true
+    },
+    {
+      "name": "status-True-2",
+      "field": "status",
+      "value": "killed",
+      "accepted": true
+    },
+    {
+      "name": "status-False-0",
+      "field": "status",
+      "value": null,
+      "accepted": false
+    },
+    {
+      "name": "status-False-1",
+      "field": "status",
+      "value": true,
+      "accepted": false
+    },
+    {
+      "name": "status-False-2",
+      "field": "status",
+      "value": 0,
+      "accepted": false
+    },
+    {
+      "name": "status-False-3",
+      "field": "status",
+      "value": "running",
+      "accepted": false
+    },
+    {
+      "name": "status-False-4",
+      "field": "status",
+      "value": "SYNTHETIC_INVALID_STATUS",
+      "accepted": false
+    },
+    {
+      "name": "status-False-5",
+      "field": "status",
+      "value": {},
+      "accepted": false
+    },
+    {
+      "name": "status-False-6",
+      "field": "status",
+      "value": [],
+      "accepted": false
+    },
+    {
+      "name": "status-missing",
+      "field": "status",
+      "missing": true,
+      "accepted": false
+    },
+    {
+      "name": "cause-True-0",
+      "field": "cause",
+      "value": "producer",
+      "accepted": true
+    },
+    {
+      "name": "cause-True-1",
+      "field": "cause",
+      "value": "kill",
+      "accepted": true
+    },
+    {
+      "name": "cause-True-2",
+      "field": "cause",
+      "value": "teardown",
+      "accepted": true
+    },
+    {
+      "name": "cause-False-0",
+      "field": "cause",
+      "value": null,
+      "accepted": false
+    },
+    {
+      "name": "cause-False-1",
+      "field": "cause",
+      "value": true,
+      "accepted": false
+    },
+    {
+      "name": "cause-False-2",
+      "field": "cause",
+      "value": 0,
+      "accepted": false
+    },
+    {
+      "name": "cause-False-3",
+      "field": "cause",
+      "value": "SYNTHETIC_INVALID_CAUSE",
+      "accepted": false
+    },
+    {
+      "name": "cause-False-4",
+      "field": "cause",
+      "value": {},
+      "accepted": false
+    },
+    {
+      "name": "cause-False-5",
+      "field": "cause",
+      "value": [],
+      "accepted": false
+    },
+    {
+      "name": "cause-missing",
+      "field": "cause",
+      "missing": true,
+      "accepted": false
+    },
+    {
+      "name": "producerReported-True-0",
+      "field": "producerReported",
+      "value": true,
+      "accepted": true
+    },
+    {
+      "name": "producerReported-True-1",
+      "field": "producerReported",
+      "value": false,
+      "accepted": true
+    },
+    {
+      "name": "producerReported-False-0",
+      "field": "producerReported",
+      "value": null,
+      "accepted": false
+    },
+    {
+      "name": "producerReported-False-1",
+      "field": "producerReported",
+      "value": 0,
+      "accepted": false
+    },
+    {
+      "name": "producerReported-False-2",
+      "field": "producerReported",
+      "value": 1,
+      "accepted": false
+    },
+    {
+      "name": "producerReported-False-3",
+      "field": "producerReported",
+      "value": "invalid",
+      "accepted": false
+    },
+    {
+      "name": "producerReported-False-4",
+      "field": "producerReported",
+      "value": {},
+      "accepted": false
+    },
+    {
+      "name": "producerReported-False-5",
+      "field": "producerReported",
+      "value": [],
+      "accepted": false
+    },
+    {
+      "name": "producerReported-missing",
+      "field": "producerReported",
+      "missing": true,
+      "accepted": false
+    },
+    {
+      "name": "detail-True-0",
+      "field": "detail",
+      "value": null,
+      "accepted": true
+    },
+    {
+      "name": "detail-True-1",
+      "field": "detail",
+      "value": "",
+      "accepted": true
+    },
+    {
+      "name": "detail-True-2",
+      "field": "detail",
+      "value": "synthetic detail",
+      "accepted": true
+    },
+    {
+      "name": "detail-False-0",
+      "field": "detail",
+      "value": true,
+      "accepted": false
+    },
+    {
+      "name": "detail-False-1",
+      "field": "detail",
+      "value": 0,
+      "accepted": false
+    },
+    {
+      "name": "detail-False-2",
+      "field": "detail",
+      "value": {},
+      "accepted": false
+    },
+    {
+      "name": "detail-False-3",
+      "field": "detail",
+      "value": [],
+      "accepted": false
+    },
+    {
+      "name": "detail-missing",
+      "field": "detail",
+      "missing": true,
+      "accepted": true
+    }
+  ]
+}
