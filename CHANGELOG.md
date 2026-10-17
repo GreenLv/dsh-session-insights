@@ -4,9 +4,9 @@
 
 Public releases are listed newest first.
 
-## 0.6.0 - Unreleased
+## 0.6.0
 
-Adapt Session Insights to DSH 0.2.1-rc.2. The floor moves to `>=0.2.1-rc.2`; 0.2.0-rc.2 and 0.2.1-rc.1 are refused. Session format remains V4, but the host adds required event vocabulary and new completion/delegation semantics, so start a new analysis run after upgrading. This is a candidate record: dual-platform native, real-model/UI and exact-artifact acceptance remain pending.
+Adapt Session Insights to DSH 0.2.1-rc.2. The floor moves to `>=0.2.1-rc.2`; 0.2.0-rc.2 and 0.2.1-rc.1 are refused. Session format remains V4, but the host adds required event vocabulary and new completion/delegation semantics, so start a new analysis run after upgrading.
 
 ### Added
 
@@ -23,9 +23,7 @@ Adapt Session Insights to DSH 0.2.1-rc.2. The floor moves to `>=0.2.1-rc.2`; 0.2
 - `INPUT_IDENTITY`/analyzer semantics are now `v4-dsh021rc2.3`; cached deterministic parses and prior-run resume with different semantics are invalidated by design.
 - The npm/Python/Bundle/Skill identity is 0.6.0 and the DSH engines/peers floor is `>=0.2.1-rc.2`.
 
-### Pending
-
-- Native Web/Headless/Desktop acceptance on macOS and Windows, real-model/UI evidence, and exact-artifact acceptance are performed by the follow-up native acceptance session. See `docs/acceptance/v0.6.0-rc2.1-candidate.md`.
+- Source and synthetic checks are preserved in the [development record](docs/acceptance/v0.6.0-rc2.1-candidate.md). Native, model and UI results are recorded separately in the acceptance receipts attached to each exact release artifact; range admission does not establish testing of future hosts.
 
 
 ## 0.5.2 - 2026-09-30

@@ -21,7 +21,7 @@ class Rc21PrivacyTests(unittest.TestCase):
         result = subprocess.run(['node', '--input-type=module', '-e',
             "import {privacyValues,privacySnapshot} from './tests-js/fixtures/rc21-privacy.mjs'; "
             "process.stdout.write(JSON.stringify(privacyValues.map(v=>({...v,snapshot:privacySnapshot(v.value)}))))"],
-            cwd=ROOT, capture_output=True, text=True, check=True)
+            cwd=ROOT, capture_output=True, text=True, encoding='utf-8', check=True)
         cls.cases = json.loads(result.stdout)
 
     def test_free_string_projection_and_rendered_outputs(self):
@@ -50,7 +50,7 @@ class Rc21PrivacyTests(unittest.TestCase):
                             input=json.dumps({'snapshots': [value], 'options': {
                                 'now': value['session']['createdAt'] + 86400000, 'days': 30,
                                 'privacy': privacy, 'locale': locale, 'analysis_depth': 'evidence'}}),
-                            capture_output=True, text=True, check=True)
+                            capture_output=True, text=True, encoding='utf-8', check=True)
                         rendered = json.loads(native.stdout)
                         native_embedded = json.loads(re.search(r'<script id="report-data"[^>]*>([\s\S]*?)</script>', rendered['html'])[1])
                         self.assertEqual(native_embedded, rendered['report'])

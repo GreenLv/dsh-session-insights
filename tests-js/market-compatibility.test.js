@@ -99,10 +99,10 @@ test("both README support summaries match the market range", async () => {
   ]);
   assert.match(english, /The package requires `>=0\.2\.1-rc\.2`/);
   assert.match(english, /Contract and service tests cover synthetic V4 input/);
-  assert.match(english, /recorded source checks and its explicitly pending native, model, platform and exact-artifact gates/);
+  assert.match(english, /acceptance receipts attached to each exact release artifact/);
   assert.match(english, /docs\/acceptance\/v0\.6\.0-rc2\.1-candidate\.md/);
   assert.match(chinese, /软件包要求 `>=0\.2\.1-rc\.2`/);
   assert.match(chinese, /契约与服务测试覆盖合成 V4 输入/);
-  assert.match(chinese, /具体制品的宿主、模型、平台与页面验收结果分别记录/);
+  assert.match(chinese, /原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录/);
   assert.match(chinese, /docs\/acceptance\/v0\.6\.0-rc2\.1-candidate\.md/);
 });

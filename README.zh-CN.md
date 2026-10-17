@@ -39,7 +39,7 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 `0.6.0` Bundle 需要 DSH `>=0.2.1-rc.2` 和 Node.js `^22.19.0 || >=24.0.0`，无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。
 
-**DSH 兼容性：** 软件包要求 `>=0.2.1-rc.2`；DSH `0.2.0-rc.2` 与 `0.2.1-rc.1` 低于支持下限，后续版本按声明的范围准入，不依赖静态版本表。契约与服务测试覆盖合成 V4 输入；具体制品的宿主、模型、平台与页面验收结果分别记录；候选记录中的原生、模型、平台与精确制品项在完成前保持 pending。详见 [DSH 兼容性](#dsh-兼容性)。
+**DSH 兼容性：** 软件包要求 `>=0.2.1-rc.2`；DSH `0.2.0-rc.2` 与 `0.2.1-rc.1` 低于支持下限，后续版本按声明的范围准入，不依赖静态版本表。契约与服务测试覆盖合成 V4 输入；源码与合成检查保留在 [0.6.0 开发记录](docs/acceptance/v0.6.0-rc2.1-candidate.md)；原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录。范围准入不代表未来宿主已经过实测。详见 [DSH 兼容性](#dsh-兼容性)。
 
 下方 registry 命令需要 `0.6.0` 已发布。验收候选时，请安装已审查的 tgz 或源码版本；使用 registry 命令前，请先在 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) 核实版本：
 
@@ -70,7 +70,7 @@ npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 
 
 ### 官方 Desktop
 
-Desktop 共用 Node 分析实现，其插件 profile 由官方 Electron 应用管理；npm CLI 会拒绝 `--profile desktop`。请通过应用内的插件管理或应用自带的命令 carrier 安装或卸载 Bundle。macOS carrier 位于 `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`，安装调用为 `plugin --profile desktop add <package>`。使用未发布候选前，请查看[候选记录](docs/acceptance/v0.6.0-rc2.1-candidate.md)中已记录的源码检查与仍待完成的平台 gate。Windows 如因文件占用出现 `EPERM`，应在重装前关闭主程序及其 child host。命令返回 HTML 路径后，可用本地浏览器查看；传入 `--no-open` 时只返回路径，不附查看提示。
+Desktop 共用 Node 分析实现，其插件 profile 由官方 Electron 应用管理；npm CLI 会拒绝 `--profile desktop`。请通过应用内的插件管理或应用自带的命令 carrier 安装或卸载 Bundle。macOS carrier 位于 `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`，安装调用为 `plugin --profile desktop add <package>`。各平台的实测结果请查看该精确发布制品的附带验收回执。Windows 如因文件占用出现 `EPERM`，应在重装前关闭主程序及其 child host。命令返回 HTML 路径后，可用本地浏览器查看；传入 `--no-open` 时只返回路径，不附查看提示。
 
 ## 获取渠道
 
@@ -211,7 +211,7 @@ DSH 把定时消息写为 user role、`source.kind=schedule` 的消息；DSH 0.2
 
 DSH 0.2.1-rc.2 仍使用会话格式 4，但新增了必需的 `job/registered`、`job/settled` 与 `working-directory/change` 记录。读取器接受这些记录，并把注册表结算仅视为生产者/注册表结果：它不证明用户任务完成、交付产出或资源已释放。已注册但未结算的 job 记为 pending（包括父轮已结束而子工作仍在运行）；注册缺失的结算按完整性异常计数，而不是让整个会话不可读。Team 名册/任务快照与入站 relay 作为委派证据计数，不算 Lead 的任务完成，也不当作用户提示。工作目录变化形成带标签的轨迹，而不可变的 header cwd 仍是会话来源项目，用于筛选与恢复；跨项目活动会显式呈现，原始路径不进入 redacted/metrics 报告。第三方 `plugin:` 记录只保留不透明类型/数量覆盖，不进入用户意图、模型上下文或完成证据。`web_search` 与 `web_fetch` 按记录的工具调用计数；一次搜索返回多个来源仍只算一次调用。Token 原始分桶为记录值；`input_tokens` 与 `total_tokens` 是由记录值派生的和，并已标注。
 
-0.6.0（DSH 0.2.1-rc.2）候选记录和待验收项记录在 [docs/acceptance/v0.6.0-rc2.1-candidate.md](docs/acceptance/v0.6.0-rc2.1-candidate.md)。0.5.2 的独立复核记录在 [docs/acceptance/v0.5.2-candidate.md](docs/acceptance/v0.5.2-candidate.md)。0.5.1 的候选审查范围记录在 [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md)。[0.5.0 发布验收记录](docs/acceptance/v0.5.0-release.md)和[冻结的 0.5.0 候选记录](docs/acceptance/v0.5.0-rc2-candidate.md)只适用于那个 0.5.0 实现及其注明的宿主。历史验收只适用于各自注明的实现。
+0.6.0（DSH 0.2.1-rc.2）的源码与合成检查保留在 [docs/acceptance/v0.6.0-rc2.1-candidate.md](docs/acceptance/v0.6.0-rc2.1-candidate.md)。原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录。0.5.2 的独立复核记录在 [docs/acceptance/v0.5.2-candidate.md](docs/acceptance/v0.5.2-candidate.md)。0.5.1 的候选审查范围记录在 [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md)。[0.5.0 发布验收记录](docs/acceptance/v0.5.0-release.md)和[冻结的 0.5.0 候选记录](docs/acceptance/v0.5.0-rc2-candidate.md)只适用于那个 0.5.0 实现及其注明的宿主。历史验收只适用于各自注明的实现。
 
 ## 会话日志代际
 
