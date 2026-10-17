@@ -402,24 +402,15 @@ const identifier = (id, opts, prefix) =>
   opts.privacy === 'local'
     ? sanitize(id, 'local', 300)
     : `${prefix}-${hash(id).slice(0, 12)}`
-const projectLabel = (cwd) => {
-  const label =
-      String(cwd)
-        .replace(/[\\/]+$/, '')
-        .split(/[\\/]/)
-        .at(-1) || 'unknown',
-    clean = sanitize(label)
-  return clean.startsWith('<redacted-')
-    ? `project-${hash(label).slice(0, 8)}`
-    : clean
-}
-// Trajectory display is lexical, not filesystem interpretation. In particular,
+// Project and trajectory display are lexical, not filesystem interpretation.
 // UNC share roots must never fall back to their raw anchor as a public label.
 const cwdLabel = (cwd) => {
   const label = String(cwd).replace(/[\\/]+$/, '').split(/[\\/]/).at(-1) || 'unknown'
   const clean = sanitize(label) || 'unknown'
   return clean.startsWith('<redacted-') ? `project-${hash(label).slice(0, 8)}` : clean
 }
+// Selection continues to use the raw immutable header cwd and existing path keys.
+const projectLabel = cwdLabel
 const timestamp = (value) =>
   typeof value === 'number' &&
   Number.isFinite(value) &&

@@ -17,7 +17,7 @@ import webbrowser
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlsplit, urlunsplit
 from .v4 import IDENTITY, validate_records
@@ -684,20 +684,8 @@ def extract_file_extensions(arguments: Any) -> Counter[str]:
 
 
 def project_label(cwd: str) -> str:
-    value = cwd.strip().rstrip("/\\")
-    if not value:
-        return "unknown"
-    if re.match(r"^[A-Za-z]:[\\/]", value) or value.startswith("\\\\"):
-        # Drive and UNC paths use Windows separators even on a POSIX host.
-        label = PureWindowsPath(value).name
-    else:
-        label = Path(value).name
-    original = label or value
-    redacted = redact_text(original, 100)
-    if redacted.startswith("<redacted-"):
-        suffix = hashlib.sha256(original.encode("utf-8", errors="replace")).hexdigest()[:8]
-        return f"project-{suffix}"
-    return redacted
+    """Public display only; filtering still uses the raw header cwd/path key."""
+    return cwd_label(cwd)
 
 
 def normalize_path(value: str) -> str:

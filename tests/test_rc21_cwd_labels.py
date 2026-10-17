@@ -56,8 +56,9 @@ class Rc21CwdLabelFamilyTests(unittest.TestCase):
                 # Both ambient and explicit filesystem interpretation are
                 # forbidden inside the trajectory display projection.
                 with patch.object(analyzer, 'Path', side_effect=AssertionError('ambient Path used')), \
-                     patch.object(analyzer, 'PureWindowsPath', side_effect=AssertionError('Windows anchor used')):
+                     patch.object(analyzer, 'PureWindowsPath', side_effect=AssertionError('Windows anchor used'), create=True):
                     self.assertEqual(analyzer.cwd_label(''.join(vector['cwd_parts'])), vector['label'])
+                    self.assertEqual(analyzer.project_label(''.join(vector['cwd_parts'])), vector['label'])
 
     def test_production_trajectory_projection_and_rendering_family(self):
         for context in CONTEXTS:
@@ -87,11 +88,59 @@ class Rc21CwdLabelFamilyTests(unittest.TestCase):
                                 self.assertNotIn(json.dumps(raw, ensure_ascii=False)[1:-1], encoded, vector['name'])
                             self.assertNotIn('synthetic-cwd-secret', encoded)
                             self.assertNotIn('synthetic_cwd_secret', encoded)
-                        # Existing header-project display/filtering is outside
-                        # this trajectory projection; full parity still covers
-                        # every context whose immutable origin is unchanged.
-                        if context != 'origin':
-                            test_native_parity.NativeParityTests.compare(self, values, privacy, locale)
+                        # Header display/grouping and every new trajectory field
+                        # must agree, including origin UNC/drive/POSIX roots.
+                        test_native_parity.NativeParityTests.compare(self, values, privacy, locale)
+                        if context == 'origin':
+                            expected_labels = [vector['label'] for vector in VECTORS]
+                            self.assertEqual([row['project'] for row in report['session_summaries']], expected_labels)
+                            self.assertEqual({row['project'] for row in report['projects']}, set(expected_labels))
+                            strings = []
+                            def collect(item):
+                                if isinstance(item, str):
+                                    strings.append(item)
+                                elif isinstance(item, dict):
+                                    for key, value in item.items():
+                                        strings.append(key)
+                                        collect(value)
+                                elif isinstance(item, list):
+                                    for value in item:
+                                        collect(value)
+                            collect(report)
+                            for vector in VECTORS:
+                                raw = ''.join(vector['cwd_parts'])
+                                if '/' in raw or '\\' in raw:
+                                    self.assertNotIn(raw, strings, vector['name'])
+                            for text in (json.dumps(report), json.dumps(embedded)):
+                                self.assertNotIn('synthetic-cwd-secret', text)
+                                self.assertNotIn('synthetic_cwd_secret', text)
+
+    def test_unc_header_complete_report_with_windows_display_context(self):
+        original_label = analyzer.project_label
+        def windows_display(cwd):
+            # Reproduce the failed Windows display interpretation without
+            # replacing Path in unrelated file/selection/configuration code.
+            with patch.object(analyzer, 'Path', PureWindowsPath):
+                return original_label(cwd)
+        for cwd in ('//server/share', '\\\\server\\share\\'):
+            value = snapshot('job-lifecycle')
+            value['session']['cwd'] = cwd
+            for privacy in ('local', 'redacted', 'metrics'):
+                with self.subTest(cwd=cwd, privacy=privacy):
+                    cfg = replace(config(), privacy_mode=privacy, metrics_only=privacy == 'metrics')
+                    with patch.object(analyzer, 'project_label', windows_display):
+                        report = analyzer.build_report(cfg, session_snapshots=[value])
+                        test_native_parity.NativeParityTests.compare(self, [value], privacy)
+                    self.assertEqual(report['session_summaries'][0]['project'], 'share')
+                    self.assertEqual(report['session_summaries'][0]['working_directory']['origin_label'], 'share')
+                    self.assertEqual(report['projects'][0]['project'], 'share')
+                    for text in (json.dumps(report), analyzer.render_html(report)):
+                        self.assertNotIn('//server/share', text)
+                        self.assertNotIn(json.dumps(cwd)[1:-1], text)
+            selected = analyzer.build_report(replace(config(), project=cwd), session_snapshots=[value])
+            changed = analyzer.build_report(replace(config(), project='/synthetic/workspace/project-b'), session_snapshots=[value])
+            self.assertEqual(selected['totals']['sessions'], 1)
+            self.assertEqual(changed['totals']['sessions'], 0)
 
     def test_filter_still_uses_immutable_header_origin(self):
         value = cwd_label_snapshot({'name': 'filter', 'cwd_parts': ['/synthetic/other'], 'label': 'other'}, 'inherited-own')
