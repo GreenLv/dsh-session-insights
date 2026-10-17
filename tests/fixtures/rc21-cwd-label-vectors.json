@@ -1,0 +1,171 @@
+[
+  {
+    "name": "unc-slash-root",
+    "cwd_parts": [
+      "//server/share"
+    ],
+    "label": "share"
+  },
+  {
+    "name": "unc-backslash-root",
+    "cwd_parts": [
+      "\\\\server\\share"
+    ],
+    "label": "share"
+  },
+  {
+    "name": "unc-slash-trailing",
+    "cwd_parts": [
+      "//server/share///"
+    ],
+    "label": "share"
+  },
+  {
+    "name": "unc-backslash-trailing",
+    "cwd_parts": [
+      "\\\\server\\share\\\\"
+    ],
+    "label": "share"
+  },
+  {
+    "name": "unc-mixed",
+    "cwd_parts": [
+      "\\\\server/share\\"
+    ],
+    "label": "share"
+  },
+  {
+    "name": "unc-child",
+    "cwd_parts": [
+      "//server/share/项目 一/"
+    ],
+    "label": "项目 一"
+  },
+  {
+    "name": "unc-server-only",
+    "cwd_parts": [
+      "//server"
+    ],
+    "label": "server"
+  },
+  {
+    "name": "drive-slash-root",
+    "cwd_parts": [
+      "C:/"
+    ],
+    "label": "C:"
+  },
+  {
+    "name": "drive-backslash-root",
+    "cwd_parts": [
+      "C:\\"
+    ],
+    "label": "C:"
+  },
+  {
+    "name": "drive-trailing-root",
+    "cwd_parts": [
+      "c:\\\\"
+    ],
+    "label": "c:"
+  },
+  {
+    "name": "drive-child",
+    "cwd_parts": [
+      "C:\\synthetic\\项目 一\\"
+    ],
+    "label": "项目 一"
+  },
+  {
+    "name": "drive-relative",
+    "cwd_parts": [
+      "C:"
+    ],
+    "label": "C:"
+  },
+  {
+    "name": "posix-root",
+    "cwd_parts": [
+      "/"
+    ],
+    "label": "unknown"
+  },
+  {
+    "name": "posix-root-multiple",
+    "cwd_parts": [
+      "////"
+    ],
+    "label": "unknown"
+  },
+  {
+    "name": "backslash-root",
+    "cwd_parts": [
+      "\\"
+    ],
+    "label": "unknown"
+  },
+  {
+    "name": "trailing-child",
+    "cwd_parts": [
+      "/synthetic/leaf///"
+    ],
+    "label": "leaf"
+  },
+  {
+    "name": "literal-dot",
+    "cwd_parts": [
+      "/synthetic/leaf/."
+    ],
+    "label": "."
+  },
+  {
+    "name": "blank-leaf",
+    "cwd_parts": [
+      "/synthetic/   "
+    ],
+    "label": "unknown"
+  },
+  {
+    "name": "named-secret",
+    "cwd_parts": [
+      "/synthetic/",
+      "api_key",
+      "=",
+      "synthetic-cwd-secret"
+    ],
+    "label": "api_key=<redacted>"
+  },
+  {
+    "name": "bearer-secret",
+    "cwd_parts": [
+      "/synthetic/",
+      "Bearer ",
+      "synthetic_cwd_secret"
+    ],
+    "label": "Bearer <redacted>"
+  },
+  {
+    "name": "known-secret",
+    "cwd_parts": [
+      "/synthetic/",
+      "sk-synthetic_cwd_secret_123456"
+    ],
+    "label": "project-673ebf80"
+  },
+  {
+    "name": "email",
+    "cwd_parts": [
+      "/synthetic/",
+      "synthetic@example.test"
+    ],
+    "label": "project-37733ca9"
+  },
+  {
+    "name": "long-leaf",
+    "cwd_parts": [
+      "/synthetic/",
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    ],
+    "label": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA…"
+  }
+]

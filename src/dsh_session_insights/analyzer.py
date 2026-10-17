@@ -25,11 +25,11 @@ from .v4 import IDENTITY, validate_records
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.6.0-v4-dsh021rc2.3"
+ANALYZER_VERSION = "0.6.0-v4-dsh021rc2.4"
 FAILURE_RULE_VERSION = "5.1.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
-DETERMINISTIC_CACHE_VERSION = 7
+DETERMINISTIC_CACHE_VERSION = 8
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
 
 # Session-log generations understood by this reader. Native V3 is the current
@@ -2058,7 +2058,7 @@ def new_dsh_session(
     session["cwd_segments"] = [{
         "seq": -1,
         "key": cwd_path_key(cwd),
-        "label": project_label(cwd.replace("\\", "/")),
+        "label": cwd_label(cwd),
         "inherited": False,
     }]
     session["working_directory_changes"] = 0
@@ -2232,7 +2232,7 @@ def record_working_directory(session: dict[str, Any], data: dict[str, Any], seq:
     session["cwd_segments"].append({
         "seq": seq,
         "key": key,
-        "label": project_label(cwd.replace("\\", "/")),
+        "label": cwd_label(cwd),
         "inherited": False,
     })
 
@@ -2608,6 +2608,19 @@ def process_dsh_record(
     # Remaining known DSH record types are parsed as structural no-ops:
     # permission/preset, sandbox/mode, approval/policy, agent/inbox/spliced,
     # todo/write, step/start, step/end, session/end-seed, and aggregate chunks.
+
+
+def cwd_label(cwd: str) -> str:
+    """Lexical trajectory basename, independent of host Path/anchor semantics.
+
+    Match Node's separator splitting and secret cleanup. Never recover an empty
+    root basename by returning the original path; header filtering is separate.
+    """
+    label = re.split(r"[\\/]", re.sub(r"[\\/]+$", "", cwd))[-1] or "unknown"
+    clean = redact_text(label) or "unknown"
+    if clean.startswith("<redacted-"):
+        return f"project-{hashlib.sha256(label.encode('utf-8')).hexdigest()[:8]}"
+    return clean
 
 
 def cwd_path_key(cwd: str) -> str:

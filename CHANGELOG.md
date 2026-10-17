@@ -20,7 +20,7 @@ Adapt Session Insights to DSH 0.2.1-rc.2. The floor moves to `>=0.2.1-rc.2`; 0.2
 
 ### Changed
 
-- `INPUT_IDENTITY`/analyzer semantics are now `v4-dsh021rc2.3`; cached deterministic parses and prior-run resume with different semantics are invalidated by design.
+- `INPUT_IDENTITY`/analyzer semantics are now `v4-dsh021rc2.4`; cached deterministic parses and prior-run resume with different semantics are invalidated by design.
 - The npm/Python/Bundle/Skill identity is 0.6.0 and the DSH engines/peers floor is `>=0.2.1-rc.2`.
 
 - Source and synthetic checks are preserved in the [development record](docs/acceptance/v0.6.0-rc2.1-candidate.md). Native, model and UI results are recorded separately in the acceptance receipts attached to each exact release artifact; range admission does not establish testing of future hosts.

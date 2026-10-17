@@ -413,6 +413,13 @@ const projectLabel = (cwd) => {
     ? `project-${hash(label).slice(0, 8)}`
     : clean
 }
+// Trajectory display is lexical, not filesystem interpretation. In particular,
+// UNC share roots must never fall back to their raw anchor as a public label.
+const cwdLabel = (cwd) => {
+  const label = String(cwd).replace(/[\\/]+$/, '').split(/[\\/]/).at(-1) || 'unknown'
+  const clean = sanitize(label) || 'unknown'
+  return clean.startsWith('<redacted-') ? `project-${hash(label).slice(0, 8)}` : clean
+}
 const timestamp = (value) =>
   typeof value === 'number' &&
   Number.isFinite(value) &&
@@ -487,7 +494,7 @@ function recordWorkingDirectory(s, d, seq, inherited = false) {
     count(s.cwd_anomalies, 'relative')
   if (key === s.cwd_segments.at(-1).key) count(s.cwd_anomalies, 'duplicate')
   s.working_directory_changes++
-  s.cwd_segments.push({seq, key, label: projectLabel(d.cwd), inherited})
+  s.cwd_segments.push({seq, key, label: cwdLabel(d.cwd), inherited})
 }
 export function parseSnapshot(snapshot, opts, coverage) {
   if (
@@ -563,7 +570,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
     recovery_seen: new Set(), settled_calls: new Set(), scoped_calls: new Map(),
     llm_retry_chains: new Set(),
     jobs: new Map(),
-    cwd_segments: [{seq: -1, key: pathKey(cwd), label: projectLabel(cwd), inherited: false}],
+    cwd_segments: [{seq: -1, key: pathKey(cwd), label: cwdLabel(cwd), inherited: false}],
     working_directory_changes: 0,
     unpaired_job_settlements: 0,
     jobs_busy_turn_ends: 0,
@@ -1914,7 +1921,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.6.0-v4-dsh021rc2.3',
+    analyzer_version: '0.6.0-v4-dsh021rc2.4',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),
