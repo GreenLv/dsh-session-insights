@@ -20,7 +20,7 @@ Adapt Session Insights to DSH 0.2.1-rc.2. The floor moves to `>=0.2.1-rc.2`; 0.2
 
 ### Changed
 
-- `INPUT_IDENTITY`/analyzer semantics are now `v4-dsh021rc2.1`; cached deterministic parses and prior-run resume with different semantics are invalidated by design.
+- `INPUT_IDENTITY`/analyzer semantics are now `v4-dsh021rc2.2`; cached deterministic parses and prior-run resume with different semantics are invalidated by design.
 - The npm/Python/Bundle/Skill identity is 0.6.0 and the DSH engines/peers floor is `>=0.2.1-rc.2`.
 
 ### Pending

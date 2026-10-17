@@ -20,7 +20,7 @@
 
 ### 变更
 
-- `INPUT_IDENTITY`/分析语义更新为 `v4-dsh021rc2.1`；不同语义的确定性缓存与旧运行恢复按设计失效。
+- `INPUT_IDENTITY`/分析语义更新为 `v4-dsh021rc2.2`；不同语义的确定性缓存与旧运行恢复按设计失效。
 - npm/Python/Bundle/Skill 身份为 0.6.0，DSH engines/peers 下限为 `>=0.2.1-rc.2`。
 
 ### 待办
