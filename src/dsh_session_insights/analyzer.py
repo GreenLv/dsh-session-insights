@@ -25,11 +25,11 @@ from .v4 import IDENTITY, validate_records
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.6.0-v4-dsh021rc2.2"
+ANALYZER_VERSION = "0.6.0-v4-dsh021rc2.3"
 FAILURE_RULE_VERSION = "5.1.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
-DETERMINISTIC_CACHE_VERSION = 6
+DETERMINISTIC_CACHE_VERSION = 7
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
 
 # Session-log generations understood by this reader. Native V3 is the current
@@ -457,6 +457,48 @@ def excerpt_text(text: str, config: AnalysisConfig, max_chars: int | None = None
     if config.privacy_mode == "redacted":
         return redact_text(text, limit)
     return local_text(text, limit)
+
+
+CATEGORY_VOCABULARY = {
+    "kind": {"bash", "pwsh", "pty-send", "workflow", "subagent"},
+    "phase": {"provisioning", "active", "failed", "unknown"},
+    "status": {"pending", "in_progress", "completed", "deleted", "unknown"},
+    "effort": {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"},
+    "mode": {"one-shot", "continuable"},
+}
+
+
+def public_category(value: Any, config: AnalysisConfig, category: str) -> str | None:
+    """Shape category values identically in individual rows and counter keys."""
+    if not isinstance(value, str):
+        return None
+    if config.metrics_only or config.privacy_mode == "metrics":
+        if value in CATEGORY_VOCABULARY.get(category, set()):
+            return value
+        return f"{category}-{hashlib.sha256(value.encode('utf-8')).hexdigest()[:12]}"
+    if config.privacy_mode == "redacted" and re.search(r"(^|[\s:=])(?:/|[A-Za-z]:[\\/]|\\\\)", value):
+        return f"{category}-{hashlib.sha256(value.encode('utf-8')).hexdigest()[:12]}"
+    return excerpt_text(value, config, 100) or "unknown"
+
+
+def public_counts(values: Any, config: AnalysisConfig, category: str) -> dict[str, int]:
+    result: Counter[str] = Counter()
+    for key, count in values.items():
+        result[public_category(key, config, category)] += count
+    return dict(sorted(result.items()))
+
+
+def public_descriptor(value: Any, config: AnalysisConfig) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    version = value.get("version")
+    return {
+        "version": version if isinstance(version, int) and not isinstance(version, bool) and abs(version) <= 2**53 - 1 else None,
+        "mode": public_category(value.get("mode"), config, "mode"),
+        "provider": public_category(value.get("provider"), config, "provider"),
+        "agent_provider": public_category(value.get("agent_provider"), config, "provider"),
+        "agent_model": public_category(value.get("agent_model"), config, "model"),
+    }
 
 
 def analysis_privacy(config: AnalysisConfig) -> str:
@@ -2407,7 +2449,7 @@ def process_dsh_record(
         if isinstance(call, dict) and call_id in session["rejected_approval_call_ids"]:
             call["approval_rejected"] = True
         lowered = name.casefold()
-        if lowered in {"subagent", "workflow", "spawn_teammate"}:
+        if lowered in {"subagent", "subagent_fork", "workflow", "spawn_teammate"}:
             session["subagents"] += 1
         if lowered == "send_message":
             session["delegation"]["relays_sent"] += 1
@@ -2682,9 +2724,9 @@ def finalize_delegation(session: dict[str, Any]) -> None:
     team = session["team"]
     session["team_summary"] = {
         "members": len(team["members"]),
-        "members_by_phase": dict(sorted(Counter(str(member.get("phase") or "unknown") for member in team["members"].values()).items())),
+        "members_by_phase": dict(sorted(Counter(member["phase"] if isinstance(member.get("phase"), str) and member["phase"] else "unknown" for member in team["members"].values()).items())),
         "tasks": len(team["tasks"]),
-        "tasks_by_status": dict(sorted(Counter(str(task.get("status") or "unknown") for task in team["tasks"].values()).items())),
+        "tasks_by_status": dict(sorted(Counter(task["status"] if isinstance(task.get("status"), str) and task["status"] else "unknown" for task in team["tasks"].values()).items())),
         "task_transitions": team["task_transitions"],
         "mailbox_legacy": team["mailbox_legacy"],
     }
@@ -2772,7 +2814,7 @@ def parse_dsh_session_records(
             # opaque type and count are retained; their payload never becomes
             # user intent, task-completion evidence or model context.
             if record_type.startswith("plugin:"):
-                coverage.setdefault("plugin_records", Counter())[record_type] += 1
+                coverage.setdefault("plugin_records", Counter())[public_category(record_type, config, "plugin")] += 1
             else:
                 coverage["unknown_record_types"][record_type or "<missing>"] += 1
             continue
@@ -2903,7 +2945,7 @@ def job_public_items(session: dict[str, Any], config: AnalysisConfig) -> list[di
         finished = job.get("finished_at")
         items.append({
             "job_id": stable_identifier(str(job["job_id"]), config, "job"),
-            "kind": "omitted" if metrics else excerpt_text(str(job["kind"]), config, 40),
+            "kind": public_category(job["kind"], config, "kind"),
             "status": job["status"],
             "cause": job["cause"],
             "settled": bool(job["settled"]),
@@ -2914,7 +2956,7 @@ def job_public_items(session: dict[str, Any], config: AnalysisConfig) -> list[di
                 if isinstance(finished, (int, float)) and not isinstance(finished, bool)
                 else None
             ),
-            "label": "omitted" if metrics else excerpt_text(str(job["label"]), config, 80),
+            "label": "omitted" if metrics else public_category(job["label"], config, "label"),
         })
     return items
 
@@ -2971,6 +3013,7 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "child_sessions": len(session["child_sessions"]),
         "jobs": {
             **dict(session.get("job_counts") or {}),
+            "by_kind": public_counts(session["job_counts"]["by_kind"], config, "kind"),
             "items": job_public_items(session, config),
         },
         "working_directory": {
@@ -2993,12 +3036,12 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
             **dict(session.get("delegation") or {}),
             "measurement": "recorded-source-kinds; delivery and turn end are not completion",
         },
-        "team": dict(session.get("team_summary") or {}),
-        "subagent": (
-            dict(session["subagent_descriptor"])
-            if isinstance(session.get("subagent_descriptor"), dict)
-            else None
-        ),
+        "team": {
+            **dict(session.get("team_summary") or {}),
+            "members_by_phase": public_counts(session["team_summary"]["members_by_phase"], config, "phase"),
+            "tasks_by_status": public_counts(session["team_summary"]["tasks_by_status"], config, "status"),
+        },
+        "subagent": public_descriptor(session.get("subagent_descriptor"), config),
         "system_messages": session.get("system_messages", 0),
         "injected_user_messages": session.get("injected_user_messages", 0),
         "injected_source_kinds": dict(sorted(session.get("injected_source_kinds", {}).items())),
@@ -3022,7 +3065,7 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "web_searches": session["web_searches"],
         "web_fetches": session["web_fetches"],
         "model_selections": session["model_selections"],
-        "reasoning_efforts": dict(sorted(session["reasoning_efforts"].items())),
+        "reasoning_efforts": public_counts(session["reasoning_efforts"], config, "effort"),
         "mcp_calls": session["mcp_calls"],
         "skill_calls": session["skill_calls"],
         "aborted_turns": session["aborted_turns"],
@@ -3059,8 +3102,8 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "skill_mentions": [name for name, _ in session["skill_mentions"].most_common(5)],
     }
     view["title_source"] = title_source
-    view["provider"] = provider
-    view["model"] = model
+    view["provider"] = public_category(provider, config, "provider")
+    view["model"] = public_category(model, config, "model")
     view["llm_retries"] = session["llm_retries"]
     view["llm_retries_performed"] = session["llm_retries_performed"]
     view["llm_retry_chains"] = len(session["llm_retry_chains"])
@@ -3574,12 +3617,14 @@ def build_insight_narrative_en(
     }
 
 
-def build_provider_stats(sessions: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def build_provider_stats(sessions: list[dict[str, Any]], config: AnalysisConfig) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     model_session_ids: dict[tuple[str, str], set[str]] = defaultdict(set)
     provider_session_ids: dict[str, set[str]] = defaultdict(set)
     for session in sessions:
         session_id = str(session.get("rollout_id") or id(session))
         for provider, model in session["provider_models"]:
+            provider = public_category(provider, config, "provider")
+            model = public_category(model, config, "model")
             model_session_ids[(provider, model)].add(session_id)
             provider_session_ids[provider].add(session_id)
     provider_models = [
@@ -3841,7 +3886,7 @@ def build_report(
     for session in sessions:
         job_kinds.update(session.get("job_counts", {}).get("by_kind", {}))
         job_causes.update(session.get("job_counts", {}).get("by_cause", {}))
-    job_totals["by_kind"] = dict(sorted(job_kinds.items()))
+    job_totals["by_kind"] = public_counts(job_kinds, config, "kind")
     job_totals["by_cause"] = dict(sorted(job_causes.items()))
     totals["jobs"] = job_totals
     totals["working_directory_changes"] = sum(session.get("cwd_changes", 0) for session in sessions)
@@ -3877,7 +3922,7 @@ def build_report(
         merged: Counter[str] = Counter()
         for session in sessions:
             merged.update(session.get("team_summary", {}).get(key, {}))
-        team_totals[key] = dict(sorted(merged.items()))
+        team_totals[key] = public_counts(merged, config, "phase" if key == "members_by_phase" else "status")
     totals["team"] = team_totals
     # Third-party plugin records are ignorable and opaque; the report retains
     # only their type and count, never their payload.
@@ -4214,7 +4259,7 @@ def build_report(
         "excerpts": select_excerpts(sessions, config),
         "warnings": warnings,
     }
-    providers, provider_models = build_provider_stats(sessions)
+    providers, provider_models = build_provider_stats(sessions, config)
     report["providers"] = providers
     report["provider_models"] = provider_models
     if include_internal_sessions:

@@ -92,6 +92,38 @@ export function sanitize(text, privacy = 'redacted', limit = 600) {
     .trim()
   return truncate(v, limit)
 }
+// Recorded category strings are not trusted enums. Preserve standard vocabulary
+// in metrics and pseudonymize extensions; use the same mapping for rows and keys.
+const CATEGORY_VOCABULARY = {
+  kind: ['bash', 'pwsh', 'pty-send', 'workflow', 'subagent'],
+  phase: ['provisioning', 'active', 'failed', 'unknown'],
+  status: ['pending', 'in_progress', 'completed', 'deleted', 'unknown'],
+  effort: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+  mode: ['one-shot', 'continuable'],
+}
+function publicCategory(value, opts, category) {
+  if (typeof value !== 'string') return null
+  if (opts.privacy === 'metrics')
+    return CATEGORY_VOCABULARY[category]?.includes(value) ? value : `${category}-${hash(value).slice(0, 12)}`
+  if (opts.privacy === 'redacted' && /(^|[\s:=])(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(value))
+    return `${category}-${hash(value).slice(0, 12)}`
+  return sanitize(value, opts.privacy, 100) || 'unknown'
+}
+function publicCounts(values, opts, category) {
+  const result = new Map()
+  for (const [key, value] of values) count(result, publicCategory(key, opts, category), value)
+  return dict(result)
+}
+function publicDescriptor(value, opts) {
+  if (value === null) return null
+  return {
+    version: Number.isSafeInteger(value.version) ? value.version : null,
+    mode: publicCategory(value.mode, opts, 'mode'),
+    provider: publicCategory(value.provider, opts, 'provider'),
+    agent_provider: publicCategory(value.agent_provider, opts, 'provider'),
+    agent_model: publicCategory(value.agent_model, opts, 'model'),
+  }
+}
 export function secretErrors(value, privacy) {
   const errors = []
   // Check strings separately: JSON backslash escaping must not hide Windows paths.
@@ -580,7 +612,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
       // Third-party `plugin:` records are ignorable by contract; retain only
       // the opaque type and count, never the payload.
       if (typeof type === 'string' && type.startsWith('plugin:')) {
-        const key = sanitize(type, 'redacted', 100)
+        const key = publicCategory(type, opts, 'plugin')
         coverage.plugin_records[key] = (coverage.plugin_records[key] || 0) + 1
       } else {
         coverage.unknown_record_types[
@@ -835,7 +867,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
           count(s.file_extensions, m[1].toLowerCase())
       if (name === 'request_user_input') s.clarification_requests++
       if (
-        ['spawn_agent', 'create_agent', 'subagent', 'workflow', 'spawn_teammate'].includes(name)
+        ['spawn_agent', 'create_agent', 'subagent', 'subagent_fork', 'workflow', 'spawn_teammate'].includes(name)
       )
         s.subagents++
       if (name === 'send_message') s.delegation.relays_sent++
@@ -1111,8 +1143,8 @@ export function parseSnapshot(snapshot, opts, coverage) {
   }
   {
     const membersByPhase = new Map(), tasksByStatus = new Map()
-    for (const member of s.team.members.values()) count(membersByPhase, String(member.phase || 'unknown'))
-    for (const task of s.team.tasks.values()) count(tasksByStatus, String(task.status || 'unknown'))
+    for (const member of s.team.members.values()) count(membersByPhase, typeof member.phase === 'string' && member.phase ? member.phase : 'unknown')
+    for (const task of s.team.tasks.values()) count(tasksByStatus, typeof task.status === 'string' && task.status ? task.status : 'unknown')
     s.team_summary = {
       members: s.team.members.size,
       members_by_phase: membersByPhase,
@@ -1267,18 +1299,18 @@ function publicSession(s, opts) {
     child_sessions: s.children.size,
     jobs: {
       ...s.job_counts,
-      by_kind: dict(s.job_counts.by_kind),
+      by_kind: publicCounts(s.job_counts.by_kind, opts, 'kind'),
       by_cause: dict(s.job_counts.by_cause),
       items: [...s.jobs.values()].slice(0, 20).map(job => ({
         job_id: identifier(job.job_id, opts, 'job'),
-        kind: opts.privacy === 'metrics' ? 'omitted' : sanitize(job.kind, opts.privacy, 40),
+        kind: publicCategory(job.kind, opts, 'kind'),
         status: job.status,
         cause: job.cause,
         settled: job.settled,
         producer_reported: job.producer_reported,
         inherited: job.inherited,
         duration_ms: job.finished_at === null ? null : Math.max(0, job.finished_at - job.started_at),
-        label: opts.privacy === 'metrics' ? 'omitted' : sanitize(job.label, opts.privacy, 80),
+        label: opts.privacy === 'metrics' ? 'omitted' : publicCategory(job.label, opts, 'label'),
       })),
     },
     working_directory: {
@@ -1304,10 +1336,10 @@ function publicSession(s, opts) {
     },
     team: {
       ...s.team_summary,
-      members_by_phase: dict(s.team_summary.members_by_phase),
-      tasks_by_status: dict(s.team_summary.tasks_by_status),
+      members_by_phase: publicCounts(s.team_summary.members_by_phase, opts, 'phase'),
+      tasks_by_status: publicCounts(s.team_summary.tasks_by_status, opts, 'status'),
     },
-    subagent: s.subagent_descriptor === null ? null : {...s.subagent_descriptor},
+    subagent: publicDescriptor(s.subagent_descriptor, opts),
     llm_retry_chains: s.llm_retry_chains.size,
     injected_source_kinds: dict(s.injected_source_kinds),
     median_prompt_chars: Math.trunc(median(s.prompt_lengths)),
@@ -1336,7 +1368,7 @@ function publicSession(s, opts) {
     median_user_response_seconds: round(median(s.user_responses)),
     tokens: s.tokens,
     token_measurement: {...s.token_measurement},
-    reasoning_efforts: dict(s.reasoning_efforts),
+    reasoning_efforts: publicCounts(s.reasoning_efforts, opts, 'effort'),
     top_tools: ranked(s.tool_counts)
       .slice(0, 5)
       .map(([n]) => n),
@@ -1346,8 +1378,8 @@ function publicSession(s, opts) {
     skill_mentions: ranked(s.skill_mentions)
       .slice(0, 5)
       .map(([n]) => n),
-    provider: sanitize(provider || '', 'local', 100) || null,
-    model: sanitize(model || '', 'local', 100) || null,
+    provider: publicCategory(provider, opts, 'provider'),
+    model: publicCategory(model, opts, 'model'),
   }
 }
 const groupBy = (rows, key) => {
@@ -1434,7 +1466,7 @@ export function buildReport(snapshots, input = {}) {
     teardown: jobCount('teardown'), duration_negative: jobCount('duration_negative'),
     detail_present: jobCount('detail_present'), busy_turn_ends: jobCount('busy_turn_ends'),
     unpaired_settlement: jobCount('unpaired_settlement'),
-    by_kind: dict(kindTotals), by_cause: dict(causeTotals),
+    by_kind: publicCounts(kindTotals, opts, 'kind'), by_cause: dict(causeTotals),
     measurement: 'recorded',
     completion_scope: 'registry-or-producer-outcome; not user-task completion or resource release',
   }
@@ -1463,8 +1495,8 @@ export function buildReport(snapshots, input = {}) {
     tasks: sessions.reduce((n, s) => n + s.team_summary.tasks, 0),
     task_transitions: sessions.reduce((n, s) => n + s.team_summary.task_transitions, 0),
     mailbox_legacy: sessions.reduce((n, s) => n + s.team_summary.mailbox_legacy, 0),
-    members_by_phase: dict(memberPhaseTotals),
-    tasks_by_status: dict(taskStatusTotals),
+    members_by_phase: publicCounts(memberPhaseTotals, opts, 'phase'),
+    tasks_by_status: publicCounts(taskStatusTotals, opts, 'status'),
     measurement: 'last-wins roster/task snapshots; not Lead task completion',
   }
   totals.llm_retry_chains = new Set(sessions.flatMap((s) => [...s.llm_retry_chains])).size
@@ -1720,25 +1752,26 @@ export function buildReport(snapshots, input = {}) {
     modelMap = new Map()
   for (const s of sessions)
     for (const key of s.provider_models.keys()) {
-      const [p, m] = JSON.parse(key)
+      const raw = JSON.parse(key), p = publicCategory(raw[0], opts, 'provider'), m = publicCategory(raw[1], opts, 'model')
+      const publicKey = JSON.stringify([p, m])
       if (!providerMap.has(p)) providerMap.set(p, new Set())
       providerMap.get(p).add(s.rawId)
-      if (!modelMap.has(key)) modelMap.set(key, new Set())
-      modelMap.get(key).add(s.rawId)
+      if (!modelMap.has(publicKey)) modelMap.set(publicKey, new Set())
+      modelMap.get(publicKey).add(s.rawId)
     }
   const provider_models = [...modelMap].map(([key, ids]) => {
     const [p, m] = JSON.parse(key)
     return {
-      provider: sanitize(p, 'redacted', 100),
-      model: sanitize(m, 'redacted', 100),
+      provider: p,
+      model: m,
       sessions: ids.size,
     }
   })
   const providers = [...providerMap].map(([p, ids]) => ({
-    provider: sanitize(p, 'redacted', 100),
+    provider: p,
     sessions: ids.size,
     models: provider_models
-      .filter((m) => m.provider === sanitize(p, 'redacted', 100))
+      .filter((m) => m.provider === p)
       .map(({ model, sessions }) => ({ model, sessions })),
   }))
   const en = opts.locale === 'en',
@@ -1881,7 +1914,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.6.0-v4-dsh021rc2.2',
+    analyzer_version: '0.6.0-v4-dsh021rc2.3',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),
