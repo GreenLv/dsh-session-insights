@@ -1,5 +1,11 @@
 # Distribution status
 
+## Published 0.6.0 (2026-10-18)
+
+[npm 0.6.0](https://www.npmjs.com/package/dsh-session-insights/v/0.6.0) and the [GitHub Release](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.6.0) publish the same accepted artifact. Tag `v0.6.0` points to `542c342f2b06fcb980215247e33c07e0ce2dd2a6`; the tarball SHA-256 is `b0985cae3f565e215aaa91e5286c03bd43c8219b51d20520d809489e3298e8f5`. Anonymous downloads from both channels match, and all 22 Release attachments were read back and compared on 2026-10-18.
+
+The release requires DSH `>=0.2.1-rc.2`. Both native platforms passed the required host, model and report-UI checks described in the [release acceptance](acceptance/v0.6.0-release.md). The [public receipt](acceptance/v0.6.0-release-receipt.json) records publication separately. Existing community listings were not resubmitted or freshly revalidated; npm publication does not prove marketplace ingestion or approval. Earlier sections retain their named historical release facts.
+
 ## Published 0.5.0 (2026-09-26)
 
 The [GitHub Release](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.5.0) and [npm 0.5.0](https://www.npmjs.com/package/dsh-session-insights/v/0.5.0) publish the same accepted artifact for DSH `0.1.7-rc.2` only. Source tag: `607ecae2edaa0b145126a1c4cd8b3352c4a6bc5a`; artifact SHA-256: `1b969c46de0c526e79b3283322ebaa340676d8eaee0792b4ba6cd906c150e8d2`.

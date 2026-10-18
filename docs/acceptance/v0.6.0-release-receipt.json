@@ -1,0 +1,231 @@
+{
+  "schema": "release-receipt/v2",
+  "status": "passed",
+  "release_profile": "package",
+  "repository": {
+    "url": "https://github.com/GreenLv/dsh-session-insights",
+    "commit": "542c342f2b06fcb980215247e33c07e0ce2dd2a6"
+  },
+  "version": "0.6.0",
+  "tag": "v0.6.0",
+  "artifact": {
+    "filename": "dsh-session-insights-0.6.0.tgz",
+    "sha256": "b0985cae3f565e215aaa91e5286c03bd43c8219b51d20520d809489e3298e8f5",
+    "size_bytes": 162436
+  },
+  "channels": [
+    {
+      "id": "source_tag",
+      "kind": "source_tag",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/tree/v0.6.0",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.6.0",
+        "commit": "542c342f2b06fcb980215247e33c07e0ce2dd2a6",
+        "artifact_sha256": null
+      },
+      "observed": {
+        "version": "0.6.0",
+        "commit": "542c342f2b06fcb980215247e33c07e0ce2dd2a6",
+        "artifact_sha256": null
+      }
+    },
+    {
+      "id": "npm_registry",
+      "kind": "package_registry",
+      "required": true,
+      "status": "verified",
+      "url": "https://registry.npmjs.org/dsh-session-insights/0.6.0",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.6.0",
+        "commit": "542c342f2b06fcb980215247e33c07e0ce2dd2a6",
+        "artifact_sha256": "b0985cae3f565e215aaa91e5286c03bd43c8219b51d20520d809489e3298e8f5"
+      },
+      "observed": {
+        "version": "0.6.0",
+        "commit": "542c342f2b06fcb980215247e33c07e0ce2dd2a6",
+        "artifact_sha256": "b0985cae3f565e215aaa91e5286c03bd43c8219b51d20520d809489e3298e8f5"
+      }
+    },
+    {
+      "id": "github_release",
+      "kind": "repository_release",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.6.0",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.6.0",
+        "commit": "542c342f2b06fcb980215247e33c07e0ce2dd2a6",
+        "artifact_sha256": "b0985cae3f565e215aaa91e5286c03bd43c8219b51d20520d809489e3298e8f5"
+      },
+      "observed": {
+        "version": "0.6.0",
+        "commit": "542c342f2b06fcb980215247e33c07e0ce2dd2a6",
+        "artifact_sha256": "b0985cae3f565e215aaa91e5286c03bd43c8219b51d20520d809489e3298e8f5"
+      }
+    },
+    {
+      "id": "public_downloads",
+      "kind": "public_readback",
+      "required": true,
+      "status": "verified",
+      "url": "https://registry.npmjs.org/dsh-session-insights/-/dsh-session-insights-0.6.0.tgz",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.6.0",
+        "commit": "542c342f2b06fcb980215247e33c07e0ce2dd2a6",
+        "artifact_sha256": "b0985cae3f565e215aaa91e5286c03bd43c8219b51d20520d809489e3298e8f5"
+      },
+      "observed": {
+        "version": "0.6.0",
+        "commit": "542c342f2b06fcb980215247e33c07e0ce2dd2a6",
+        "artifact_sha256": "b0985cae3f565e215aaa91e5286c03bd43c8219b51d20520d809489e3298e8f5"
+      }
+    }
+  ],
+  "assets": [
+    {
+      "filename": "artifact.json",
+      "sha256": "a51cf8edccc6d168fdb1720b64ad8e49001e99102daf5ad8bfd1ecbbb6e41f3e",
+      "size_bytes": 3950,
+      "role": "manifest"
+    },
+    {
+      "filename": "dsh-session-insights-0.6.0.tgz",
+      "sha256": "b0985cae3f565e215aaa91e5286c03bd43c8219b51d20520d809489e3298e8f5",
+      "size_bytes": 162436,
+      "role": "artifact"
+    },
+    {
+      "filename": "macos-desktop-native.json",
+      "sha256": "2a00a9e914da14412598de274c48f159a13d9f9f9c651cb3d1f85c5492e1e75c",
+      "size_bytes": 10672,
+      "role": "native_annex"
+    },
+    {
+      "filename": "macos-headless-native.json",
+      "sha256": "6d8756ea9d1c976f2b5785e0242f8f8f54eb126dce631dd9f4453ef621cc52db",
+      "size_bytes": 10057,
+      "role": "native_annex"
+    },
+    {
+      "filename": "macos-model-ui-native.json",
+      "sha256": "cfb1cd7faf2a3d3e7553669e3642f43939b6e14b83376146978bf7e660feb8ea",
+      "size_bytes": 4776,
+      "role": "native_annex"
+    },
+    {
+      "filename": "macos-model-usage.json",
+      "sha256": "4ef94442233fbbf9446dcf4faa59e372ee49d276434b11d361f5d59f79816212",
+      "size_bytes": 729,
+      "role": "native_annex"
+    },
+    {
+      "filename": "macos-portable-native.json",
+      "sha256": "795c96da906f015b8c2b5fec9dac2e4888496d2e14f7bb1c70912161d6082032",
+      "size_bytes": 11303,
+      "role": "native_annex"
+    },
+    {
+      "filename": "macos-web-native.json",
+      "sha256": "d3a4431b42ea314a61d13fe16d9e50132f5a2826218698a81b3ffc838be57617",
+      "size_bytes": 9995,
+      "role": "native_annex"
+    },
+    {
+      "filename": "macos-worker-resource.json",
+      "sha256": "5761b2b1df54974000a55e680665cd6711568177987d7a47ff651a99f9904423",
+      "size_bytes": 6835,
+      "role": "native_annex"
+    },
+    {
+      "filename": "qualification-status.json",
+      "sha256": "7fe1abf556fe9f7e4a43e32fa9cc4045d4bd4615b43228d597be621b039a3425",
+      "size_bytes": 793,
+      "role": "other"
+    },
+    {
+      "filename": "reader-review.json",
+      "sha256": "c9ba2a35da26650d48f09e24e5114b374c10596fff41ad280f78e2ad0cbe272b",
+      "size_bytes": 3450,
+      "role": "other"
+    },
+    {
+      "filename": "SHA256SUMS",
+      "sha256": "3acd7b6781f1e280b8e09478c50a9abcb054403819e1546caf4ce7bfca0b5263",
+      "size_bytes": 1917,
+      "role": "checksum"
+    },
+    {
+      "filename": "source-ci.json",
+      "sha256": "166d749c1c680d7ddc12baa88ca1a69882150ecae6682427b62b70e51d0ecf5e",
+      "size_bytes": 1323,
+      "role": "other"
+    },
+    {
+      "filename": "tgz.sha256",
+      "sha256": "42ecf055e29d8bd4a75aa9d53a86c3de95e83d7e01242f3644188931921fb640",
+      "size_bytes": 97,
+      "role": "checksum"
+    },
+    {
+      "filename": "windows-artifact-transfer.json",
+      "sha256": "dfef731c1856aac79a896bdf5426cfdc5cb56b37429d6b515e5362e20bb5e001",
+      "size_bytes": 1238,
+      "role": "native_annex"
+    },
+    {
+      "filename": "windows-daily-qualification.json",
+      "sha256": "ce6444f2fa781d04822c7196a43683f78201381fb01cf01d1abb0954b0bdd80a",
+      "size_bytes": 1471,
+      "role": "native_annex"
+    },
+    {
+      "filename": "windows-desktop-native.json",
+      "sha256": "b810afe2b3d3ecdcfb7a3d16a6ec5578b793a7ee24b191b2e75a7d21150e110d",
+      "size_bytes": 10621,
+      "role": "native_annex"
+    },
+    {
+      "filename": "windows-headless-native.json",
+      "sha256": "2f691277b2f5d44e9fc2877318359fe28785ea843c3b975be20b7f5fdce417d2",
+      "size_bytes": 10057,
+      "role": "native_annex"
+    },
+    {
+      "filename": "windows-model-budget.json",
+      "sha256": "b2c66d51b1d3531cee9c953dda98f24a49ef894a01f295587b1acf6bb659cfd3",
+      "size_bytes": 976,
+      "role": "native_annex"
+    },
+    {
+      "filename": "windows-model-report-ui-native.json",
+      "sha256": "b3380b3768ab89bab553cf4c2e25120145730e915769a608ac702611f72e7384",
+      "size_bytes": 10823,
+      "role": "native_annex"
+    },
+    {
+      "filename": "windows-portable-native.json",
+      "sha256": "942beeabecc49b32cad7f397c9a1d0d10d7c15d65520f0ecb1fd44ce905d1180",
+      "size_bytes": 11303,
+      "role": "native_annex"
+    },
+    {
+      "filename": "windows-web-native.json",
+      "sha256": "bdef61a9e49fb075a0547db4929cacb3bc83765d3d11f42a90bfe284b9500cc3",
+      "size_bytes": 9995,
+      "role": "native_annex"
+    }
+  ],
+  "run": {
+    "started_at": "2026-10-18T04:48:21+00:00",
+    "finished_at": "2026-10-18T04:59:53.219830+00:00"
+  },
+  "unperformed_actions": [
+    "promotion"
+  ]
+}
