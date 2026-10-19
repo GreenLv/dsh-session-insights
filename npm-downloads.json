@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
   "renderer_version": 3,
-  "generated_at": "2026-10-18T09:00:45.955Z",
-  "data_through": "2026-10-17",
+  "generated_at": "2026-10-19T10:11:52.194Z",
+  "data_through": "2026-10-18",
   "period": {
     "start": "2026-08-22",
-    "end": "2026-10-17"
+    "end": "2026-10-18"
   },
   "title": "dsh-session-insights npm download history",
   "project": "dsh-session-insights",
@@ -16,7 +16,7 @@
       "label": "dsh-session-insights",
       "color": "#2563eb",
       "start": "2026-08-22",
-      "total": 3413,
+      "total": 3486,
       "downloads": [
         {
           "day": "2026-08-22",
@@ -300,8 +300,13 @@
         },
         {
           "day": "2026-10-17",
+          "downloads": 73,
+          "cumulative": 3486
+        },
+        {
+          "day": "2026-10-18",
           "downloads": 0,
-          "cumulative": 3413
+          "cumulative": 3486
         }
       ]
     }
@@ -589,24 +594,29 @@
     },
     {
       "day": "2026-10-17",
+      "downloads": 73,
+      "cumulative": 3486
+    },
+    {
+      "day": "2026-10-18",
       "downloads": 0,
-      "cumulative": 3413
+      "cumulative": 3486
     }
   ],
   "sources": [
     {
       "package": "dsh-session-insights",
       "start": "2026-08-22",
-      "end": "2026-10-17",
-      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-10-17/dsh-session-insights",
-      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-10-17/dsh-session-insights"
+      "end": "2026-10-18",
+      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-10-18/dsh-session-insights",
+      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-10-18/dsh-session-insights"
     }
   ],
-  "observation_through": "2026-10-17",
+  "observation_through": "2026-10-18",
   "settlement": {
     "mode": "latest-available-day",
     "latest_day_status": "provisional",
-    "stable_through": "2026-10-15",
+    "stable_through": "2026-10-16",
     "minimum_age_days": 2,
     "minimum_observation_span_hours": 12
   },
