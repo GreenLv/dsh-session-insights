@@ -34,6 +34,8 @@ NEGATIVE_CONTRACT_ALLOWLIST = {
     "tests/test_cli_install.py": {"credential-assignment", "legacy-home-field", "legacy-product"},
     "tests/helpers.py": {"credential-assignment"},
     "tests/test_public_tree_audit.py": {"private-user-path", "legacy-product"},
+    # Synthetic Windows/POSIX user paths used as redaction inputs, never real.
+    "tests-js/dsi-audit.test.js": {"private-user-path"},
     "scripts/build_fixture.py": {"private-key"},
     "scripts/audit_public_tree.py": set(CONTENT_RULES),
 }
