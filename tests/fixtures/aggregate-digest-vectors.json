@@ -1,0 +1,108 @@
+{
+  "schema": "dsh-session-insights-aggregate-digest-vectors/v1",
+  "manifest": {
+    "scope_fingerprint": "vector-fixed-scope",
+    "semantic_schema_version": "1.2.0"
+  },
+  "cases": [
+    {
+      "name": "single-facet",
+      "facets": [
+        {
+          "task_family_id": "task-abc123def456",
+          "goal": "实现完成",
+          "task_type": "implementation",
+          "interaction_style": "detailed",
+          "instruction_handling": "followed",
+          "tool_execution": "strong",
+          "verification_quality": "strong",
+          "handoff_quality": "clear",
+          "frictions": [
+            "none"
+          ],
+          "strengths": [
+            "clear goal"
+          ],
+          "outcome_inference": "fully_achieved",
+          "evidence_refs": [
+            "evidence-abc123def456abc123"
+          ],
+          "score": 12.0
+        }
+      ],
+      "expected_digest": "35c2c0589a911720a036929aaac9641fd9f3ecebee566d5cd24525bc45ef0fa8"
+    },
+    {
+      "name": "two-facets-order-sensitive",
+      "facets": [
+        {
+          "task_family_id": "task-aaa",
+          "goal": "A",
+          "task_type": "review",
+          "interaction_style": "brief",
+          "instruction_handling": "followed",
+          "tool_execution": "adequate",
+          "verification_quality": "partial",
+          "handoff_quality": "clear",
+          "frictions": [],
+          "strengths": [
+            "s"
+          ],
+          "outcome_inference": "unclear",
+          "evidence_refs": [
+            "evidence-111"
+          ]
+        },
+        {
+          "task_family_id": "task-bbb",
+          "goal": "B",
+          "task_type": "debugging",
+          "interaction_style": "detailed",
+          "instruction_handling": "missed",
+          "tool_execution": "weak",
+          "verification_quality": "absent",
+          "handoff_quality": "partial",
+          "frictions": [
+            "f1",
+            "f2"
+          ],
+          "strengths": [],
+          "outcome_inference": "not_achieved",
+          "evidence_refs": [
+            "evidence-222",
+            "evidence-333"
+          ],
+          "score": 3.5
+        }
+      ],
+      "expected_digest": "eb1a6706a64e988e7a9a52c4fc0fc76acdb18bb98efa81633f2c4aa07d7e9315"
+    },
+    {
+      "name": "chinese-and-special-chars",
+      "facets": [
+        {
+          "task_family_id": "task-中文标识",
+          "goal": "包含 emoji 🎉 与 URL https://example.invalid/x?a=1 的目标",
+          "task_type": "writing",
+          "interaction_style": "detailed",
+          "instruction_handling": "partially_followed",
+          "tool_execution": "not_applicable",
+          "verification_quality": "unclear",
+          "handoff_quality": "unclear",
+          "frictions": [
+            "重试多次",
+            "路径 /a/b/c 干扰"
+          ],
+          "strengths": [
+            "结构清晰"
+          ],
+          "outcome_inference": "mostly_achieved",
+          "evidence_refs": [
+            "evidence-URI编码test"
+          ]
+        }
+      ],
+      "expected_digest": "de97db6a3635b4528b6ba61c85ded7a0ca15dbc195f2a7d688bbfd7f91b1f387"
+    }
+  ]
+}

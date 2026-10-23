@@ -1,0 +1,55 @@
+{
+  "schema": "dsh-session-insights-url-vectors/v1",
+  "cases": [
+    {
+      "name": "plain-no-query",
+      "input": "see https://example.invalid/path now",
+      "expected_python": "see https://example.invalid/path now"
+    },
+    {
+      "name": "userinfo-no-query",
+      "input": "go https://synthetic-user:synthetic-pass@example.invalid/path",
+      "expected_python": "go https://example.invalid/path"
+    },
+    {
+      "name": "userinfo-with-query",
+      "input": "go https://u:p@example.invalid/path?a=1&b=2 here",
+      "expected_python": "go https://example.invalid/path?<redacted-query> here"
+    },
+    {
+      "name": "query-only",
+      "input": "see https://example.invalid/x?token=1",
+      "expected_python": "see https://example.invalid/x?<redacted-query>"
+    },
+    {
+      "name": "fragment",
+      "input": "see https://example.invalid/x#frag",
+      "expected_python": "see https://example.invalid/x?<redacted-query>"
+    },
+    {
+      "name": "uppercase-scheme",
+      "input": "HTTPS://user:pw@example.invalid/p",
+      "expected_python": "https://example.invalid/p"
+    },
+    {
+      "name": "port",
+      "input": "https://user:pw@example.invalid:8443/p",
+      "expected_python": "https://example.invalid:8443/p"
+    },
+    {
+      "name": "percent-userinfo",
+      "input": "https://%75ser:p%40ss@example.invalid/p",
+      "expected_python": "https://example.invalid/p"
+    },
+    {
+      "name": "trailing-punct",
+      "input": "link https://user:pw@example.invalid/p.",
+      "expected_python": "link https://example.invalid/p."
+    },
+    {
+      "name": "broken-url-port",
+      "input": "https://example.invalid:99999999999999999999/p",
+      "expected_python": "<url>"
+    }
+  ]
+}

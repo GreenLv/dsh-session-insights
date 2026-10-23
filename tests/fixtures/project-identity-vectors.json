@@ -1,0 +1,55 @@
+{
+  "schema": "dsh-session-insights-project-identity-vectors/v1",
+  "cases": [
+    {
+      "name": "posix-a",
+      "cwd": "/synthetic/customer-a/app",
+      "project_id": "project-b518bab1ff92"
+    },
+    {
+      "name": "posix-b",
+      "cwd": "/synthetic/customer-b/app",
+      "project_id": "project-5b2f395b840b"
+    },
+    {
+      "name": "posix-case-sensitive-a",
+      "cwd": "/synthetic/Customer-A/app",
+      "project_id": "project-31b3b6d0eb2f"
+    },
+    {
+      "name": "posix-case-sensitive-b",
+      "cwd": "/synthetic/customer-a/app",
+      "project_id": "project-b518bab1ff92"
+    },
+    {
+      "name": "posix-trailing",
+      "cwd": "/synthetic/customer-a/app/",
+      "project_id": "project-b518bab1ff92"
+    },
+    {
+      "name": "win-drive-upper",
+      "cwd": "C:\\Synthetic\\App",
+      "project_id": "project-615d4469c435"
+    },
+    {
+      "name": "win-drive-lower",
+      "cwd": "c:\\synthetic\\app",
+      "project_id": "project-615d4469c435"
+    },
+    {
+      "name": "win-fwd-slash",
+      "cwd": "C:/Synthetic/App",
+      "project_id": "project-615d4469c435"
+    },
+    {
+      "name": "unc",
+      "cwd": "\\\\server\\share\\app",
+      "project_id": "project-597b933c30fd"
+    },
+    {
+      "name": "posix-on-windows-host-style",
+      "cwd": "/mnt/c/app",
+      "project_id": "project-93377573ef0f"
+    }
+  ]
+}

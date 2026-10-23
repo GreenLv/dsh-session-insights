@@ -1,0 +1,75 @@
+{
+  "schema": "dsh-session-insights-timezone-vectors/v1",
+  "cases": [
+    {
+      "name": "shanghai-after-midnight",
+      "instant": "2026-10-22T17:00:00Z",
+      "instant_ms": 1792688400000,
+      "zone": "Asia/Shanghai",
+      "date": "2026-10-23",
+      "hour": 1,
+      "weekday": 4,
+      "utc_date": "2026-10-22"
+    },
+    {
+      "name": "shanghai-before-midnight",
+      "instant": "2026-10-22T15:59:00Z",
+      "instant_ms": 1792684740000,
+      "zone": "Asia/Shanghai",
+      "date": "2026-10-22",
+      "hour": 23,
+      "weekday": 3,
+      "utc_date": "2026-10-22"
+    },
+    {
+      "name": "utc-same-instant",
+      "instant": "2026-10-22T17:00:00Z",
+      "instant_ms": 1792688400000,
+      "zone": "UTC",
+      "date": "2026-10-22",
+      "hour": 17,
+      "weekday": 3,
+      "utc_date": "2026-10-22"
+    },
+    {
+      "name": "ny-before-fallback",
+      "instant": "2026-11-01T05:30:00Z",
+      "instant_ms": 1793511000000,
+      "zone": "America/New_York",
+      "date": "2026-11-01",
+      "hour": 1,
+      "weekday": 6,
+      "utc_date": "2026-11-01"
+    },
+    {
+      "name": "ny-after-fallback",
+      "instant": "2026-11-01T06:30:00Z",
+      "instant_ms": 1793514600000,
+      "zone": "America/New_York",
+      "date": "2026-11-01",
+      "hour": 1,
+      "weekday": 6,
+      "utc_date": "2026-11-01"
+    },
+    {
+      "name": "ny-spring-gap",
+      "instant": "2027-03-14T07:30:00Z",
+      "instant_ms": 1805009400000,
+      "zone": "America/New_York",
+      "date": "2027-03-14",
+      "hour": 3,
+      "weekday": 6,
+      "utc_date": "2027-03-14"
+    },
+    {
+      "name": "fixed-offset",
+      "instant": "2026-10-22T17:00:00Z",
+      "instant_ms": 1792688400000,
+      "zone": "UTC+08:00",
+      "date": "2026-10-23",
+      "hour": 1,
+      "weekday": 4,
+      "utc_date": "2026-10-22"
+    }
+  ]
+}

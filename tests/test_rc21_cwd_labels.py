@@ -1,4 +1,5 @@
 """Host-independent cwd display family, through public report projections."""
+import hashlib
 import json
 import io
 import runpy
@@ -122,9 +123,24 @@ class Rc21CwdLabelFamilyTests(unittest.TestCase):
                         # must agree, including origin UNC/drive/POSIX roots.
                         test_native_parity.NativeParityTests.compare(self, values, privacy, locale)
                         if context == 'origin':
-                            expected_labels = [vector['label'] for vector in VECTORS]
+                            # F9: labels that collide across distinct project
+                            # identities carry a short stable anonymous suffix.
+                            identities = [analyzer.project_identity(''.join(vector['cwd_parts'])) for vector in VECTORS]
+                            label_by_id = {}
+                            for identity, vector in zip(identities, VECTORS):
+                                label_by_id.setdefault(identity, vector['label'])
+                            counts = {}
+                            for label in label_by_id.values():
+                                counts[label] = counts.get(label, 0) + 1
+                            final = {
+                                identity: label if counts[label] < 2
+                                else f"{label}-{hashlib.sha256(identity.encode('utf-8')).hexdigest()[:8]}"
+                                for identity, label in label_by_id.items()
+                            }
+                            expected_labels = [final[identity] for identity in identities]
                             self.assertEqual([row['project'] for row in report['session_summaries']], expected_labels)
                             self.assertEqual({row['project'] for row in report['projects']}, set(expected_labels))
+                            self.assertEqual({row['project_id'] for row in report['session_summaries']}, set(identities))
                             strings = []
                             def collect(item):
                                 if isinstance(item, str):

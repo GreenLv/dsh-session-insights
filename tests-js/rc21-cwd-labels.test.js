@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {buildReport} from '../plugin/lib/analyzer.js'
+import {buildReport, projectIdOf} from '../plugin/lib/analyzer.js'
+import {createHash} from 'node:crypto'
 import {renderReport} from '../plugin/lib/semantic.js'
 import {renderMemory} from './fixtures/rc21-privacy.mjs'
 import {cwdLabelVectors,cwdLabelSnapshot,expectedDirectoryLabels} from './fixtures/rc21-cwd-labels.mjs'
@@ -9,8 +10,21 @@ for(const context of ['origin','own','inherited','inherited-own']) test(`cwd dis
   const snapshots=cwdLabelVectors.map(vector=>cwdLabelSnapshot(vector,context))
   const {report}=buildReport(snapshots,{now:snapshots[0].session.createdAt+86400000,days:30,privacy,locale,analysis_depth:'evidence'})
   if(context==='origin') {
-   assert.deepEqual(report.session_summaries.map(row=>row.project),cwdLabelVectors.map(vector=>vector.label))
-   assert.deepEqual(new Set(report.projects.map(row=>row.project)),new Set(cwdLabelVectors.map(vector=>vector.label)))
+   // F9: basename labels that collide across distinct project identities
+   // carry a short stable anonymous suffix; every session of one identity
+   // shares that identity's disambiguated label.
+   const identities=cwdLabelVectors.map(vector=>projectIdOf(vector.cwd_parts.join('')))
+   const labelById=new Map()
+   cwdLabelVectors.forEach((vector,index)=>{if(!labelById.has(identities[index]))labelById.set(identities[index],vector.label)})
+   const labelCounts=new Map()
+   for(const label of labelById.values())labelCounts.set(label,(labelCounts.get(label)||0)+1)
+   const finalLabel=new Map()
+   for(const [identity,label] of labelById)
+     finalLabel.set(identity,labelCounts.get(label)>1?`${label}-${createHash('sha256').update(identity).digest('hex').slice(0,8)}`:label)
+   for(const row of report.session_summaries)
+    assert.equal(row.project,finalLabel.get(row.project_id),`${row.project_id} label`)
+   assert.deepEqual(new Set(report.projects.map(row=>row.project)),new Set([...labelById.keys()].map(identity=>finalLabel.get(identity))))
+   assert.deepEqual(new Set(report.session_summaries.map(row=>row.project_id)),new Set(identities))
    const strings=[]
    const collect=value=>{if(typeof value==='string')strings.push(value);else if(Array.isArray(value))value.forEach(collect);else if(value&&typeof value==='object')for(const [key,item]of Object.entries(value)){strings.push(key);collect(item)}}
    collect(report)
