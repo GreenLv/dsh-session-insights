@@ -6,7 +6,7 @@ Public releases are listed newest first.
 
 ## 0.6.1
 
-Security and correctness patch for 0.6.0: closes the audited output-boundary, cache-minimization, privacy-projection, project-identity, timezone and aggregate-freshness defects (F1-F11), adds trusted human approval for run deletion, and adds dependency auditing to CI. Session format stays V4 with DSH `>=0.2.1-rc.2`; start a new analysis run after upgrading; old caches are ignored automatically and deleting them is an optional, deliberate cleanup (see Migration).
+Security and correctness patch for 0.6.0: closes the output-boundary, cache-minimization, privacy-projection, project-identity, timezone and aggregate-freshness defects listed below, adds trusted human approval for run deletion, and adds dependency auditing to CI. Session format stays V4 with DSH `>=0.2.1-rc.2`; start a new analysis run after upgrading; old caches are ignored automatically and deleting them is an optional, deliberate cleanup (see Migration).
 
 ### Security
 
@@ -17,7 +17,7 @@ Security and correctness patch for 0.6.0: closes the audited output-boundary, ca
 - Extension `source.kind` values in `injected_source_kinds` follow the shared category vocabulary: documented kinds stay readable, extensions are sanitized/pseudonymized per privacy mode, and credentials never persist even locally.
 - Model-output validation covers the full input-sanitize contract (emails with plus tags, URL userinfo/query, identifiers, paths — values and object keys); invalid replacements keep the previous valid bytes, and an aggregate file placed outside the accepted submit path is untrusted input that finalize refuses.
 - Corrupt logs in provable out-of-scope projects are skipped after a bounded header read (never parsed, cached or blocking healthy projects); in-scope corruption still fails closed, now with a privacy-safe session locator and line number.
-- Native run deletion requires a human approval through the host `ctx.approval` seam (`allowed-once` scoped to that exact call); a model-supplied `confirm=true` alone deletes nothing, no approval service means fail-closed, and the typed command `session-insights --cleanup <run> --confirm` is the direct human entry.
+- Native run deletion requires a human approval through the host `ctx.approval` seam (`allowed-once` scoped to that exact call); a model-supplied `confirm=true` alone deletes nothing, no approval service means fail-closed, and the typed DSH command `/session-insights --cleanup <run> --confirm` is the direct human entry.
 
 ### Changed
 

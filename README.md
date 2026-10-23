@@ -37,7 +37,7 @@ The HTML file contains its own styles and data, so you can keep it locally and o
 
 ## Install the Bundle
 
-The `0.6.1` Bundle requires DSH `>=0.2.1-rc.2` and Node.js `^22.19.0 || >=24.0.0`, without Python. The optional file-log CLI still requires Python 3.11+.
+The `0.6.1` Bundle requires DSH `>=0.2.1-rc.2` and Node.js `^22.19.0 || >=24.0.0`, without Python. The optional file-log CLI still requires Python 3.11+. Start a new analysis run after upgrading from 0.6.0.
 
 **DSH compatibility:** The package requires `>=0.2.1-rc.2`; DSH `0.2.0-rc.2` and `0.2.1-rc.1` are below the supported floor and later releases are admitted by the declared range, not by static version tables. Contract and service tests cover synthetic V4 input. Source and synthetic checks are preserved in the [0.6.0 development record](docs/acceptance/v0.6.0-rc2.1-candidate.md). Native, model and UI results are recorded separately in the acceptance receipts attached to each exact release artifact; range admission does not establish testing of future hosts. See [DSH compatibility](#dsh-compatibility).
 
@@ -124,7 +124,7 @@ Reports are refused inside `$DSH_HOME/sessions`, so generated files cannot be mi
 
 Project filters use absolute host paths. A relative path is refused with an actionable error — the plugin entry cannot reliably know the host's invocation directory and refuses to guess. On Windows, pass a native path such as `/session-insights --project C:/path/to/project`; a POSIX-rooted path such as `/path/to/project` is rejected instead of silently matching no sessions. The optional Python CLI resolves a relative `--project` against the working directory you invoked it from.
 
-Date, hour and weekday fields share one report timezone, captured from the host at request time or set explicitly with `--report-timezone` (an IANA name like `Asia/Shanghai`, or a fixed offset like `UTC+08:00`). The zone travels with the request into analysis, is recorded in the report and the run manifest, and raw timestamps remain UTC instants. On Windows, a Python runtime without IANA data reports an actionable tzdata installation error instead of silently falling back to UTC.
+Date, hour and weekday fields share one report timezone, captured from the host at request time or set explicitly with `--report-timezone` (an IANA name like `Asia/Shanghai`, or a fixed offset like `UTC+08:00`). The zone travels with the request into analysis, is recorded in the report and the run manifest, and raw timestamps remain UTC instants. The optional Python CLI on Windows without IANA data reports an actionable tzdata installation error instead of silently falling back to UTC.
 
 The semantic workflow is the default. Invalid model output gets one repair opportunity and can then fall back explicitly to the deterministic report. The current session is counted for coverage but excluded from recommendations as meta-analysis.
 
