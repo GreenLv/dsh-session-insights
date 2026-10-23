@@ -821,6 +821,15 @@
       };
     }
 
+    // Project identity: new reports carry a stable anonymous project_id; old
+    // reports fall back to the display label. Identity drives filtering and
+    // grouping so two projects sharing a basename never merge.
+    const projectKey = (row) => row.project_id ?? row.project;
+    const projectName = (key) => {
+      const row = sessions.find((r) => projectKey(r) === key);
+      return (row && row.project) || key;
+    };
+
     function filteredSessions() {
       const from = byId("from-date").value;
       const to = byId("to-date").value;
@@ -832,7 +841,7 @@
       return sessions.filter((row) =>
         (!from || row.date >= from) &&
         (!to || row.date <= to) &&
-        (!project || row.project === project) &&
+        (!project || projectKey(row) === project) &&
         (!status || row.status === status) &&
         (!role || row.role === role) &&
         (!platform || row.platform === platform) &&
@@ -1477,11 +1486,12 @@
     function renderProjects(rows) {
       const map = new Map();
       for (const row of rows) {
-        const current = map.get(row.project) || { label: row.project, sessions: 0, minutes: 0, tools: 0 };
+        const key = projectKey(row);
+        const current = map.get(key) || { label: row.project, sessions: 0, minutes: 0, tools: 0 };
         current.sessions += 1;
         current.minutes += Number(row.active_minutes) || 0;
         current.tools += Number(row.tool_calls) || 0;
-        map.set(row.project, current);
+        map.set(key, current);
       }
       const items = [...map.values()].sort((a, b) => b.sessions - a.sessions || b.tools - a.tools).slice(0, 10);
       for (const item of items) item.display = ui(
@@ -1597,7 +1607,7 @@
       const visible = excerpts.filter((item) =>
         (!from || item.date >= from) &&
         (!to || item.date <= to) &&
-        (!project || item.project === project) &&
+        (!project || projectKey(item) === project) &&
         (!status || item.status === status) &&
         (!role || item.role === role) &&
         (!platform || item.platform === platform) &&
@@ -1689,7 +1699,7 @@
         excerpts: excerpts.filter((item) =>
           (!from || item.date >= from) &&
           (!to || item.date <= to) &&
-          (!project || item.project === project) &&
+          (!project || projectKey(item) === project) &&
           (!byId("status-filter").value || item.status === byId("status-filter").value) &&
           (!byId("role-filter").value || item.role === byId("role-filter").value) &&
           (!byId("platform-filter").value || item.platform === byId("platform-filter").value) &&
@@ -1711,7 +1721,7 @@
       const stats = exported.summary;
       const rows = exported.session_summaries;
       const projects = new Map();
-      for (const row of rows) projects.set(row.project, (projects.get(row.project) || 0) + 1);
+      for (const row of rows) projects.set(projectKey(row), (projects.get(projectKey(row)) || 0) + 1);
       if (isEnglish) {
         return [
           "# DSH Session Insights",
@@ -1729,7 +1739,7 @@
           "",
           "## Project areas",
           "",
-          ...[...projects.entries()].sort((a, b) => b[1] - a[1]).map(([project, count]) => `- ${project}: ${count} sessions`),
+          ...[...projects.entries()].sort((a, b) => b[1] - a[1]).map(([project, count]) => `- ${projectName(project)}: ${count} sessions`),
           "",
           "## Work areas",
           "",
@@ -1838,7 +1848,9 @@
 
     function initialize() {
       const dates = sessions.map((row) => row.date).sort();
-      const projects = [...new Set(sessions.map((row) => row.project))].sort((a, b) => a.localeCompare(b));
+      const projectNames = new Map();
+      for (const row of sessions) projectNames.set(projectKey(row), row.project);
+      const projects = [...projectNames.keys()].sort((a, b) => (projectNames.get(a) || "").localeCompare(projectNames.get(b) || ""));
       const workAreas = [...new Set(sessions.map((row) => row.work_area))].sort((a, b) => (areaLabels[a] || a).localeCompare(areaLabels[b] || b));
       const roles = [...new Set(sessions.map((row) => row.role).filter(Boolean))].sort();
       const platforms = [...new Set(sessions.map((row) => row.platform).filter(Boolean))].sort();
@@ -1853,7 +1865,7 @@
       for (const project of projects) {
         const option = document.createElement("option");
         option.value = project;
-        option.textContent = project;
+        option.textContent = projectNames.get(project) || project;
         byId("project-filter").append(option);
       }
       for (const area of workAreas) {

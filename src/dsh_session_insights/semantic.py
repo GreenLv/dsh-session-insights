@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -20,7 +21,7 @@ from typing import Any
 from . import analyzer as engine
 
 
-SEMANTIC_SCHEMA_VERSION = "1.1.0"
+SEMANTIC_SCHEMA_VERSION = "1.2.0"
 from .v4 import IDENTITY
 DEFAULT_LIMIT = 24
 DEFAULT_BATCH_SIZE = 6
@@ -43,9 +44,14 @@ AGGREGATE_SECTIONS = (
 )
 
 
-def write_json(path: Path, value: Any) -> None:
+def write_json(path: Path, value: Any, *, private: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if private:
+        # Cache artifacts are private regardless of umask.
+        os.chmod(path.parent, 0o700)
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if private:
+        os.chmod(path, 0o600)
 
 
 def read_json(path: Path) -> Any:
@@ -77,7 +83,7 @@ def build_config(args: argparse.Namespace) -> engine.AnalysisConfig:
         dsh_home=dsh_home,
         since=since,
         until=until,
-        project=args.project,
+        project=engine.canonical_project_input(args.project) if args.project else None,
         privacy_mode=args.privacy,
         metrics_only=args.privacy == "metrics",
         max_excerpts=args.max_excerpts,
@@ -88,6 +94,7 @@ def build_config(args: argparse.Namespace) -> engine.AnalysisConfig:
         deterministic_cache=not args.no_deterministic_cache,
         refresh_deterministic_cache=args.refresh_deterministic_cache,
         locale=getattr(args, "locale", "zh-CN"),
+        report_timezone=engine.resolve_report_timezone(getattr(args, "report_timezone", None)),
     )
 
 
@@ -102,6 +109,7 @@ def config_manifest(config: engine.AnalysisConfig) -> dict[str, Any]:
         "analysis_privacy": engine.analysis_privacy(config),
         "analysis_depth": config.analysis_depth,
         "locale": config.locale,
+        "report_timezone": config.report_timezone or engine.resolve_report_timezone(None),
         "deterministic_cache": config.deterministic_cache,
         "refresh_deterministic_cache": config.refresh_deterministic_cache,
         "max_excerpts": config.max_excerpts,
@@ -125,6 +133,7 @@ def config_from_manifest(value: dict[str, Any]) -> engine.AnalysisConfig:
         deterministic_cache=bool(value.get("deterministic_cache", True)),
         refresh_deterministic_cache=False,
         locale=value.get("locale", "zh-CN"),
+        report_timezone=value.get("report_timezone") or engine.resolve_report_timezone(None),
     )
 
 
@@ -134,9 +143,11 @@ def family_messages(
     config: engine.AnalysisConfig,
     max_chars: int,
 ) -> tuple[list[dict[str, Any]], bool]:
+    # family ids are already public forms (projected once at parse), so the
+    # selected family id matches the session field directly.
     family_sessions = [
         item for item in sessions
-        if engine.stable_identifier(item["family_id"], config, "task") == family["task_family_id"]
+        if item["family_id"] == family["task_family_id"]
         and item["role"] in {"root_task", "task_subagent"}
     ]
     family_sessions.sort(key=lambda item: (item["timestamp"], item["rollout_id"]))
@@ -269,7 +280,7 @@ def select_families(families: list[dict[str, Any]], limit: int) -> list[dict[str
     ]
     if len(eligible) <= limit:
         return sorted(eligible, key=lambda item: (item["date"], item["task_family_id"]), reverse=True)
-    projects = {item["project"] for item in eligible}
+    projects = {item.get("project_id") or item["project"] for item in eligible}
     project_cap = math.ceil(limit * 0.4) if len(projects) > 1 else limit
     selected: list[dict[str, Any]] = []
     selected_ids: set[str] = set()
@@ -283,11 +294,12 @@ def select_families(families: list[dict[str, Any]], limit: int) -> list[dict[str
             identity = item["task_family_id"]
             if identity in selected_ids:
                 continue
-            if enforce_cap and project_counts[item["project"]] >= project_cap:
+            project_key = item.get("project_id") or item["project"]
+            if enforce_cap and project_counts[project_key] >= project_cap:
                 continue
             selected.append(item)
             selected_ids.add(identity)
-            project_counts[item["project"]] += 1
+            project_counts[project_key] += 1
             added += 1
 
     recent = sorted(eligible, key=lambda item: (item["date"], item["task_family_id"]), reverse=True)
@@ -322,19 +334,52 @@ def select_families(families: list[dict[str, Any]], limit: int) -> list[dict[str
 
 
 def secret_leak_errors(value: Any, privacy: str) -> list[str]:
-    text = json.dumps(value, ensure_ascii=False)
-    errors = []
-    for name, pattern in (
-        ("Bearer token", engine.BEARER_RE),
-        ("named secret", engine.NAMED_SECRET_RE),
-        ("known secret", engine.KNOWN_SECRET_RE),
-        ("long token", engine.LONG_TOKEN_RE),
-    ):
-        if pattern.search(text):
-            errors.append(f"输出包含禁止的 {name}")
-    if privacy == "redacted" and (engine.ABS_UNIX_PATH_RE.search(text) or engine.ABS_WINDOWS_PATH_RE.search(text)):
-        errors.append("redacted 输出包含绝对路径")
-    return errors
+    """Reject model output that is wider than the sanitize contract.
+
+    Strings are visited individually (values and object keys): serializing to
+    one JSON blob would let backslash escaping hide Windows paths. The checked
+    categories mirror what input sanitization removes — including URL
+    userinfo/query in every mode — so validated output can never carry more
+    identity than the evidence the model was shown.
+    """
+    errors: list[str] = []
+
+    def check(text: str) -> None:
+        for name, pattern in (
+            ("Bearer token", engine.BEARER_RE),
+            ("named secret", engine.NAMED_SECRET_RE),
+            ("known secret", engine.KNOWN_SECRET_RE),
+            ("long token", engine.LONG_TOKEN_RE),
+        ):
+            if pattern.search(text):
+                errors.append(f"输出包含禁止的 {name}")
+        if engine.URL_USERINFO_RE.search(text) or engine.URL_QUERY_RE.search(text):
+            errors.append("输出包含带凭据或查询参数的 URL")
+        if privacy == "redacted":
+            if engine.EMAIL_RE.search(text):
+                errors.append("redacted 输出包含邮箱地址")
+            if engine.UUID_RE.search(text):
+                errors.append("redacted 输出包含标识符")
+            if engine.ABS_UNIX_PATH_RE.search(text) or engine.ABS_WINDOWS_PATH_RE.search(text):
+                errors.append("redacted 输出包含绝对路径")
+
+    def visit(item: Any) -> None:
+        if isinstance(item, str):
+            check(item)
+        elif isinstance(item, dict):
+            for key, child in item.items():
+                check(str(key))
+                visit(child)
+        elif isinstance(item, list):
+            for child in item:
+                visit(child)
+
+    visit(value)
+    unique: list[str] = []
+    for message in errors:
+        if message not in unique:
+            unique.append(message)
+    return unique
 
 
 def validate_facet(facet: Any, candidate: dict[str, Any], privacy: str) -> list[str]:
@@ -413,6 +458,7 @@ def validate_batch_file(workdir: Path, batch_id: str, *, update_cache: bool = Tr
             write_json(
                 cache_dir / f"{candidate['fingerprint']}.json",
                 {"semantic_schema_version": SEMANTIC_SCHEMA_VERSION, "fingerprint": candidate["fingerprint"], "facet": facet},
+                private=True,
             )
     return facets
 
@@ -503,6 +549,8 @@ def command_prepare(args: argparse.Namespace) -> int:
     )
     candidates = [candidate_from_family(item, sessions, config, args.max_family_chars) for item in selected]
     cache_dir = semantic_home(config) / "cache" / f"semantic-{SEMANTIC_SCHEMA_VERSION}" / "facets"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(cache_dir, 0o700)
     cache_enabled = not args.no_semantic_cache
     cached_facets: list[dict[str, Any]] = []
     misses: list[dict[str, Any]] = []
@@ -548,11 +596,25 @@ def command_prepare(args: argparse.Namespace) -> int:
     write_json(workdir / "base-report.json", report)
     write_json(workdir / "semantic-evidence.json", {"candidates": candidates})
     write_json(workdir / "cache-hits.json", {"facets": cached_facets})
+    selection = {
+        "project": config.project,
+        "since": config.since.isoformat(),
+        "until": config.until.isoformat(),
+        "privacy": config.privacy_mode,
+        "analysis_privacy": engine.analysis_privacy(config),
+        "analysis_depth": config.analysis_depth,
+        "locale": config.locale,
+        "report_timezone": config.report_timezone or engine.resolve_report_timezone(None),
+    }
+    scope_fingerprint = hashlib.sha256(
+        json.dumps(selection, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
     manifest = {
         **IDENTITY,
         "semantic_schema_version": SEMANTIC_SCHEMA_VERSION,
         "auto_created": auto_created,
         "runtime": "dsh",
+        "scope_fingerprint": scope_fingerprint,
         "privacy": config.privacy_mode,
         "analysis_privacy": engine.analysis_privacy(config),
         "analysis_depth": config.analysis_depth,
@@ -590,6 +652,88 @@ def command_validate_batch(args: argparse.Namespace) -> int:
     return 0
 
 
+def analysis_scrub_text(value: Any, privacy: str, limit: int = 400) -> str:
+    """Mirror the Node model-input scrub: identity/credential rules only.
+
+    URLs were already sanitized at capture; re-running the URL rewriter here
+    would be redundant and is the one place the runtimes differ textually, so
+    the shared regex set is applied directly to keep both projections
+    byte-identical.
+    """
+    if privacy == "metrics":
+        return ""
+    text = str(value)
+    text = engine.BEARER_RE.sub("Bearer <redacted>", text)
+    text = engine.NAMED_SECRET_RE.sub(lambda m: f"{m.group(1)}=<redacted>", text)
+    text = engine.KNOWN_SECRET_RE.sub("<redacted-secret>", text)
+    if privacy == "redacted":
+        text = engine.EMAIL_RE.sub("<redacted-email>", text)
+        text = engine.UUID_RE.sub("<id>", text)
+        text = engine.HOME_UNIX_RE.sub("~", text)
+        text = engine.HOME_WINDOWS_RE.sub("~", text)
+        text = engine.ABS_UNIX_PATH_RE.sub("<path>", text)
+        text = engine.ABS_WINDOWS_PATH_RE.sub("<path>", text)
+    text = engine.LONG_TOKEN_RE.sub("<redacted-token>", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) > limit:
+        text = text[: max(0, limit - 1)].rstrip() + "…"
+    return text
+
+
+def project_for_analysis(value: Any, privacy: str) -> Any:
+    """Project summary sections under the run's analysis privacy.
+
+    Free strings — values and object keys alike — never keep report-side
+    (possibly local) latitude when they enter model context.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        return analysis_scrub_text(value, privacy)
+    if isinstance(value, list):
+        return [project_for_analysis(item, privacy) for item in value]
+    if isinstance(value, dict):
+        return {
+            analysis_scrub_text(key, privacy, 200): project_for_analysis(item, privacy)
+            for key, item in value.items()
+        }
+    return analysis_scrub_text(str(value), privacy)
+
+
+def _normalize_digest_numbers(value: Any) -> Any:
+    """Integral floats become integers so canonical JSON matches the Node digest."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, float) and math.isfinite(value) and value == int(value):
+        return int(value)
+    if isinstance(value, dict):
+        return {key: _normalize_digest_numbers(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_digest_numbers(item) for item in value]
+    return value
+
+
+def facets_digest(facets: list[dict[str, Any]], manifest: dict[str, Any]) -> str:
+    """Deterministic content identity of the validated facet set.
+
+    Mirrors the Node `facetsDigest`: canonical JSON over the ordered facets
+    plus the contract versions that influence the result, so a stored
+    aggregate can never finalize against changed facet content.
+    """
+    payload = {
+        "digest_schema": 1,
+        "semantic_schema_version": SEMANTIC_SCHEMA_VERSION,
+        "analyzer_semantics": IDENTITY["analyzer_semantics"],
+        "scope_fingerprint": manifest.get("scope_fingerprint", ""),
+        "facets": _normalize_digest_numbers(facets),
+    }
+    return hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
 def command_prepare_aggregate(args: argparse.Namespace) -> int:
     workdir = args.workdir.resolve()
     manifest = load_manifest(workdir)
@@ -598,6 +742,7 @@ def command_prepare_aggregate(args: argparse.Namespace) -> int:
     evidence = [item for candidate in candidates.values() for item in candidate["evidence"]]
     report = read_json(workdir / "base-report.json")
     english = manifest.get("locale") == "en"
+    analysis_privacy = manifest.get("analysis_privacy", manifest["privacy"])
     write_json(
         workdir / "aggregate-input.json",
         {
@@ -626,9 +771,8 @@ def command_prepare_aggregate(args: argparse.Namespace) -> int:
                 ]),
             },
             "full_scope_summary": {
-                "coverage": report["coverage"], "totals": report["totals"],
-                "task_family_totals": report["task_family_totals"], "projects": report["projects"],
-                "friction_signals": report["friction_signals"],
+                key: project_for_analysis(report[key], analysis_privacy)
+                for key in ("coverage", "totals", "task_family_totals", "projects", "friction_signals")
             },
             "facets": facets,
             "evidence": evidence,
@@ -648,8 +792,42 @@ def command_validate_aggregate(args: argparse.Namespace) -> int:
     errors = validate_aggregate_value(value, workdir)
     if errors:
         raise ValueError("; ".join(errors))
-    print(json.dumps({"valid": True, "sections": {key: len(value[key]) for key in AGGREGATE_SECTIONS}}, ensure_ascii=False))
+    manifest = load_manifest(workdir)
+    digest = facets_digest(all_facets(workdir), manifest)
+    # The accepted aggregate is bound to the exact facet content it validated
+    # against; finalize recomputes this identity from the files on disk.
+    write_json(
+        workdir / "aggregate-binding.json",
+        {
+            "binding_schema": 1,
+            "semantic_schema_version": SEMANTIC_SCHEMA_VERSION,
+            "analyzer_semantics": IDENTITY["analyzer_semantics"],
+            "scope_fingerprint": manifest.get("scope_fingerprint", ""),
+            "facets_digest": digest,
+        },
+    )
+    print(json.dumps({"valid": True, "facets_digest": digest, "sections": {key: len(value[key]) for key in AGGREGATE_SECTIONS}}, ensure_ascii=False))
     return 0
+
+
+def aggregate_freshness(workdir: Path) -> dict[str, Any]:
+    """Compare the stored binding with the facet content currently on disk."""
+    manifest = load_manifest(workdir)
+    current = facets_digest(all_facets(workdir), manifest)
+    binding_path = workdir / "aggregate-binding.json"
+    if not binding_path.is_file():
+        return {"current": current, "binding": None, "status": "unbound"}
+    binding = read_json(binding_path)
+    if (
+        not isinstance(binding, dict)
+        or binding.get("binding_schema") != 1
+        or binding.get("semantic_schema_version") != SEMANTIC_SCHEMA_VERSION
+        or binding.get("analyzer_semantics") != IDENTITY["analyzer_semantics"]
+        or binding.get("scope_fingerprint") != manifest.get("scope_fingerprint", "")
+    ):
+        return {"current": current, "binding": binding, "status": "unbound"}
+    status = "current" if binding.get("facets_digest") == current else "stale"
+    return {"current": current, "binding": binding, "status": status}
 
 
 def semantic_recommendations(items: list[dict[str, Any]], *, english: bool = False) -> list[dict[str, Any]]:
@@ -685,22 +863,30 @@ def render_output(report: dict[str, Any], config: engine.AnalysisConfig, args: a
     output = args.output.expanduser().resolve() if args.output else engine.default_html_output(config).with_suffix(
         {"html": ".html", "markdown": ".md", "json": ".json"}[args.format]
     ).resolve()
-    sessions_root = (engine.session_source_root(config) / "sessions").expanduser().resolve()
-    if output.is_relative_to(sessions_root):
-        raise ValueError("语义报告不能写入会话源目录")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(rendered, encoding="utf-8")
-    print(output)
-    if args.format == "html":
-        companion = output.with_suffix(".json")
-        write_json(companion, report)
-        print(companion)
+    from .output_safety import (
+        UnsafeOutputError,
+        atomic_write_text,
+        html_companion_path,
+        prepare_output_targets,
+    )
+
+    sessions_root = engine.session_source_root(config) / "sessions"
+    companion = html_companion_path(output) if args.format == "html" else None
+    try:
+        checked = prepare_output_targets([output] + ([companion] if companion is not None else []), sessions_root)
+        atomic_write_text(checked[0], rendered)
+        print(checked[0])
+        if companion is not None:
+            atomic_write_text(checked[1], json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+            print(checked[1])
+    except UnsafeOutputError as exc:
+        raise ValueError(str(exc)) from exc
     if args.open:
         if args.format != "html":
             raise ValueError("--open requires --format html")
-        if not webbrowser.open_new_tab(output.as_uri()):
-            print(f"warning: browser did not report a successful open; report remains at {output}", file=sys.stderr)
-    return output
+        if not webbrowser.open_new_tab(checked[0].as_uri()):
+            print(f"warning: browser did not report a successful open; report remains at {checked[0]}", file=sys.stderr)
+    return checked[0]
 
 
 def report_semantic_evidence(candidates: dict[str, dict[str, Any]], privacy: str) -> list[dict[str, Any]]:
@@ -727,6 +913,15 @@ def command_finalize(args: argparse.Namespace) -> int:
         status = "fallback"
         fallback_reason = ("Semantic batches or aggregate did not complete; the deterministic report was preserved." if english else "语义批次或汇总未完成；已保留确定性报告。")
     else:
+        freshness = aggregate_freshness(workdir)
+        if freshness["status"] == "stale":
+            raise ValueError(
+                "aggregate 已过期：已验证的 facet 内容在汇总接受后发生变更。请重新运行 prepare-aggregate 并提交新汇总，或使用 --fallback 生成明确降级报告。"
+            )
+        if freshness["status"] == "unbound":
+            raise ValueError(
+                "aggregate 未经确认：semantic-report.json 未通过 validate-aggregate 绑定当前 facet 内容。请重新提交，或使用 --fallback。"
+            )
         facets = all_facets(workdir)
         aggregate = read_json(workdir / "semantic-report.json")
         errors = validate_aggregate_value(aggregate, workdir)
@@ -784,6 +979,9 @@ def command_finalize(args: argparse.Namespace) -> int:
         "deterministic_cache": manifest.get("deterministic_cache", {}),
         "evidence_contract": "bounded sanitized untrusted conversation and optional structured tool facts; report privacy is applied independently; semantic outcome never upgrades structured completion",
         "fallback_reason": fallback_reason,
+        **({} if args.fallback or manifest["metrics_semantic_skipped"] else {
+            "aggregate_binding": {"facets_digest": freshness["current"], "binding_status": "current"}
+        }),
     }
     if fallback_reason:
         report.setdefault("warnings", []).append(fallback_reason)
@@ -816,6 +1014,7 @@ def add_prepare_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--max-excerpts", type=int, default=80)
     parser.add_argument("--locale", choices=("zh-CN", "en"), default="zh-CN")
+    parser.add_argument("--report-timezone", help="IANA zone or UTC+HH:MM for date/hour/weekday projections; defaults to host local")
     parser.add_argument("--semantic-limit", type=int, default=DEFAULT_LIMIT)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--max-family-chars", type=int, default=DEFAULT_FAMILY_CHARS)

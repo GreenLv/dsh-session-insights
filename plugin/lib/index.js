@@ -2,7 +2,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { resolve } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { Store, MAX_JSON_BYTES } from './storage.js'
-import { normalizeProjectKey } from './analyzer.js'
+import { normalizeProjectKey, validateReportTimezone, hostReportTimezone } from './analyzer.js'
 import {
   prepareSemantic,
   loadManifest,
@@ -77,17 +77,35 @@ function normalizeProjectInput(value, platform = process.platform) {
       'project must use a Windows path such as C:\\path\\to\\project',
     )
   }
+  const isAbsolute =
+    platform === 'win32'
+      ? /^(?:[A-Za-z]:[\\/]|\\\\|\/\/)/.test(project)
+      : project.startsWith('/')
+  if (!isAbsolute)
+    // The native entry has no reliable host invocation cwd, so a relative
+    // project path is refused with an actionable message rather than guessed
+    // against process.cwd or silently producing an empty report.
+    throw new Error(
+      `project must be an absolute path (got ${JSON.stringify(project)}); this entry cannot reliably resolve relative project paths`,
+    )
   return project
 }
 
 function normalizeOptions(input = {}) {
   const result = {
     days: input.days === undefined ? 30 : Number(input.days),
-    project: input.project ? normalizeProjectInput(input.project) : undefined,
+    project: input.project
+      ? normalizeProjectKey(normalizeProjectInput(input.project))
+      : undefined,
     privacy: input.privacy || 'redacted',
     analysis_privacy: input.analysis_privacy || undefined,
     analysis_depth: input.analysis_depth || 'evidence',
     locale: input.locale || 'zh-CN',
+    // Captured once here, at the request entry: the Worker gets an explicit
+    // zone and no empty-environment drift can change it later.
+    report_timezone: input.report_timezone
+      ? validateReportTimezone(input.report_timezone)
+      : hostReportTimezone(),
   }
   if (!Number.isSafeInteger(result.days) || result.days <= 0)
     throw new Error('days must be a positive integer')
@@ -101,8 +119,10 @@ function normalizeOptions(input = {}) {
   return result
 }
 function matchesProject(cwd, project) {
-  const key = normalizeProjectKey(resolve(String(cwd || '')))
-  const root = normalizeProjectKey(resolve(project))
+  // Both sides are canonical keys already (header cwd is absolute; the entry
+  // canonicalized the request once), so no process-cwd resolution happens here.
+  const key = normalizeProjectKey(String(cwd || ''))
+  const root = String(project)
   return key === root || key.startsWith(root.endsWith('/') ? root : root + '/')
 }
 
@@ -178,9 +198,8 @@ async function prepare(ctx, raw, signal, scheduleAnalysis) {
 function requestedScope(raw) {
   const options = normalizeOptions(raw)
   return {
-    project: options.project
-      ? normalizeProjectKey(resolve(options.project))
-      : null,
+    // options.project is already the single canonical key.
+    project: options.project || null,
     days: options.days,
     privacy: options.privacy,
     analysis_privacy:
@@ -189,6 +208,7 @@ function requestedScope(raw) {
         : options.analysis_privacy || options.privacy,
     analysis_depth: options.analysis_depth,
     locale: options.locale,
+    report_timezone: options.report_timezone,
   }
 }
 const SCOPE_FIELDS = [
@@ -198,6 +218,7 @@ const SCOPE_FIELDS = [
   'analysis_privacy',
   'analysis_depth',
   'locale',
+  'report_timezone',
 ]
 const scopeEqual = (a, b) =>
   SCOPE_FIELDS.every((k) => JSON.stringify(a[k]) === JSON.stringify(b[k]))
@@ -266,6 +287,38 @@ async function deterministicReport(ctx, raw, signal, scheduleAnalysis) {
     run = store.create()
   return renderReport(store, run, built.report)
 }
+// The cleanup deletion path must be authorized by a human through the
+// host's trusted approval seam (or a directly typed command). A model-supplied
+// confirm=true alone never authorizes deletion; without an approval service
+// the operation fails closed.
+function approvalService(ctx) {
+  try {
+    return ctx.approval ?? null
+  } catch {
+    return null
+  }
+}
+async function cleanupRun(ctx, store, workdir, confirm, exec) {
+  if (!confirm) return store.cleanup(workdir, false)
+  const approval = approvalService(ctx)
+  if (!approval)
+    throw new Error(
+      'run deletion requires a host approval service; none is available, so the request fails closed. Ask the user to run the session-insights command with --cleanup <run> --confirm.',
+    )
+  const plan = store.inventory(store.run(workdir))
+  const outcome = await approval.request({
+    agent: exec?.agent,
+    toolName: 'session_insights_cleanup',
+    callId: exec?.callId,
+    reason: `Permanently delete the session-insights run at ${plan.workdir} (${plan.files.length} files, ${plan.bytes} bytes).`,
+  })
+  if (outcome !== 'allowed-once')
+    throw new Error(
+      `run deletion was not approved (${outcome}); nothing was deleted`,
+    )
+  return store.cleanup(workdir, true)
+}
+
 function parseCommandInput(rawInput) {
   const tokens =
     rawInput
@@ -280,13 +333,16 @@ function parseCommandInput(rawInput) {
     ['--analysis-privacy', 'analysis_privacy'],
     ['--analysis-depth', 'analysis_depth'],
     ['--locale', 'locale'],
+    ['--report-timezone', 'report_timezone'],
     ['--workdir', 'workdir'],
+    ['--cleanup', 'cleanup'],
   ])
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
     if (token === '--deterministic') options.deterministic = true
     else if (token === '--resume') options.resume = true
     else if (token === '--no-open') options.no_open = true
+    else if (token === '--confirm') options.confirm = true
     else if (valued.has(token)) {
       if (tokens[index + 1] === undefined)
         throw new Error(`${token} requires a value`)
@@ -416,6 +472,7 @@ export function apply(ctx) {
       analysis_privacy: { type: 'string', enum: [...PRIVACY] },
       analysis_depth: { type: 'string', enum: [...DEPTHS] },
       locale: { type: 'string', enum: [...LOCALES] },
+      report_timezone: { type: 'string' },
       resume: { type: 'boolean' },
       workdir: { type: 'string' },
     }),
@@ -466,17 +523,17 @@ export function apply(ctx) {
   )
   register(
     'session_insights_cleanup',
-    'Preview files and bytes in one marked native run. Set confirm=true only after the user requests deletion of that run; deletes its reports and evidence permanently. Legacy runs and shared CLI caches are never removed.',
+    'Preview files and bytes in one marked native run. Deletion additionally requires a human approval through the host approval service: set confirm=true only after the user requests deletion of that run. Legacy runs and shared CLI caches are never removed.',
     schema({ workdir: { type: 'string' }, confirm: { type: 'boolean' } }, [
       'workdir',
     ]),
-    (a) => new Store().cleanup(a.workdir, a.confirm === true),
+    (a, exec) => cleanupRun(ctx, new Store(), a.workdir, a.confirm === true, exec),
   )
   ctx.commands.register({
     name: 'session-insights',
     description: 'Analyze DSH sessions and create a local retrospective',
     input: {
-      hint: '[--days N] [--project PATH] [--privacy MODE] [--analysis-privacy MODE] [--analysis-depth LEVEL] [--locale zh-CN|en] [--deterministic] [--resume] [--workdir RUN] [--no-open]',
+      hint: '[--days N] [--project PATH] [--privacy MODE] [--analysis-privacy MODE] [--analysis-depth LEVEL] [--locale zh-CN|en] [--report-timezone ZONE] [--deterministic] [--resume] [--workdir RUN] [--cleanup RUN [--confirm]] [--no-open]',
     },
     async handler(invocation) {
       return owned(invocation.signal, async signal => {

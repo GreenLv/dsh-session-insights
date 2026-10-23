@@ -361,6 +361,14 @@ export default {
     "source": "\\b(?=[A-Za-z0-9+/=]{32,}\\b)(?=[A-Za-z0-9+/=]*[A-Za-z])(?=[A-Za-z0-9+/=]*\\d)[A-Za-z0-9+/=]+\\b",
     "flags": ""
   },
+  "URL_USERINFO_RE": {
+    "source": "https?://[^\\s/?#]+@",
+    "flags": "i"
+  },
+  "URL_QUERY_RE": {
+    "source": "https?://[^\\s<>\\\"']+[?#]",
+    "flags": "i"
+  },
   "CORRECTION_RE": {
     "source": "(?:\\b(?:no|not that|instead|wrong|stop|actually|rather than|misunderstood)\\b|不要|不是这样|不对|错了|改为|重新|你误解|别这样)",
     "flags": "i"

@@ -13,6 +13,7 @@ import os
 import re
 import statistics
 import sys
+import uuid
 import webbrowser
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
@@ -25,11 +26,11 @@ from .v4 import IDENTITY, validate_records
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.6.0-v4-dsh021rc2.4"
+ANALYZER_VERSION = "0.6.1-v4-dsh021rc2.5"
 FAILURE_RULE_VERSION = "5.1.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
-DETERMINISTIC_CACHE_VERSION = 8
+DETERMINISTIC_CACHE_VERSION = 9
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
 
 # Session-log generations understood by this reader. Native V3 is the current
@@ -187,6 +188,11 @@ KNOWN_SECRET_RE = re.compile(
     r"\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})\b"
 )
 LONG_TOKEN_RE = re.compile(r"\b(?=[A-Za-z0-9+/=]{32,}\b)(?=[A-Za-z0-9+/=]*[A-Za-z])(?=[A-Za-z0-9+/=]*\d)[A-Za-z0-9+/=]+\b")
+# Output-boundary rules for model-produced text. Input sanitize removes URL
+# userinfo, query and fragment in every mode, so validated output may not carry
+# them either; these patterns drive the shared accept/reject decision.
+URL_USERINFO_RE = re.compile(r"https?://[^\s/?#]+@", re.IGNORECASE)
+URL_QUERY_RE = re.compile(r"https?://[^\s<>\"']+[?#]", re.IGNORECASE)
 CORRECTION_RE = re.compile(
     r"(?:\b(?:no|not that|instead|wrong|stop|actually|rather than|misunderstood)\b|不要|不是这样|不对|错了|改为|重新|你误解|别这样)",
     re.IGNORECASE,
@@ -281,6 +287,10 @@ class AnalysisConfig:
     deterministic_cache: bool = True
     refresh_deterministic_cache: bool = False
     locale: str = "zh-CN"
+    # IANA name or explicit UTC offset (UTC+08:00). Resolved once at the
+    # request entry; every date/hour/weekday projection and date filter in the
+    # report derives from it, while raw timestamps stay UTC instants.
+    report_timezone: str | None = None
 
 
 def parse_datetime(value: str, *, end_of_day: bool = False) -> datetime:
@@ -304,6 +314,86 @@ def parse_dsh_timestamp(value: Any) -> datetime | None:
         return datetime.fromtimestamp(value / 1000, tz=timezone.utc)
     except (OverflowError, OSError, ValueError):
         return None
+
+
+_UTC_OFFSET_RE = re.compile(r"^(?:UTC|GMT)?([+-])([0-9]{2}):?([0-9]{2})$")
+_ZONE_CACHE: dict[str, Any] = {}
+
+
+def resolve_report_timezone(value: str | None) -> str:
+    """Validate an explicit report timezone, or capture the host local one.
+
+    Accepts IANA names (validated through zoneinfo) and explicit fixed offsets
+    like ``UTC+08:00``. A missing IANA database — the usual Windows situation —
+    is an actionable error asking for ``tzdata`` or an explicit offset, never a
+    silent fallback to UTC.
+    """
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    if value:
+        text = value.strip()
+        match = _UTC_OFFSET_RE.match(text)
+        if match:
+            sign, hours, minutes = match.groups()
+            if int(hours) > 23 or int(minutes) > 59:
+                raise ValueError(f"报告时区偏移无效：{text}")
+            return f"UTC{sign}{hours}:{minutes}"
+        try:
+            ZoneInfo(text)
+        except (ZoneInfoNotFoundError, ValueError, OSError) as exc:
+            raise ValueError(
+                f"报告时区不可用：{text}。Windows 下请安装 tzdata（python -m pip install tzdata）或改用 UTC+HH:MM 形式。"
+            ) from exc
+        return text
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    named = None
+    tz_env = os.environ.get("TZ")
+    if tz_env and "/" in tz_env:
+        try:
+            ZoneInfo(tz_env)
+            named = tz_env
+        except (ZoneInfoNotFoundError, ValueError, OSError):
+            named = None
+    if named is None:
+        # macOS/Linux expose the active zone through the /etc/localtime link;
+        # Windows has no equivalent, so it falls through to the UTC offset form
+        # and an explicit --report-timezone remains available.
+        try:
+            target = os.readlink("/etc/localtime")
+            if "zoneinfo/" in target:
+                candidate = target.split("zoneinfo/")[-1]
+                try:
+                    ZoneInfo(candidate)
+                    named = candidate
+                except (ZoneInfoNotFoundError, ValueError, OSError):
+                    named = None
+        except OSError:
+            named = None
+    if named:
+        return named
+    local = datetime.now().astimezone().tzinfo
+    offset = local.utcoffset(datetime.now()) or timedelta(0)
+    total = int(offset.total_seconds() // 60)
+    sign = "+" if total >= 0 else "-"
+    total = abs(total)
+    return f"UTC{sign}{total // 60:02d}:{total % 60:02d}"
+
+
+def report_zone(config: "AnalysisConfig") -> timezone | Any:
+    """The tzinfo this report's calendar fields derive from."""
+    name = config.report_timezone or resolve_report_timezone(None)
+    if name not in _ZONE_CACHE:
+        from zoneinfo import ZoneInfo
+
+        match = _UTC_OFFSET_RE.match(name)
+        if match:
+            sign, hours, minutes = match.groups()
+            delta = timedelta(hours=int(hours), minutes=int(minutes))
+            _ZONE_CACHE[name] = timezone(delta if sign == "+" else -delta)
+        else:
+            _ZONE_CACHE[name] = ZoneInfo(name)
+    return _ZONE_CACHE[name]
 
 
 def strip_dsh_sensitive_blocks(text: str) -> str:
@@ -401,6 +491,13 @@ def english_count(value: int | float, singular: str, plural: str | None = None) 
 
 
 def strip_url_queries(text: str) -> str:
+    """Remove URL userinfo in every mode, plus query/fragment credentials.
+
+    Rebuilt authority keeps only host and port, so percent-encoded or plain
+    username/password material never survives into any report, cache, or model
+    input. Unparseable URLs collapse to a placeholder instead of failing the
+    surrounding report.
+    """
     url_re = re.compile(r"https?://[^\s<>\]\[\)\(]+", re.IGNORECASE)
 
     def replace(match: re.Match[str]) -> str:
@@ -409,10 +506,18 @@ def strip_url_queries(text: str) -> str:
         while raw and raw[-1] in ".,;:!?":
             trailing = raw[-1] + trailing
             raw = raw[:-1]
-        parts = urlsplit(raw)
-        if not parts.query and not parts.fragment:
-            return raw + trailing
-        return urlunsplit((parts.scheme, parts.netloc, parts.path, "<redacted-query>", "")) + trailing
+        try:
+            parts = urlsplit(raw)
+            port = parts.port
+            hostname = parts.hostname
+        except ValueError:
+            return "<url>" + trailing
+        if not parts.scheme or hostname is None:
+            return "<url>" + trailing
+        authority = hostname if port is None else f"{hostname}:{port}"
+        if parts.query or parts.fragment:
+            return urlunsplit((parts.scheme, authority, parts.path, "<redacted-query>", "")) + trailing
+        return urlunsplit((parts.scheme, authority, parts.path, "", "")) + trailing
 
     return url_re.sub(replace, text)
 
@@ -465,6 +570,20 @@ CATEGORY_VOCABULARY = {
     "status": {"pending", "in_progress", "completed", "deleted", "unknown"},
     "effort": {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"},
     "mode": {"one-shot", "continuable"},
+    # Recorded `user/message.data.source.kind` values documented by the host.
+    # The union is merge-extensible, so any other value is an extension source
+    # and is pseudonymized or redacted like every other free category string.
+    "source": {
+        "user",
+        "subagent-settled",
+        "tool-jobs",
+        "agent-message",
+        "goal",
+        "agent-instructions",
+        "skill-catalog",
+        "subagent-report",
+        "session-log-deepseek",
+    },
 }
 
 
@@ -486,6 +605,19 @@ def public_counts(values: Any, config: AnalysisConfig, category: str) -> dict[st
     for key, count in values.items():
         result[public_category(key, config, category)] += count
     return dict(sorted(result.items()))
+
+
+def note_provider_model(session: dict[str, Any], provider: Any, model: Any, config: AnalysisConfig) -> None:
+    """Record one provider/model observation in its public form at capture time.
+
+    Raw provider and model strings are host/runtime metadata; every projection
+    site (session view, provider stats, deterministic cache) consumes the same
+    pre-projected pair so the value is projected exactly once per source.
+    """
+    if not isinstance(provider, str) or not provider or not isinstance(model, str) or not model:
+        return
+    pair = (public_category(provider, config, "provider"), public_category(model, config, "model"))
+    session["provider_models"][pair] += 1
 
 
 def public_descriptor(value: Any, config: AnalysisConfig) -> dict[str, Any] | None:
@@ -617,18 +749,24 @@ def cached_parse_delta(coverage: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def apply_cached_scope(session: dict[str, Any] | None, config: AnalysisConfig, coverage: dict[str, Any]) -> dict[str, Any] | None:
+def apply_cached_scope(
+    session: dict[str, Any] | None,
+    config: AnalysisConfig,
+    coverage: dict[str, Any],
+    *,
+    project_already_checked: bool = False,
+) -> dict[str, Any] | None:
     if session is None:
         return None
     timestamp = session.get("timestamp")
     if not isinstance(timestamp, datetime) or timestamp < config.since or timestamp > config.until:
         coverage["skipped_outside_window"] += 1
         return None
-    cwd = str(session.get("cwd") or "")
-    project_matches = matches_dsh_project(cwd or None, session.get("workspace_key"), config.project)
-    if not project_matches:
-        coverage["skipped_project"] += 1
-        return None
+    if not project_already_checked:
+        cwd = str(session.get("cwd") or "")
+        if not matches_dsh_project(cwd or None, session.get("workspace_key"), config.project):
+            coverage["skipped_project"] += 1
+            return None
     if session["task_started"] > session["task_complete"] + session["aborted_turns"]:
         coverage["partial_sessions"] += 1
     return session
@@ -688,16 +826,68 @@ def project_label(cwd: str) -> str:
     return cwd_label(cwd)
 
 
+def project_identity(cwd: str) -> str:
+    """Stable anonymous project identity from the lexical path key.
+
+    Byte-identical to the Node `projectIdOf`: sha256 over the shared path key,
+    truncated to 12 hex characters. Case folding follows the path's own form
+    (Windows drives fold, POSIX stays sensitive), never the analyzing machine,
+    and the digest never exposes the source path.
+    """
+    key = cwd_path_key(cwd)
+    digest = hashlib.sha256(key.encode("utf-8", errors="replace")).hexdigest()[:12]
+    return f"project-{digest}"
+
+
 def normalize_path(value: str) -> str:
     normalized = value.replace("\\", "/").rstrip("/")
     return normalized.casefold() if re.match(r"^[A-Za-z]:/", normalized) else normalized
 
 
+def normalize_project_key(value: str) -> str:
+    """Canonical project key shared by the Node runtime (normalizeProjectKey).
+
+    Forward slashes, no trailing separator, case-folded for Windows drives and
+    on Windows itself. Foreign paths keep their own case semantics: a POSIX
+    path is never case-folded just because the analyzing machine is Windows,
+    and vice versa. This function must stay byte-identical to the Node export.
+    """
+    path = str(value).replace("\\", "/")
+    path = re.sub(r"/+$", "", path) or "/"
+    if os.name == "nt" or re.match(r"^[A-Za-z]:/", path):
+        return path.lower()
+    return path
+
+
+def is_absolute_project_path(value: str) -> bool:
+    """Platform-form absoluteness, independent of the analyzing machine."""
+    return bool(
+        value.startswith("/")
+        or re.match(r"^[A-Za-z]:[\\/]", value)
+        or value.startswith("\\\\")
+        or value.startswith("//")
+    )
+
+
+def canonical_project_input(value: str) -> str:
+    """Resolve and canonicalize one CLI --project value exactly once.
+
+    The CLI resolves a relative value against the invoking working directory
+    (documented CLI semantics); the native plugin entry refuses relative paths
+    instead of guessing a host cwd. Either way, every later consumer —
+    selection, parsing, cache scope, resume records — sees the same key.
+    """
+    expanded = os.path.expanduser(value)
+    if not is_absolute_project_path(expanded):
+        expanded = str(Path.cwd() / expanded)
+    return normalize_project_key(expanded)
+
+
 def matches_project(cwd: str, requested: str | None) -> bool:
     if not requested:
         return True
-    actual = normalize_path(os.path.expanduser(cwd))
-    target = normalize_path(os.path.expanduser(requested))
+    actual = normalize_project_key(cwd)
+    target = normalize_project_key(requested)
     return actual == target or actual.startswith(target + "/")
 
 
@@ -1788,6 +1978,133 @@ def read_dsh_jsonl_lines(path: Path) -> list[str] | None:
         return None
 
 
+@dataclass(frozen=True)
+class SessionHeaderScope:
+    """Bounded first-record scope decision for one session log.
+
+    `status` is one of:
+    - ``read_error``   the file cannot be opened/decoded at all
+    - ``outside_window`` / ``outside_project``  provably out of scope; the body
+      is never parsed, cached, or read past the bounded header budget
+    - ``corrupt_first_line``  the first JSONL line is not valid JSON; parsing
+      must fail closed with a locator rather than guess
+    - ``undecidable``  scope cannot be proven from the header (missing
+      createdAt/cwd or a non-session first record); the full parse decides
+    - ``in_scope``  provably inside the requested window and project filter
+    """
+
+    status: str
+    timestamp: datetime | None = None
+    cwd: str | None = None
+
+
+def _first_line_from_chunks(chunks: Any, budget: int) -> str | None:
+    """Return the first newline-terminated line from a decoded chunk stream.
+
+    `None` means the stream ended without a newline (single-line payload is
+    returned by the caller from the remaining bytes) or the budget was exceeded,
+    which callers treat as an undecidable header.
+    """
+    pending = bytearray()
+    total = 0
+    for chunk in chunks:
+        total += len(chunk)
+        if total > budget:
+            return None
+        pending += chunk
+        index = pending.find(b"\n")
+        if index >= 0:
+            if index > MAX_LOG_LINE_BYTES:
+                return None
+            return bytes(pending[:index]).decode("utf-8")
+        if len(pending) > budget:
+            return None
+    return None
+
+
+def read_session_header_line(path: Path) -> str | None:
+    """Read only the first JSONL line of a session log under a hard budget.
+
+    DSH writes the session header as its own first Zstandard frame, so a zstd
+    log yields the header after decoding at most one frame; plaintext logs are
+    read up to the first newline. Returns `None` when the line cannot be
+    obtained within the budget (callers then treat scope as undecidable).
+    """
+    if dsh_log_compression(path) == "none":
+        def plain_chunks() -> Any:
+            with path.open("rb") as stream:
+                while True:
+                    chunk = stream.read(min(64 * 1024, MAX_HEADER_FRAME_BYTES + 1))
+                    if not chunk:
+                        return
+                    yield chunk
+        try:
+            return _first_line_from_chunks(plain_chunks(), MAX_HEADER_FRAME_BYTES)
+        except (OSError, UnicodeDecodeError):
+            return None
+    zstandard = get_zstandard()
+    try:
+        with path.open("rb") as stream:
+            return _first_line_from_chunks(_iter_zstd_blocks(stream, zstandard), MAX_HEADER_FRAME_BYTES)
+    except (OSError, EOFError, UnicodeDecodeError, zstandard.ZstdError, DshSessionLogResourceLimit):
+        return None
+
+
+def session_header_scope(path: Path, config: AnalysisConfig, workspace_key: str | None) -> SessionHeaderScope:
+    """Decide one log's scope from its bounded header record alone."""
+    try:
+        line = read_session_header_line(path)
+    except OSError:
+        return SessionHeaderScope("read_error")
+    if line is None or not line.strip():
+        # An empty file cannot produce a session; a header larger than the
+        # budget cannot be trusted to bound anything. Both fall through to the
+        # full parse, which fails closed or reports unreadable as before.
+        return SessionHeaderScope("undecidable")
+    try:
+        header = json.loads(line)
+    except json.JSONDecodeError:
+        return SessionHeaderScope("corrupt_first_line")
+    if not isinstance(header, dict) or str(header.get("type") or "") != "session":
+        return SessionHeaderScope("undecidable")
+    timestamp = parse_dsh_timestamp(header.get("createdAt"))
+    if timestamp is None:
+        return SessionHeaderScope("undecidable")
+    if timestamp < config.since or timestamp > config.until:
+        return SessionHeaderScope("outside_window", timestamp=timestamp)
+    if config.project:
+        cwd = header.get("cwd") if isinstance(header.get("cwd"), str) and header.get("cwd") else None
+        # The same matching contract as the in-record path: header cwd first,
+        # then the lossy workspace key (decode and exact-key equality). Only a
+        # decision from these inputs bounds the log; otherwise fall through.
+        if matches_dsh_project(cwd, workspace_key, config.project):
+            return SessionHeaderScope("in_scope", timestamp=timestamp, cwd=cwd)
+        if cwd is not None:
+            return SessionHeaderScope("outside_project", timestamp=timestamp, cwd=cwd)
+        # cwd missing: the workspace key may still prove scope through the
+        # exact-key equality inside matches_dsh_project; if it could not, the
+        # decision is undecidable rather than out-of-scope.
+        if workspace_key and dsh_project_key(config.project).casefold() == workspace_key.casefold():
+            return SessionHeaderScope("in_scope", timestamp=timestamp)
+        decoded = decode_dsh_workspace_key(workspace_key)
+        if decoded is not None:
+            return SessionHeaderScope("outside_project", timestamp=timestamp)
+        return SessionHeaderScope("undecidable", timestamp=timestamp)
+    return SessionHeaderScope("in_scope", timestamp=timestamp, cwd=header.get("cwd") if isinstance(header.get("cwd"), str) else None)
+
+
+def session_log_locator(path: Path) -> str:
+    """Privacy-safe locator for one session log, used in fail-closed errors.
+
+    Directory names come from the host's lossy project key grammar and the
+    session directory id; both pass through redaction so no raw private path
+    is echoed into an error that may reach a model or report.
+    """
+    workspace = path.parent.parent.name if path.parent.parent.name else "unknown"
+    session_dir = path.parent.name or "unknown"
+    return f"{redact_text(workspace, 100)}/{redact_text(session_dir, 100)}"
+
+
 def _iter_zstd_blocks(stream: Any, zstandard: Any) -> Any:
     """Decode at most one 128 KiB Zstandard block per call, retaining EOF checks.
 
@@ -2014,6 +2331,7 @@ def new_dsh_session(
         "source": source,
     }
     session = new_session(meta, timestamp, path, config)
+    session["project_id"] = project_identity(cwd)
     session["workspace_key"] = workspace_key
     session["session_header_records"] = 1
     session["log_generation_version"] = header.get("version")
@@ -2346,7 +2664,11 @@ def process_dsh_record(
             source = data.get("source")
             kind = str(source.get("kind") or "unknown") if isinstance(source, dict) else "unknown"
             session["injected_user_messages"] += 1
-            session["injected_source_kinds"][kind] += 1
+            # Projection happens here, once: the counter holds only the public
+            # form, so reports and the deterministic cache can never carry the
+            # raw extension string. Delegation logic below keeps using the raw
+            # kind — an injected notice never becomes human input by renaming.
+            session["injected_source_kinds"][public_category(kind, config, "source") or "unknown"] += 1
             form = str(source.get("form") or "") if isinstance(source, dict) else ""
             if kind == "subagent-settled":
                 # A runtime-owned completion notice settles a delegation; it
@@ -2411,10 +2733,7 @@ def process_dsh_record(
         if isinstance(message, dict):
             source = message.get("source")
             if isinstance(source, dict):
-                provider = source.get("provider")
-                model = source.get("model")
-                if provider and model:
-                    session["provider_models"][(str(provider), str(model))] += 1
+                note_provider_model(session, source.get("provider"), source.get("model"), config)
         return
     if record_type == "command/run":
         if str(data.get("name") or "").casefold() == "session-insights":
@@ -2526,17 +2845,11 @@ def process_dsh_record(
         if isinstance(header, dict):
             header_config = header.get("config")
             if isinstance(header_config, dict):
-                provider = header_config.get("provider")
-                model = header_config.get("model")
-                if provider and model:
-                    session["provider_models"][(str(provider), str(model))] += 1
+                note_provider_model(session, header_config.get("provider"), header_config.get("model"), config)
         # request/header contains system prompts; deliberately never excerpt it.
         return
     if record_type == "request/context":
-        provider = data.get("provider")
-        model = data.get("model")
-        if provider and model:
-            session["provider_models"][(str(provider), str(model))] += 1
+        note_provider_model(session, data.get("provider"), data.get("model"), config)
         return
     if record_type == "approval/asked":
         approval_id = str(data.get("id") or "")
@@ -2561,14 +2874,11 @@ def process_dsh_record(
             session["rejected_approval_call_ids"].discard(call_id)
         return
     if record_type == "model/selection":
-        provider = data.get("provider")
-        model = data.get("model")
-        if isinstance(provider, str) and provider and isinstance(model, str) and model:
-            session["provider_models"][(provider, model)] += 1
+        note_provider_model(session, data.get("provider"), data.get("model"), config)
         session["model_selections"] += 1
         effort = data.get("reasoningEffort")
         if isinstance(effort, str) and effort:
-            session["reasoning_efforts"][effort] += 1
+            session["reasoning_efforts"][public_category(effort, config, "effort") or "unknown"] += 1
         return
     if record_type == "llm/retry":
         # Scheduled retry (appended before backoff); not proof an attempt ran.
@@ -2634,11 +2944,13 @@ def cwd_platform_form(key: str) -> str:
     return "relative"
 
 
-def finalize_jobs(session: dict[str, Any]) -> None:
+def finalize_jobs(session: dict[str, Any], config: AnalysisConfig) -> None:
     """Derive job counters from durable records, never from notices or prose.
 
     `completed` is a registry/producer outcome. It does not certify resource
     release, user-task completion, or that an async child produced a deliverable.
+    Free category strings (kind, cause) are projected to their public form here,
+    once, so downstream views and the deterministic cache never see raw values.
     """
     counts = {
         "registered": 0,
@@ -2661,7 +2973,7 @@ def finalize_jobs(session: dict[str, Any]) -> None:
     }
     for job in session["jobs"].values():
         counts["registered"] += 1
-        counts["by_kind"][str(job["kind"])] += 1
+        counts["by_kind"][public_category(str(job["kind"]), config, "kind") or "unknown"] += 1
         if job["inherited"]:
             counts["inherited"] += 1
         if job["settled"]:
@@ -2719,27 +3031,36 @@ def finalize_working_directory(session: dict[str, Any]) -> None:
     session["cwd_relative_changes"] = session["cwd_anomalies"]["relative"]
 
 
-def finalize_delegation(session: dict[str, Any]) -> None:
+def finalize_delegation(session: dict[str, Any], config: AnalysisConfig) -> None:
+    """Finalize delegation counters; team phase/status maps project once here."""
     delegation = session["delegation"]
     delegation["dispatches_by_tool"] = dict(sorted(delegation["dispatches_by_tool"].items()))
     team = session["team"]
+    phases: Counter[str] = Counter()
+    for member in team["members"].values():
+        raw = member["phase"] if isinstance(member.get("phase"), str) and member["phase"] else "unknown"
+        phases[public_category(raw, config, "phase") or "unknown"] += 1
+    statuses: Counter[str] = Counter()
+    for task in team["tasks"].values():
+        raw = task["status"] if isinstance(task.get("status"), str) and task["status"] else "unknown"
+        statuses[public_category(raw, config, "status") or "unknown"] += 1
     session["team_summary"] = {
         "members": len(team["members"]),
-        "members_by_phase": dict(sorted(Counter(member["phase"] if isinstance(member.get("phase"), str) and member["phase"] else "unknown" for member in team["members"].values()).items())),
+        "members_by_phase": dict(sorted(phases.items())),
         "tasks": len(team["tasks"]),
-        "tasks_by_status": dict(sorted(Counter(task["status"] if isinstance(task.get("status"), str) and task["status"] else "unknown" for task in team["tasks"].values()).items())),
+        "tasks_by_status": dict(sorted(statuses.items())),
         "task_transitions": team["task_transitions"],
         "mailbox_legacy": team["mailbox_legacy"],
     }
     # Team snapshots are durable identity/state, never Lead task completion.
 
 
-def finalize_dsh_session(session: dict[str, Any], coverage: dict[str, Any]) -> dict[str, Any]:
+def finalize_dsh_session(session: dict[str, Any], coverage: dict[str, Any], config: AnalysisConfig) -> dict[str, Any]:
     session["tool_execution"]["inner_incomplete"] = sum(not p["settled"] and not p.get("inherited") for p in session["ptc"].values())
     finalize_dsh_tokens(session)
-    finalize_jobs(session)
+    finalize_jobs(session, config)
     finalize_working_directory(session)
-    finalize_delegation(session)
+    finalize_delegation(session, config)
     session["repeated_retries"] = (
         session["unchanged_retries"] + session["state_change_retries"] + session["polling_retries"]
     )
@@ -2751,7 +3072,31 @@ def finalize_dsh_session(session: dict[str, Any], coverage: dict[str, Any]) -> d
     session["work_area"] = classify_work_area(" ".join(session["topic_text_parts"]))
     session["session_type"] = classify_session(session)
     session["meta_analysis"] = is_insights_meta_analysis(session)
+    project_public_fields(session, config)
     return session
+
+
+def project_public_fields(session: dict[str, Any], config: AnalysisConfig) -> None:
+    """Project identity-bearing fields once, at parse time.
+
+    Every consumer — session views, family aggregation, provider stats, and
+    the deterministic cache — uses these public forms directly, so a cached
+    session and a freshly parsed one carry byte-identical values and no view
+    can hash or redact a value twice.
+    """
+    session["rollout_id"] = stable_identifier(session["rollout_id"], config, "rollout")
+    session["family_id"] = stable_identifier(session["family_id"], config, "task")
+    if config.privacy_mode == "local" and not config.metrics_only:
+        pass  # local keeps the relative log locator as-is
+    else:
+        session["rollout_file"] = stable_identifier(session["rollout_file"], config, "file")
+    session["first_prompt"] = excerpt_text(session.get("first_prompt") or "", config, 12000)
+    session["provider_title"] = excerpt_text(session.get("provider_title") or "", config, 12000)
+    session["fallback_title"] = excerpt_text(session.get("fallback_title") or "", config, 12000)
+    session["job_items_public"] = job_public_items(session, config)
+    # The raw registry stays in process memory but never enters the cache:
+    # CACHE_SESSION_FIELDS excludes it, and public consumers use the counts and
+    # bounded public items above.
 
 
 def parse_dsh_session_file(
@@ -2762,6 +3107,7 @@ def parse_dsh_session_file(
     compression = 'zstd' if path.name.endswith('.zstd') else 'none'
     if parse_dsh_generation_filename(path.name, compression) != 4:
         raise ValueError("only session.v4 logs are supported; migrate upstream")
+    locator = session_log_locator(path)
     try:
         lines = read_dsh_jsonl_lines(path)
     except DshSessionLogResourceLimit:
@@ -2773,21 +3119,34 @@ def parse_dsh_session_file(
         coverage["unreadable_files"] += 1
         return None
     records: list[Any] = []
-    for line in lines:
+    for number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
         try:
             records.append(json.loads(line))
         except json.JSONDecodeError as error:
-            raise ValueError("corrupt V4 JSON; no older-generation fallback") from error
-    validate_records(records, DSH_KNOWN_RECORD_TYPES, physical=True)
-    return parse_dsh_session_records(
-        records,
-        config,
-        coverage,
-        source_path=path,
-        workspace_key=path.parent.parent.name,
-    )
+            # Fail closed with a privacy-safe locator: no raw path and no log
+            # body content is echoed into the error surface.
+            raise ValueError(
+                f"session {locator} line {number}: corrupt V4 JSON; no older-generation fallback"
+            ) from error
+    try:
+        validate_records(records, DSH_KNOWN_RECORD_TYPES, physical=True)
+    except ValueError as error:
+        raise ValueError(f"session {locator}: {redact_text(str(error), 300)}") from error
+    try:
+        return parse_dsh_session_records(
+            records,
+            config,
+            coverage,
+            source_path=path,
+            workspace_key=path.parent.parent.name,
+        )
+    except ValueError as error:
+        # Structurally impossible input (identity conflicts, replay violations)
+        # fails closed with the same privacy-safe locator; the message itself is
+        # redacted so a free-string field can never echo private content.
+        raise ValueError(f"session {locator}: {redact_text(str(error), 300)}") from error
 
 
 def parse_dsh_session_records(
@@ -2817,7 +3176,9 @@ def parse_dsh_session_records(
             if record_type.startswith("plugin:"):
                 coverage.setdefault("plugin_records", Counter())[public_category(record_type, config, "plugin")] += 1
             else:
-                coverage["unknown_record_types"][record_type or "<missing>"] += 1
+                # Unknown types are free strings; only their redacted form is
+                # public (matching the Node projection), never the raw value.
+                coverage["unknown_record_types"][redact_text(record_type or "<missing>", 100)] += 1
             continue
         record_timestamp = parse_dsh_timestamp(record.get("time"))
         record_seq = record.get("seq")
@@ -2894,7 +3255,7 @@ def parse_dsh_session_records(
     if session is None:
         coverage["missing_metadata"] += 1
         return None
-    return finalize_dsh_session(session, coverage)
+    return finalize_dsh_session(session, coverage, config)
 
 
 def session_complexity(session: dict[str, Any]) -> float:
@@ -2964,6 +3325,10 @@ def job_public_items(session: dict[str, Any], config: AnalysisConfig) -> list[di
 
 def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict[str, Any]:
     status = session_status(session)
+    # One report timezone derives date, hour and weekday together; the raw
+    # timestamp stays a UTC instant for machine consumers.
+    zone = report_zone(config)
+    calendar = session["timestamp"].astimezone(zone)
     title_source = "prompt"
     if config.metrics_only or config.privacy_mode == "metrics":
         title = "Content omitted" if config.locale == "en" else "内容已省略"
@@ -2980,23 +3345,22 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         title = excerpt_text(raw_title, config, 140) if raw_title else ("No usable title" if config.locale == "en" else "未提供可用标题")
     provider, model = (None, None)
     if session.get("provider_models"):
-        provider, model = session["provider_models"].most_common(1)[0][0]
+        provider, model = session["provider_models"].most_common(1)[0][0]  # already projected at capture
     view = {
-        "rollout_id": stable_identifier(session["rollout_id"], config, "rollout"),
-        "task_family_id": stable_identifier(session["family_id"], config, "task"),
-        "rollout_file": (
-            session["rollout_file"]
-            if config.privacy_mode == "local" and not config.metrics_only
-            else stable_identifier(session["rollout_file"], config, "file")
-        ),
+        # Identity fields were projected once at parse (project_public_fields).
+        "rollout_id": session["rollout_id"],
+        "task_family_id": session["family_id"],
+        "rollout_file": session["rollout_file"],
         "role": session["role"],
         "classification_basis": session["classification_basis"],
         "platform": session["platform"],
         "session_header_records": session["session_header_records"],
         "project": session["project"],
-        "date": session["timestamp"].date().isoformat(),
-        "start_hour_local": session["timestamp"].astimezone().hour,
-        "weekday": session["timestamp"].astimezone().weekday(),
+        "project_id": session.get("project_id") or project_identity(session.get("cwd") or ""),
+        "date": calendar.date().isoformat(),
+        "start_hour_local": calendar.hour,
+        "weekday": calendar.weekday(),
+        "timezone": config.report_timezone or resolve_report_timezone(None),
         "observed_minutes": safe_round((session["observed_end"] - session["observed_start"]).total_seconds() / 60, 1),
         "status": status,
         "title": title,
@@ -3014,8 +3378,9 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "child_sessions": len(session["child_sessions"]),
         "jobs": {
             **dict(session.get("job_counts") or {}),
-            "by_kind": public_counts(session["job_counts"]["by_kind"], config, "kind"),
-            "items": job_public_items(session, config),
+            "by_kind": dict(sorted(session["job_counts"]["by_kind"].items())),
+            "by_cause": dict(sorted(session["job_counts"].get("by_cause", {}).items())),
+            "items": list(session.get("job_items_public") or []),
         },
         "working_directory": {
             "changes": session.get("cwd_changes", 0),
@@ -3039,8 +3404,6 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         },
         "team": {
             **dict(session.get("team_summary") or {}),
-            "members_by_phase": public_counts(session["team_summary"]["members_by_phase"], config, "phase"),
-            "tasks_by_status": public_counts(session["team_summary"]["tasks_by_status"], config, "status"),
         },
         "subagent": public_descriptor(session.get("subagent_descriptor"), config),
         "system_messages": session.get("system_messages", 0),
@@ -3066,7 +3429,7 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "web_searches": session["web_searches"],
         "web_fetches": session["web_fetches"],
         "model_selections": session["model_selections"],
-        "reasoning_efforts": public_counts(session["reasoning_efforts"], config, "effort"),
+        "reasoning_efforts": dict(sorted(session["reasoning_efforts"].items())),
         "mcp_calls": session["mcp_calls"],
         "skill_calls": session["skill_calls"],
         "aborted_turns": session["aborted_turns"],
@@ -3103,8 +3466,10 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
         "skill_mentions": [name for name, _ in session["skill_mentions"].most_common(5)],
     }
     view["title_source"] = title_source
-    view["provider"] = public_category(provider, config, "provider")
-    view["model"] = public_category(model, config, "model")
+    # provider/model come from the capture-time projection; use them as-is so
+    # the value is never hashed twice across cache and fresh paths.
+    view["provider"] = provider
+    view["model"] = model
     view["llm_retries"] = session["llm_retries"]
     view["llm_retries_performed"] = session["llm_retries_performed"]
     view["llm_retry_chains"] = len(session["llm_retry_chains"])
@@ -3140,17 +3505,18 @@ def select_excerpts(sessions: list[dict[str, Any]], config: AnalysisConfig) -> l
             return False
         seen.add(digest)
         session_counts[session_key] += 1
-        project_counts[session["project"]] += 1
+        project_counts[session["project_id"]] += 1
         result.append(
             {
                 "kind": candidate["kind"],
                 "project": session["project"],
-                "date": session["timestamp"].date().isoformat(),
+                "project_id": session["project_id"],
+                "date": session["timestamp"].astimezone(report_zone(config)).date().isoformat(),
                 "status": session_status(session),
                 "work_area": session["work_area"],
                 "role": session["role"],
                 "platform": session["platform"],
-                "task_family_id": stable_identifier(session["family_id"], config, "task"),
+                "task_family_id": session["family_id"],
                 "text": candidate["text"],
             }
         )
@@ -3247,14 +3613,11 @@ def build_task_families(
         observed_end = max(member["observed_end"] for member in ordered)
         assistant_latencies = [value for member in ordered for value in member["assistant_latency_seconds"]]
         family_view = {
-            "task_family_id": stable_identifier(family_id, config, "task"),
-            "root_rollout_id": (
-                stable_identifier(root["rollout_id"], config, "rollout")
-                if root["role"] == "root_task"
-                else None
-            ),
-            "date": root["timestamp"].date().isoformat(),
+            "task_family_id": family_id,
+            "root_rollout_id": root["rollout_id"] if root["role"] == "root_task" else None,
+            "date": root["timestamp"].astimezone(report_zone(config)).date().isoformat(),
             "project": root["project"],
+            "project_id": root.get("project_id"),
             "platform": root["platform"],
             "title": public_by_rollout[root["rollout_id"]]["title"],
             "work_area": root["work_area"],
@@ -3263,7 +3626,7 @@ def build_task_families(
             "correction_messages": sum(member["correction_messages"] for member in ordered),
             "complexity_score": safe_round(sum(member["complexity_score"] for member in ordered)),
             "rollout_count": len(ordered),
-            "rollout_ids": [stable_identifier(member["rollout_id"], config, "rollout") for member in ordered],
+            "rollout_ids": [member["rollout_id"] for member in ordered],
             "role_counts": dict(sorted(role_counts.items())),
             "role_token_totals": role_tokens,
             "tokens": aggregate_tokens(ordered),
@@ -3624,8 +3987,7 @@ def build_provider_stats(sessions: list[dict[str, Any]], config: AnalysisConfig)
     for session in sessions:
         session_id = str(session.get("rollout_id") or id(session))
         for provider, model in session["provider_models"]:
-            provider = public_category(provider, config, "provider")
-            model = public_category(model, config, "model")
+            # Pairs are public forms projected once at capture.
             model_session_ids[(provider, model)].add(session_id)
             provider_session_ids[provider].add(session_id)
     provider_models = [
@@ -3649,14 +4011,128 @@ def build_provider_stats(sessions: list[dict[str, Any]], config: AnalysisConfig)
     return providers, provider_models
 
 
+# Field whitelist for the deterministic parse cache. The cached value carries
+# the same field names the report views consume, restricted to these keys and
+# with identity-bearing fields already projected by project_public_fields.
+# Anything not listed here — raw registries (jobs/team), source metadata, call
+# state, usage-by-step rows, topic text, or the raw cwd — is never persisted.
+CACHE_SESSION_FIELDS: frozenset[str] = frozenset({
+    # identity and classification (public forms)
+    "rollout_id", "family_id", "rollout_file", "role", "classification_basis",
+    "thread_source", "originator", "platform", "log_generation_version",
+    "session_header_records",
+    # instants (UTC) needed for windows, trends and family ordering
+    "timestamp", "observed_start", "observed_end",
+    # project display and derived working-directory aggregates (labels only)
+    "project", "project_id", "cwd_segments", "cwd_projects", "cwd_cross_project",
+    "cwd_changes_inherited", "cwd_changes", "cwd_origin_label",
+    "cwd_effective_at_cut", "cwd_own_labels", "cwd_inherited_labels",
+    "cwd_platform_forms", "cwd_changes_same_as_previous", "cwd_invalid_changes",
+    "cwd_relative_changes", "working_directory_changes",
+    "unpaired_job_settlements", "jobs_busy_turn_ends",
+    # registries reduced to counts, projected categories, and bounded items
+    "job_counts", "job_items_public", "child_sessions",
+    "delegation", "team_summary", "tool_execution", "tool_recovery",
+    # counters and measurement lists
+    "task_started", "task_complete", "duration_ms", "user_messages",
+    "assistant_messages", "prompt_lengths", "correction_messages",
+    "clarification_requests", "tool_calls", "tool_counts", "tool_failures",
+    "text_error_signals", "diagnostic_nonzero", "failure_causes",
+    "failure_tools", "permission_blocks", "patches", "failed_patches",
+    "subagents", "web_searches", "web_fetches", "model_selections",
+    "reasoning_efforts", "mcp_calls", "skill_calls", "skill_counts",
+    "mcp_server_counts", "aborted_turns", "git_commits", "tokens",
+    "token_measurement", "unchanged_retries", "state_change_retries",
+    "polling_retries", "repeated_retries", "tool_run_seconds", "wait_seconds",
+    "verification_successes", "verification_failures", "verification_kinds",
+    "accepted_evidence", "file_extensions", "skill_mentions",
+    "assistant_latency_seconds", "user_response_seconds",
+    "turn_ids", "llm_retry_chains", "llm_retries", "llm_retries_performed",
+    "denied_approvals",
+    # already-privacy-shaped content the report and semantic flow need
+    "first_prompt", "provider_title", "fallback_title", "excerpt_candidates",
+    "semantic_messages",
+    # projected category counters and derived labels
+    "injected_source_kinds", "provider_models",
+    "system_messages", "injected_user_messages", "assistant_attempts",
+    "assistant_attempts_with_usage", "compaction_events",
+    "compaction_shadowed_events", "semantic_shadowed_messages",
+    "inherited_event_count",
+    # finalize outputs
+    "work_area", "session_type", "meta_analysis", "complexity_score",
+})
+
+
+def project_session_for_cache(session: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Reduce one parsed session to the whitelisted, pre-projected cache form."""
+    if session is None:
+        return None
+    projected: dict[str, Any] = {}
+    for key in CACHE_SESSION_FIELDS:
+        if key not in session:
+            continue
+        value = session[key]
+        if key == "cwd_segments":
+            # Keep only display labels and inherited flags; the path keys stay
+            # out of the persistent cache.
+            value = [
+                {"label": segment.get("label"), "inherited": bool(segment.get("inherited"))}
+                for segment in value
+            ]
+        projected[key] = value
+    return projected
+
+
+def restore_cached_session(session: dict[str, Any]) -> dict[str, Any]:
+    """Rebuild the runtime shapes a decoded cache entry needs.
+
+    Decoding yields lists for sets and plain dicts for counters; the report
+    views expect the original containers.
+    """
+    session["turn_ids"] = set(session.get("turn_ids") or [])
+    session["llm_retry_chains"] = set(session.get("llm_retry_chains") or [])
+    session["child_sessions"] = set(session.get("child_sessions") or [])
+    for key in (
+        "tool_counts", "failure_causes", "failure_tools", "verification_kinds",
+        "skill_counts", "mcp_server_counts", "file_extensions", "skill_mentions",
+        "reasoning_efforts", "injected_source_kinds", "provider_models",
+        "cwd_platform_forms",
+    ):
+        if key in session:
+            session[key] = Counter(session[key])
+    job_counts = session.get("job_counts")
+    if isinstance(job_counts, dict):
+        for key in ("by_kind", "by_cause"):
+            if key in job_counts:
+                job_counts[key] = Counter(job_counts[key])
+    return session
+
+
 def parse_with_deterministic_cache(
     path: Path,
     config: AnalysisConfig,
     coverage: dict[str, Any],
     parse_file: Any,
 ) -> dict[str, Any] | None:
+    workspace_key = path.parent.parent.name if path.parent.parent.name else None
+    scope = session_header_scope(path, config, workspace_key)
+    if scope.status == "outside_window":
+        # Provably out of scope from the bounded header: the body is never
+        # read, parsed, or cached, regardless of cache settings.
+        coverage["skipped_outside_window"] += 1
+        if not config.deterministic_cache:
+            coverage["deterministic_cache"]["disabled"] += 1
+        return None
+    if scope.status == "outside_project":
+        coverage["skipped_project"] += 1
+        if not config.deterministic_cache:
+            coverage["deterministic_cache"]["disabled"] += 1
+        return None
     if not config.deterministic_cache:
         coverage["deterministic_cache"]["disabled"] += 1
+        return parse_file(path, config, coverage)
+    if scope.status == "read_error":
+        coverage["deterministic_cache"]["misses"] += 1
         return parse_file(path, config, coverage)
     try:
         source_digest = file_sha256(path)
@@ -3675,7 +4151,8 @@ def parse_with_deterministic_cache(
     path_key = hashlib.sha256(str(path.resolve()).encode("utf-8", errors="replace")).hexdigest()
     cache_dir = deterministic_cache_home(config)
     cache_path = cache_dir / f"{path_key}.json"
-    if not config.refresh_deterministic_cache and cache_path.is_file():
+    header_proven_in_scope = scope.status == "in_scope"
+    if header_proven_in_scope and not config.refresh_deterministic_cache and cache_path.is_file():
         try:
             cached = json.loads(cache_path.read_text(encoding="utf-8"))
             if (
@@ -3688,7 +4165,10 @@ def parse_with_deterministic_cache(
                     raise ValueError("invalid deterministic cache payload")
                 apply_coverage_delta(coverage, delta)
                 coverage["deterministic_cache"]["hits"] += 1
-                return apply_cached_scope(session, config, coverage)
+                if session is None:
+                    return None
+                restore_cached_session(session)
+                return apply_cached_scope(session, config, coverage, project_already_checked=True)
             coverage["deterministic_cache"]["invalidations"] += 1
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             coverage["deterministic_cache"]["invalidations"] += 1
@@ -3705,36 +4185,52 @@ def parse_with_deterministic_cache(
     delta = cached_parse_delta(parse_coverage)
     apply_coverage_delta(coverage, delta)
     coverage["deterministic_cache"]["misses"] += 1
-    cache_session = None
-    if session is not None:
-        cache_session = dict(session)
-        cache_session["first_prompt"] = local_text(str(session.get("first_prompt") or ""), 12000)
-        cache_session["provider_title"] = local_text(str(session.get("provider_title") or ""), 12000)
-        cache_session["fallback_title"] = local_text(str(session.get("fallback_title") or ""), 12000)
-        for transient_key in ("calls", "scoped_calls", "last_failed_calls", "approval_requests", "ptc"):
-            cache_session[transient_key] = {}
-        for transient_key in ("semantic_message_digests", "recovery_seen", "settled_calls"):
-            cache_session[transient_key] = set()
+    scoped = apply_cached_scope(session, config, coverage, project_already_checked=header_proven_in_scope)
+    if scoped is None:
+        # Undecidable-at-header logs that turn out out of scope are never
+        # written to the cache; only in-scope content is persisted.
+        return None
     payload = {
         "cache_version": DETERMINISTIC_CACHE_VERSION,
         "fingerprint": fingerprint,
         "source_sha256": source_digest,
         "contract": contract,
         "coverage_delta": cache_encode(delta),
-        "session": cache_encode(cache_session),
+        "session": cache_encode(project_session_for_cache(scoped)),
     }
-    temporary = cache_path.with_name(f".{cache_path.name}.{os.getpid()}.tmp")
+    temporary = cache_path.with_name(f".{cache_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
     try:
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        temporary.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
-        temporary.replace(cache_path)
+        cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        # mkdir applies umask; enforce the private mode explicitly and never
+        # follow a pre-existing link at the cache root.
+        if cache_dir.is_symlink() or not cache_dir.is_dir():
+            raise OSError("deterministic cache root is not a private directory")
+        os.chmod(cache_dir, 0o700)
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, cache_path)
+        except BaseException:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+            raise
     except OSError:
         coverage["deterministic_cache"]["write_errors"] += 1
         try:
             temporary.unlink(missing_ok=True)
         except OSError:
             pass
-    return apply_cached_scope(session, config, coverage)
+    return scoped
 
 
 def build_report(
@@ -3811,6 +4307,19 @@ def build_report(
             if parsed is not None:
                 sessions.append(parsed)
     coverage["sessions_analyzed"] = len(sessions)
+    # Display labels are basename-derived and can collide across distinct
+    # projects; identity (project_id) is separate and drives every grouping.
+    # Colliding labels get a short, stable, anonymous suffix. This runs before
+    # any aggregation so projects, families, excerpts and rows share one label.
+    project_labels: dict[str, str] = {}
+    for session in sessions:
+        project_labels.setdefault(session["project_id"], session["project"])
+    label_counts: Counter[str] = Counter(project_labels.values())
+    for identity, label in list(project_labels.items()):
+        if label_counts[label] > 1:
+            project_labels[identity] = f"{label}-{hashlib.sha256(identity.encode('utf-8')).hexdigest()[:8]}"
+    for session in sessions:
+        session["project"] = project_labels[session["project_id"]]
     coverage["unknown_record_types"] = dict(sorted(coverage["unknown_record_types"].items()))
     coverage["plugin_records"] = dict(sorted(coverage.get("plugin_records", {}).items()))
 
@@ -3885,9 +4394,10 @@ def build_report(
     job_kinds: Counter[str] = Counter()
     job_causes: Counter[str] = Counter()
     for session in sessions:
+        # by_kind is already public (projected once at parse); merge directly.
         job_kinds.update(session.get("job_counts", {}).get("by_kind", {}))
         job_causes.update(session.get("job_counts", {}).get("by_cause", {}))
-    job_totals["by_kind"] = public_counts(job_kinds, config, "kind")
+    job_totals["by_kind"] = dict(sorted(job_kinds.items()))
     job_totals["by_cause"] = dict(sorted(job_causes.items()))
     totals["jobs"] = job_totals
     totals["working_directory_changes"] = sum(session.get("cwd_changes", 0) for session in sessions)
@@ -3922,8 +4432,9 @@ def build_report(
     for key in ("members_by_phase", "tasks_by_status"):
         merged: Counter[str] = Counter()
         for session in sessions:
+            # Phase/status maps are already public (projected once at parse).
             merged.update(session.get("team_summary", {}).get(key, {}))
-        team_totals[key] = public_counts(merged, config, "phase" if key == "members_by_phase" else "status")
+        team_totals[key] = dict(sorted(merged.items()))
     totals["team"] = team_totals
     # Third-party plugin records are ignorable and opaque; the report retains
     # only their type and count, never their payload.
@@ -3931,15 +4442,16 @@ def build_report(
 
     project_map: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for session in sessions:
-        project_map[session["project"]].append(session)
+        project_map[session["project_id"]].append(session)
     projects = []
-    for label, project_sessions in project_map.items():
+    for identity, project_sessions in project_map.items():
         project_tools = Counter()
         for session in project_sessions:
             project_tools.update(session["tool_counts"])
         projects.append(
             {
-                "project": label,
+                "project": project_sessions[0]["project"],
+                "project_id": identity,
                 "sessions": len(project_sessions),
                 "turns": sum(len(item["turn_ids"]) for item in project_sessions),
                 "active_hours": safe_round(sum(item["duration_ms"] for item in project_sessions) / 3600000),
@@ -4206,6 +4718,7 @@ def build_report(
             "analysis_privacy_mode": analysis_privacy(config),
             "analysis_depth": config.analysis_depth,
             "locale": config.locale,
+            "report_timezone": config.report_timezone or resolve_report_timezone(None),
             "max_excerpts": 0 if config.metrics_only or config.privacy_mode == "metrics" else config.max_excerpts,
         },
         "coverage": coverage,
@@ -4421,6 +4934,7 @@ def resolve_config(args: argparse.Namespace) -> AnalysisConfig:
         raise ValueError("analysis start must not be after the end")
     if args.max_excerpts < 0:
         raise ValueError("--max-excerpts must not be negative")
+    project = canonical_project_input(args.project) if args.project else None
     dsh_home = args.dsh_home or Path(os.environ.get("DSH_HOME", Path.home() / ".dsh"))
     privacy_mode = "metrics" if args.metrics_only else args.privacy
     analysis_privacy_mode = "metrics" if privacy_mode == "metrics" else (args.analysis_privacy or privacy_mode)
@@ -4428,7 +4942,7 @@ def resolve_config(args: argparse.Namespace) -> AnalysisConfig:
         dsh_home=dsh_home.expanduser(),
         since=since,
         until=until,
-        project=args.project,
+        project=project,
         privacy_mode=privacy_mode,
         metrics_only=privacy_mode == "metrics",
         max_excerpts=args.max_excerpts,
@@ -4438,6 +4952,7 @@ def resolve_config(args: argparse.Namespace) -> AnalysisConfig:
         deterministic_cache=not args.no_deterministic_cache,
         refresh_deterministic_cache=args.refresh_deterministic_cache,
         locale=args.locale,
+        report_timezone=resolve_report_timezone(args.report_timezone),
     )
 
 
@@ -4469,6 +4984,7 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-deterministic-cache", action="store_true", help="disable deterministic per-source-file parse cache")
     parser.add_argument("--max-excerpts", type=int, default=80, help="maximum local or redacted excerpts (default: 80)")
     parser.add_argument("--locale", choices=("zh-CN", "en"), default="zh-CN", help="report language")
+    parser.add_argument("--report-timezone", help="IANA zone (Asia/Shanghai) or fixed offset (UTC+08:00) for date/hour/weekday projections; defaults to the host local zone captured at startup")
     parser.add_argument("--format", choices=("json", "markdown", "html"), default="json")
     parser.add_argument("--output", type=Path, help="write output to a file instead of stdout")
     parser.add_argument("--open", action="store_true", help="open an HTML report in the default browser")
@@ -4496,21 +5012,33 @@ def main(argv: list[str] | None = None) -> int:
     if args.format == "html" and args.open and output is None:
         output = default_html_output(config)
     if output:
-        output = output.resolve()
-        sessions_root = (session_source_root(config) / "sessions").expanduser().resolve()
-        if output.is_relative_to(sessions_root):
-            parser.error("--output 不能写入 DSH 会话源目录")
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(rendered, encoding="utf-8")
-        print(output)
-        if args.format == "html":
-            companion = output.with_suffix(".json")
-            if companion == output:
-                companion = output.with_name(f"{output.stem}.data.json")
-            companion.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-            print(companion)
-        if args.open and not webbrowser.open_new_tab(output.resolve().as_uri()):
-            print(f"warning: browser did not report a successful open; report remains at {output}", file=sys.stderr)
+        from .output_safety import (
+            UnsafeOutputError,
+            atomic_write_text,
+            html_companion_path,
+            prepare_output_targets,
+        )
+
+        sessions_root = session_source_root(config) / "sessions"
+        companion = html_companion_path(output) if args.format == "html" else None
+        targets = [output] + ([companion] if companion is not None else [])
+        try:
+            checked = prepare_output_targets(targets, sessions_root)
+        except UnsafeOutputError as exc:
+            parser.error(str(exc))
+        try:
+            atomic_write_text(checked[0], rendered)
+            print(checked[0])
+            if companion is not None:
+                companion_json = (
+                    json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                )
+                atomic_write_text(checked[1], companion_json)
+                print(checked[1])
+        except UnsafeOutputError as exc:
+            parser.error(str(exc))
+        if args.open and not webbrowser.open_new_tab(checked[0].resolve().as_uri()):
+            print(f"warning: browser did not report a successful open; report remains at {checked[0]}", file=sys.stderr)
     else:
         sys.stdout.write(rendered)
     return 0

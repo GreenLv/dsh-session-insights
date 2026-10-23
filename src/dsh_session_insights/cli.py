@@ -156,6 +156,71 @@ def _home_parser(name: str) -> argparse.ArgumentParser:
     return parser
 
 
+def cache_inventory(home: Path) -> dict[str, dict[str, object]]:
+    """List managed cache roots: counts, sizes, and controlled locators only.
+
+    Never prints cache content. A root holding links, hard links, or special
+    files is reported as `refused` instead of being summarized, so a cleanup
+    decision can never be made over unowned inodes.
+    """
+    import stat as stat_module
+
+    cache_root = home / "insights" / "cache"
+    result: dict[str, dict[str, object]] = {}
+    if not cache_root.is_dir():
+        return result
+    for entry in sorted(cache_root.iterdir()):
+        if not entry.is_dir() or entry.is_symlink():
+            result[entry.name] = {"files": 0, "bytes": 0, "refused": True}
+            continue
+        files = 0
+        total = 0
+        refused = False
+        try:
+            for item in entry.rglob("*"):
+                metadata = item.lstat()
+                if stat_module.S_ISLNK(metadata.st_mode) or not stat_module.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                    refused = True
+                    continue
+                files += 1
+                total += metadata.st_size
+        except OSError:
+            refused = True
+        result[entry.name] = {"files": files, "bytes": total, "refused": refused}
+    return result
+
+
+def cache_cleanup(home: Path) -> dict[str, object]:
+    """Delete legacy cache roots after inventory; refuses unowned files.
+
+    Deletion only ever runs inside this explicitly human-invoked command. Each
+    removed file must be a regular, singly-linked file inside a listed cache
+    root; anything else aborts the whole operation before the first unlink.
+    """
+    import shutil
+    import stat as stat_module
+
+    inventory = cache_inventory(home)
+    removed: list[str] = []
+    for name, summary in inventory.items():
+        if summary.get("refused"):
+            raise ValueError(f"refusing cleanup of unowned cache root: {name}")
+    cache_root = home / "insights" / "cache"
+    for name in inventory:
+        target = cache_root / name
+        for item in sorted(target.rglob("*"), reverse=True):
+            if item.is_file():
+                metadata = item.lstat()
+                if not stat_module.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                    raise ValueError(f"refusing cleanup of unowned file: {name}")
+                item.unlink()
+            elif item.is_dir() and not item.is_symlink():
+                item.rmdir()
+        target.rmdir()
+        removed.append(name)
+    return {"removed": removed, "inventory": inventory}
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in {"-h", "--help"}:
@@ -190,6 +255,19 @@ def main(argv: list[str] | None = None) -> int:
                 for key, value in checks.items():
                     print(f"{key}: {value}")
             return 0 if passed else 1
+        if command == "cache":
+            parser = _home_parser("cache")
+            parser.add_argument("--delete", action="store_true",
+                                help="actually delete listed cache roots; without this flag the command only previews")
+            parsed = parser.parse_args(rest)
+            home = resolve_home(parsed.dsh_home)
+            if parsed.delete:
+                result = cache_cleanup(home)
+                print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            else:
+                inventory = cache_inventory(home)
+                print(json.dumps(inventory, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
         raise ValueError(f"unknown command: {command}")
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"{PRODUCT}: {exc}", file=sys.stderr)

@@ -100,6 +100,19 @@ const CATEGORY_VOCABULARY = {
   status: ['pending', 'in_progress', 'completed', 'deleted', 'unknown'],
   effort: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
   mode: ['one-shot', 'continuable'],
+  // Documented `user/message.data.source.kind` values; anything else is an
+  // extension source and is projected like every other free category string.
+  source: [
+    'user',
+    'subagent-settled',
+    'tool-jobs',
+    'agent-message',
+    'goal',
+    'agent-instructions',
+    'skill-catalog',
+    'subagent-report',
+    'session-log-deepseek',
+  ],
 }
 function publicCategory(value, opts, category) {
   if (typeof value !== 'string') return null
@@ -127,6 +140,8 @@ function publicDescriptor(value, opts) {
 export function secretErrors(value, privacy) {
   const errors = []
   // Check strings separately: JSON backslash escaping must not hide Windows paths.
+  // The checked categories mirror what input sanitize removes, so a validated
+  // output can never be wider than the evidence the model was shown.
   const visit = (item) => {
     if (typeof item === 'string') {
       for (const key of [
@@ -136,11 +151,16 @@ export function secretErrors(value, privacy) {
         'LONG_TOKEN_RE',
       ])
         if (test(key, item)) errors.push('output contains a secret signal')
-      if (
-        privacy === 'redacted' &&
-        (test('ABS_UNIX_PATH_RE', item) || test('ABS_WINDOWS_PATH_RE', item))
-      )
-        errors.push('redacted output contains an absolute path')
+      if (test('URL_USERINFO_RE', item) || test('URL_QUERY_RE', item))
+        errors.push('output contains a URL with credentials or query')
+      if (privacy === 'redacted') {
+        if (test('EMAIL_RE', item))
+          errors.push('redacted output contains an email address')
+        if (test('UUID_RE', item))
+          errors.push('redacted output contains an identifier')
+        if (test('ABS_UNIX_PATH_RE', item) || test('ABS_WINDOWS_PATH_RE', item))
+          errors.push('redacted output contains an absolute path')
+      }
     } else if (Array.isArray(item)) item.forEach(visit)
     else if (object(item))
       for (const [k, v] of Object.entries(item)) {
@@ -411,12 +431,60 @@ const cwdLabel = (cwd) => {
 }
 // Selection continues to use the raw immutable header cwd and existing path keys.
 const projectLabel = cwdLabel
+// Stable anonymous project identity from the lexical path key. Case folding
+// follows the path's own form (drives fold, POSIX stays sensitive), never the
+// analyzing machine, and the hash never exposes the source path.
+export const projectIdOf = (cwd) => 'project-' + hash(pathKey(String(cwd))).slice(0, 12)
 const timestamp = (value) =>
   typeof value === 'number' &&
   Number.isFinite(value) &&
   Math.abs(value) < 8.64e15
     ? value
     : null
+// Report-timezone calendar projection. The zone is captured or validated once
+// at the entry and travels explicitly with the options — the Worker runs with
+// an empty environment, so no process/locale setting can drift the projection.
+const WEEKDAY_BY_NAME = {Sun: 6, Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5}
+const zoneFormatters = new Map()
+// Canonical fixed-offset form for this runtime: Python accepts UTC+HH:MM and
+// Intl accepts +HH:MM; both names denote the same zone and are exchanged here
+// so the two runtimes share one wire format.
+const intlZone = (zone) => (/^UTC([+-]\d{2}:\d{2})$/.test(zone) ? zone.slice(3) : zone)
+export function validateReportTimezone(zone) {
+  const name = String(zone)
+  new Intl.DateTimeFormat('en-US', { timeZone: intlZone(name) }) // throws RangeError when unsupported
+  return name
+}
+export function hostReportTimezone() {
+  return validateReportTimezone(
+    new Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+  )
+}
+export function calendarInZone(epochMs, zone) {
+  let formatter = zoneFormatters.get(zone)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: intlZone(zone),
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+    zoneFormatters.set(zone, formatter)
+  }
+  const parts = {}
+  for (const part of formatter.formatToParts(new Date(epochMs)))
+    parts[part.type] = part.value
+  const hour = parts.hour === '24' ? 0 : Number(parts.hour)
+  const date = `${parts.year}-${parts.month}-${parts.day}`
+  // Weekday from the zone's own calendar date, not the host clock.
+  const [y, m, d] = date.split('-').map(Number)
+  const weekdayName = new Date(Date.UTC(y, m - 1, d))
+    .toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })
+  return { date, hour, weekday: WEEKDAY_BY_NAME[weekdayName] }
+}
 const pathKey = (value) => {
   const path = String(value).replace(/\\/g, '/')
   // Preserve absolute roots; trimming C:/ first would lose drive identity.
@@ -508,13 +576,14 @@ export function parseSnapshot(snapshot, opts, coverage) {
   const cwd = String(h.cwd || 'unknown'),
     rawId = String(h.id || 'unknown')
   if (opts.project) {
-    const normalize = (value) => {
-      const path = String(value).replace(/\\/g, '/').replace(/\/+$/, '')
-      return /^[A-Za-z]:\//.test(path) ? path.toLowerCase() : path
-    }
-    const actual = normalize(cwd),
-      requested = normalize(opts.project)
-    if (actual !== requested && !actual.startsWith(requested + '/')) {
+    // opts.project is the canonical key from the entry; the header cwd is
+    // absolute, so the same shared key function decides membership here.
+    const actual = normalizeProjectKey(cwd),
+      requested = String(opts.project)
+    if (
+      actual !== requested &&
+      !actual.startsWith(requested.endsWith('/') ? requested : requested + '/')
+    ) {
       coverage.skipped_project++
       return null
     }
@@ -529,6 +598,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
     start: time,
     end: time,
     project: projectLabel(cwd),
+    projectId: projectIdOf(cwd),
     role: h.origin === 'subagent' ? 'task_subagent' : 'root_task',
     platform: /^[A-Za-z]:\\/.test(cwd)
       ? 'windows'
@@ -1228,7 +1298,9 @@ export function parseSnapshot(snapshot, opts, coverage) {
   return s
 }
 function publicSession(s, opts) {
-  const date = new Date(s.time),
+  // date/hour/weekday derive from the report timezone; the raw timestamp
+  // remains the UTC instant on the row.
+  const calendar = calendarInZone(s.time, opts.report_timezone),
     source =
       opts.privacy === 'metrics'
         ? 'omitted'
@@ -1269,9 +1341,11 @@ function publicSession(s, opts) {
     platform: s.platform,
     session_header_records: s.session_header_records,
     project: s.project,
-    date: date.toISOString().slice(0, 10),
-    start_hour_local: date.getHours(),
-    weekday: (date.getDay() + 6) % 7,
+    project_id: s.projectId,
+    date: calendar.date,
+    start_hour_local: calendar.hour,
+    weekday: calendar.weekday,
+    timezone: opts.report_timezone,
     observed_minutes: round((s.end - s.start) / 60000, 1),
     status: s.status,
     title:
@@ -1339,7 +1413,7 @@ function publicSession(s, opts) {
     },
     subagent: publicDescriptor(s.subagent_descriptor, opts),
     llm_retry_chains: s.llm_retry_chains.size,
-    injected_source_kinds: dict(s.injected_source_kinds),
+    injected_source_kinds: publicCounts(s.injected_source_kinds, opts, 'source'),
     median_prompt_chars: Math.trunc(median(s.prompt_lengths)),
     failure_causes: dict(s.failure_causes),
     failure_rule_version: '5.2.0-native',
@@ -1401,6 +1475,7 @@ export function buildReport(snapshots, input = {}) {
     analysis_depth: 'evidence',
     locale: 'zh-CN',
     now: Date.now(),
+    report_timezone: hostReportTimezone(),
     ...input,
   }
   const coverage = {
@@ -1431,8 +1506,21 @@ export function buildReport(snapshots, input = {}) {
   }
   const sessions = snapshots
       .map((s) => parseSnapshot(s, opts, coverage))
-      .filter(Boolean),
-    rows = sessions.map((s) => publicSession(s, opts))
+      .filter(Boolean)
+  // Display labels are basename-derived and can collide across distinct
+  // projects; identity (projectId) is separate and drives every grouping.
+  // Colliding labels get a short, stable, anonymous suffix.
+  const projectLabels = new Map()
+  for (const s of sessions)
+    if (!projectLabels.has(s.projectId)) projectLabels.set(s.projectId, s.project)
+  const labelCounts = new Map()
+  for (const label of projectLabels.values())
+    labelCounts.set(label, (labelCounts.get(label) || 0) + 1)
+  for (const [id, label] of projectLabels)
+    if (labelCounts.get(label) > 1)
+      projectLabels.set(id, `${label}-${hash(id).slice(0, 8)}`)
+  for (const s of sessions) s.project = projectLabels.get(s.projectId)
+  const rows = sessions.map((s) => publicSession(s, opts))
   coverage.sessions_analyzed = sessions.length
   const totals = {
     ...Object.fromEntries(counters.map((k) => [k, sum(sessions, k)])),
@@ -1499,9 +1587,10 @@ export function buildReport(snapshots, input = {}) {
   }
   totals.llm_retry_chains = new Set(sessions.flatMap((s) => [...s.llm_retry_chains])).size
   totals.plugin_records = {...coverage.plugin_records}
-  const projects = [...groupBy(sessions, 'project')]
-    .map(([project, ss]) => ({
-      project,
+  const projects = [...groupBy(sessions, 'projectId')]
+    .map(([projectId, ss]) => ({
+      project: ss[0].project,
+      project_id: projectId,
       sessions: ss.length,
       turns: ss.reduce((n, s) => n + s.turn_ids.size, 0),
       active_hours: round(sum(ss, 'duration_ms') / 3600000),
@@ -1515,9 +1604,15 @@ export function buildReport(snapshots, input = {}) {
     .sort((a, b) => b.sessions - a.sessions || b.tool_calls - a.tool_calls)
   const families = [...groupBy(sessions, 'family')]
     .map(([id, ss]) => {
+      // Order by the projected id that is actually emitted, so cached and
+      // fresh parses (and both runtimes) share one total order.
       const sorted = [...ss].sort(
-          (a, b) => a.time - b.time || a.rawId.localeCompare(b.rawId),
-        ),
+        (a, b) =>
+          a.time - b.time ||
+          identifier(a.rawId, opts, 'rollout').localeCompare(
+            identifier(b.rawId, opts, 'rollout'),
+          ),
+      ),
         root = sorted.find((s) => s.role === 'root_task') || sorted[0],
         row = rows[sessions.indexOf(root)],
         latencies = sorted.flatMap((s) => s.assistant_latencies),
@@ -1527,6 +1622,7 @@ export function buildReport(snapshots, input = {}) {
         root_rollout_id: root.role === 'root_task' ? row.rollout_id : null,
         date: row.date,
         project: row.project,
+        project_id: root.projectId,
         platform: row.platform,
         title: row.title,
         work_area: root.work_area,
@@ -1820,17 +1916,18 @@ export function buildReport(snapshots, input = {}) {
       !e.text ||
       seen.has(e.text) ||
       excerpts.length >= 80 ||
-      (perProject.get(s.project) || 0) >= 20 ||
+      (perProject.get(s.projectId) || 0) >= 20 ||
       (perSession.get(s) || 0) >= 2
     )
       return
     seen.add(e.text)
-    count(perProject, s.project)
+    count(perProject, s.projectId)
     count(perSession, s)
     excerpts.push({
       ...e,
       project: s.project,
-      date: new Date(s.time).toISOString().slice(0, 10),
+      project_id: s.projectId,
+      date: calendarInZone(s.time, opts.report_timezone).date,
       status: s.status,
       work_area: s.work_area,
       role: s.role,
@@ -1912,7 +2009,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.6.0-v4-dsh021rc2.4',
+    analyzer_version: '0.6.1-v4-dsh021rc2.5',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),
@@ -1931,6 +2028,7 @@ export function buildReport(snapshots, input = {}) {
           : opts.analysis_privacy || opts.privacy,
       analysis_depth: opts.analysis_depth,
       locale: opts.locale,
+      report_timezone: opts.report_timezone,
       max_excerpts: opts.privacy === 'metrics' ? 0 : 80,
     },
     coverage,
@@ -2057,7 +2155,7 @@ function buildRecommendations(t, m, c, projects, en) {
     )
   return rows
 }
-export const analysisInternals = { identifier, canonical, regex, groupBy }
+export const analysisInternals = { identifier, canonical, regex, groupBy, truncate }
 // Canonical selection-scope key for a project path: forward slashes, no
 // trailing separator, case-folded for Windows drives (and on Windows itself),
 // so a recorded run scope and a later resume request compare equal.

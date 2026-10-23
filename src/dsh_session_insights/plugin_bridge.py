@@ -68,16 +68,21 @@ def config_from_options(options: dict[str, Any]) -> analyzer.AnalysisConfig:
         analysis_depth=str(options.get("analysis_depth", "evidence")),
         deterministic_cache=False,
         locale=str(options.get("locale", "zh-CN")),
+        report_timezone=analyzer.resolve_report_timezone(
+            str(options["report_timezone"]) if options.get("report_timezone") else None
+        ),
     )
 
 
-def render_report(report: dict[str, Any], output: Path, *, locale: str) -> dict[str, Any]:
+def render_report(report: dict[str, Any], output: Path, *, locale: str, sessions_root: Path) -> dict[str, Any]:
     report.setdefault("scope", {})["locale"] = locale
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(analyzer.render_html(report), encoding="utf-8")
-    companion = output.with_suffix(".json")
-    companion.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return {"report": str(output), "data": str(companion), "sessions": report["totals"]["sessions"]}
+    from .output_safety import atomic_write_text, html_companion_path, prepare_output_targets
+
+    companion = html_companion_path(output)
+    checked = prepare_output_targets([output, companion], sessions_root)
+    atomic_write_text(checked[0], analyzer.render_html(report))
+    atomic_write_text(checked[1], json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    return {"report": str(checked[0]), "data": str(checked[1]), "sessions": report["totals"]["sessions"]}
 
 
 def prepare_semantic(options: dict[str, Any], snapshots: list[dict[str, Any]]) -> dict[str, Any]:
@@ -86,7 +91,7 @@ def prepare_semantic(options: dict[str, Any], snapshots: list[dict[str, Any]]) -
     # `now` must travel with the request: without it the semantic window falls
     # back to wall-clock time and selects a different session set than the
     # deterministic report path, which honours the caller's `now`.
-    for name in ("days", "since", "until", "now", "project", "privacy", "analysis_privacy", "analysis_depth", "locale"):
+    for name in ("days", "since", "until", "now", "project", "privacy", "analysis_privacy", "analysis_depth", "locale", "report_timezone"):
         if options.get(name) is not None:
             argv.extend(["--" + name.replace("_", "-"), str(options[name])])
     parsed = semantic.make_parser().parse_args(argv)
@@ -112,7 +117,8 @@ def main() -> int:
             built = analyzer.build_report(config, session_snapshots=snapshots)
             assert isinstance(built, dict)
             output = Path(str(options["output"])).expanduser().resolve()
-            result = render_report(built, output, locale=str(options.get("locale", "zh-CN")))
+            sessions_root = analyzer.session_source_root(config) / "sessions"
+            result = render_report(built, output, locale=str(options.get("locale", "zh-CN")), sessions_root=sessions_root)
         elif operation == "prepare":
             result = prepare_semantic(options, snapshots)
         else:
