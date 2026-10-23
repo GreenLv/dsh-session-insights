@@ -17,7 +17,7 @@
 - `injected_source_kinds` 中的扩展 `source.kind` 遵循共享分类词汇表：已文档化的种类保持可读，扩展种类按隐私模式脱敏/伪名化，凭据在任何模式（含 local）都不落盘。
 - 模型输出校验覆盖完整输入脱敏契约（含加号的邮箱、URL userinfo/query、标识符、路径，值与对象键同查）；无效替换保留先前有效字节，未经 submit 路径放置的 aggregate 文件属于不可信输入，finalize 拒绝。
 - 头部可判定范围外的项目损坏日志在有界读取后直接跳过（不解析、不缓存、不阻断健康项目）；范围内损坏仍显式失败关闭，并附带隐私安全的会话定位符与行号。
-- 原生 run 删除必须经宿主 `ctx.approval` 接缝获得人工审批（`allowed-once`，仅作用于当次调用）；模型自填 `confirm=true` 不再能删除任何内容，无审批服务即失败关闭，直接键入命令 `session-insights --cleanup <run> --confirm` 是纯人工入口。
+- 原生 run 删除必须经宿主 `ctx.approval` 接缝获得人工审批（`allowed-once`，仅作用于当次调用）；模型自填 `confirm=true` 不再能删除任何内容，无审批服务即失败关闭，直接键入 DSH 命令 `/session-insights --cleanup <run> --confirm` 是纯人工入口。
 
 ### 变更
 

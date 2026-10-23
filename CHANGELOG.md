@@ -6,7 +6,7 @@ Public releases are listed newest first.
 
 ## 0.6.1
 
-Security and correctness patch for 0.6.0: closes the audited output-boundary, cache-minimization, privacy-projection, project-identity, timezone and aggregate-freshness defects (F1-F11), adds trusted human approval for run deletion, and adds dependency auditing to CI. Session format stays V4 with DSH `>=0.2.1-rc.2`; start a new analysis run after upgrading and delete old caches on purpose (see Migration).
+Security and correctness patch for 0.6.0: closes the audited output-boundary, cache-minimization, privacy-projection, project-identity, timezone and aggregate-freshness defects (F1-F11), adds trusted human approval for run deletion, and adds dependency auditing to CI. Session format stays V4 with DSH `>=0.2.1-rc.2`; start a new analysis run after upgrading; old caches are ignored automatically and deleting them is an optional, deliberate cleanup (see Migration).
 
 ### Security
 

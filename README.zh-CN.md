@@ -96,7 +96,7 @@ Bundle 需要 Node.js `^22.19.0 || >=24.0.0`，以及 DSH 的 `commands`、`tool
 
 ### 保留与清理
 
-报告和证据会保留到显式删除。`session_insights_cleanup` 以运行目录 `workdir` 调用时是只读预览（文件数与字节数）。删除需要宿主的人工审批：携带 `confirm: true` 时工具会就这一个 run 向部署的审批服务发起一次请求，只有用户在提示中选择允许（`allowed-once`）才会真正删除——模型自行填写的参数永远不能授权删除，没有审批服务的宿主直接失败关闭。直接键入命令 `session-insights --cleanup <run>` 为预览、`--cleanup <run> --confirm` 为删除，是纯人工入口。清理会删除整个带标记的运行目录，包括报告，且不可撤销。未标记的旧目录和带链接的条目会被拒绝；其他运行、原始日志和可选 CLI 的共享缓存会保留。旧 CLI 缓存可用 `dsh-session-insights cache` 子命令预览，并仅在显式 `--delete` 时删除确认归属的缓存根。
+报告和证据会保留到显式删除。`session_insights_cleanup` 以运行目录 `workdir` 调用时是只读预览（文件数与字节数）。删除需要宿主的人工审批：携带 `confirm: true` 时工具会就这一个 run 向部署的审批服务发起一次请求，只有用户在提示中选择允许（`allowed-once`）才会真正删除——模型自行填写的参数永远不能授权删除，没有审批服务的宿主直接失败关闭。直接键入 DSH 命令 `/session-insights --cleanup <run>` 为预览、`/session-insights --cleanup <run> --confirm` 为删除，是纯人工入口。清理会删除整个带标记的运行目录，包括报告，且不可撤销。未标记的旧目录和带链接的条目会被拒绝；其他运行、原始日志和可选 CLI 的共享缓存会保留。旧 CLI 缓存可用 `dsh-session-insights cache` 子命令预览，并仅在显式 `--delete` 时删除确认归属的缓存根。
 
 可选 CLI 仍需要 Python 3.11+；读取压缩日志需要 `zstandard>=0.23,<1`，`jsonschema>=4.23,<5` 仅供开发测试使用。其 bootstrap 安装器会调用 pip，并管理独立的 skill/runtime 目录。具体边界及商城策略限制见[安全策略](SECURITY.md)。
 
@@ -117,7 +117,7 @@ Bundle 需要 Node.js `^22.19.0 || >=24.0.0`，以及 DSH 的 `commands`、`tool
 ## 原生命令
 
 ```text
-/session-insights [--days N] [--project PATH] [--privacy MODE]
+/session-insights [--days N] [--project PATH] [--privacy MODE] [--report-timezone ZONE]
   [--analysis-privacy MODE] [--analysis-depth LEVEL]
   [--locale zh-CN|en] [--deterministic] [--resume] [--workdir RUN] [--no-open]
 ```

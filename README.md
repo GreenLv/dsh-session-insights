@@ -41,7 +41,7 @@ The `0.6.1` Bundle requires DSH `>=0.2.1-rc.2` and Node.js `^22.19.0 || >=24.0.0
 
 **DSH compatibility:** The package requires `>=0.2.1-rc.2`; DSH `0.2.0-rc.2` and `0.2.1-rc.1` are below the supported floor and later releases are admitted by the declared range, not by static version tables. Contract and service tests cover synthetic V4 input. Source and synthetic checks are preserved in the [0.6.0 development record](docs/acceptance/v0.6.0-rc2.1-candidate.md). Native, model and UI results are recorded separately in the acceptance receipts attached to each exact release artifact; range admission does not establish testing of future hosts. See [DSH compatibility](#dsh-compatibility).
 
-The registry command below requires `0.6.0` to be published. When testing a candidate, install its reviewed tarball or source revision instead. Check the version on [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) before using the registry command:
+The registry command below requires `0.6.1` to be published. When testing a candidate, install its reviewed tarball or source revision instead. Check the version on [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) before using the registry command:
 
 ```bash
 dsh plugin --profile web add dsh-session-insights@0.6.1
@@ -96,7 +96,7 @@ A run accepts at most 2,000 selected snapshots and 64 MiB of serialized snapshot
 
 ### Retention and cleanup
 
-Reports and evidence remain on disk until explicitly deleted. `session_insights_cleanup` with a run's `workdir` is a read-only preview of its files and bytes. Deletion needs the human approval of the host: with `confirm: true` the tool asks the deployment's approval service once for exactly that run, and only an `allowed-once` grant (answering the prompt the user sees) deletes anything — a model-supplied flag alone never authorizes deletion, and hosts without an approval service fail closed. The typed command `session-insights --cleanup <run>` previews and `--cleanup <run> --confirm` deletes, acting as the direct human entry. Cleanup removes the whole marked run, including its report, and cannot be undone. It refuses unmarked legacy directories and linked entries. Other runs, source logs and the optional CLI's shared caches are preserved. Review old CLI artifacts separately before removing them; the `dsh-session-insights cache` subcommand previews and (with `--delete`) removes only confirmed cache roots.
+Reports and evidence remain on disk until explicitly deleted. `session_insights_cleanup` with a run's `workdir` is a read-only preview of its files and bytes. Deletion needs the human approval of the host: with `confirm: true` the tool asks the deployment's approval service once for exactly that run, and only an `allowed-once` grant (answering the prompt the user sees) deletes anything — a model-supplied flag alone never authorizes deletion, and hosts without an approval service fail closed. Typing the DSH command `/session-insights --cleanup <run>` previews and `/session-insights --cleanup <run> --confirm` deletes, acting as the direct human entry. Cleanup removes the whole marked run, including its report, and cannot be undone. It refuses unmarked legacy directories and linked entries. Other runs, source logs and the optional CLI's shared caches are preserved. Review old CLI artifacts separately before removing them; the `dsh-session-insights cache` subcommand previews and (with `--delete`) removes only confirmed cache roots.
 
 The optional CLI still requires Python 3.11+ and `zstandard>=0.23,<1` for compressed logs; `jsonschema>=4.23,<5` is used only by development tests. Its bootstrap installer runs pip and manages its own skill/runtime directories. See [Security Policy](SECURITY.md) for the separate boundaries and STORE policy limits.
 
@@ -117,14 +117,14 @@ Reports are refused inside `$DSH_HOME/sessions`, so generated files cannot be mi
 ## Native command
 
 ```text
-/session-insights [--days N] [--project PATH] [--privacy MODE]
+/session-insights [--days N] [--project PATH] [--privacy MODE] [--report-timezone ZONE]
   [--analysis-privacy MODE] [--analysis-depth LEVEL]
   [--locale zh-CN|en] [--deterministic] [--resume] [--workdir RUN] [--no-open]
 ```
 
 Project filters use absolute host paths. A relative path is refused with an actionable error — the plugin entry cannot reliably know the host's invocation directory and refuses to guess. On Windows, pass a native path such as `/session-insights --project C:/path/to/project`; a POSIX-rooted path such as `/path/to/project` is rejected instead of silently matching no sessions. The optional Python CLI resolves a relative `--project` against the working directory you invoked it from.
 
-Date, hour and weekday fields share one report timezone, captured from the host at request time or set explicitly with `--report-timezone` (an IANA name like `Asia/Shanghai`, or a fixed offset like `UTC+08:00`). The zone travels with the request into analysis, is recorded in the report and the run manifest, and raw timestamps remain UTC instants.
+Date, hour and weekday fields share one report timezone, captured from the host at request time or set explicitly with `--report-timezone` (an IANA name like `Asia/Shanghai`, or a fixed offset like `UTC+08:00`). The zone travels with the request into analysis, is recorded in the report and the run manifest, and raw timestamps remain UTC instants. On Windows, a Python runtime without IANA data reports an actionable tzdata installation error instead of silently falling back to UTC.
 
 The semantic workflow is the default. Invalid model output gets one repair opportunity and can then fall back explicitly to the deterministic report. The current session is counted for coverage but excluded from recommendations as meta-analysis.
 
