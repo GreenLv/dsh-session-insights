@@ -75,6 +75,10 @@
             "zh-CN",
             "en"
           ]
+        },
+        "report_timezone": {
+          "type": "string",
+          "description": "IANA zone name or explicit UTC offset (for example Asia/Shanghai or UTC+08:00) used for every date, hour and weekday projection and every date filter in this report; raw timestamps remain UTC instants."
         }
       }
     },

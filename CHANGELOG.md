@@ -4,6 +4,36 @@
 
 Public releases are listed newest first.
 
+## 0.6.1
+
+Security and correctness patch for 0.6.0: closes the audited output-boundary, cache-minimization, privacy-projection, project-identity, timezone and aggregate-freshness defects (F1-F11), adds trusted human approval for run deletion, and adds dependency auditing to CI. Session format stays V4 with DSH `>=0.2.1-rc.2`; start a new analysis run after upgrading and delete old caches on purpose (see Migration).
+
+### Security
+
+- Derived CLI/bridge outputs (main file, HTML companion JSON, atomic temporaries) are boundary-checked before the first byte is written: targets inside the sessions source tree, pre-existing symlinks, hard links, non-regular files and NTFS alternate-data-stream names are refused with an actionable error, the previous report bytes stay untouched, and main/companion paths can never overwrite each other (`report --format html --output audit.json` writes `audit.data.json`).
+- The deterministic parse cache is minimized and scope-gated: a bounded header read decides window/project scope first, so out-of-scope logs are never parsed and never cached; persisted entries carry only a whitelisted, pre-projected session projection (no raw cwd, job registry, team roster, provider metadata or topic text), new cache directories/files are `0700`/`0600` regardless of umask, and the cache schema moves to version 9 (version-8 entries are ignored, never auto-imported or auto-deleted). A new `cache` CLI subcommand previews per-root file counts and sizes and deletes listed roots only with an explicit `--delete`.
+- Python local-mode text now removes URL userinfo (and query/fragment credentials) exactly like the Node runtime; broken URLs collapse to a placeholder instead of failing the report.
+- Aggregate model input is re-projected under the run's analysis privacy — every free string, including object keys in summary sections, so a local-privacy base report can no longer widen a redacted analysis input.
+- Extension `source.kind` values in `injected_source_kinds` follow the shared category vocabulary: documented kinds stay readable, extensions are sanitized/pseudonymized per privacy mode, and credentials never persist even locally.
+- Model-output validation covers the full input-sanitize contract (emails with plus tags, URL userinfo/query, identifiers, paths — values and object keys); invalid replacements keep the previous valid bytes, and an aggregate file placed outside the accepted submit path is untrusted input that finalize refuses.
+- Corrupt logs in provable out-of-scope projects are skipped after a bounded header read (never parsed, cached or blocking healthy projects); in-scope corruption still fails closed, now with a privacy-safe session locator and line number.
+- Native run deletion requires a human approval through the host `ctx.approval` seam (`allowed-once` scoped to that exact call); a model-supplied `confirm=true` alone deletes nothing, no approval service means fail-closed, and the typed command `session-insights --cleanup <run> --confirm` is the direct human entry.
+
+### Changed
+
+- Project identity and display labels are separated: every session, task family, project summary, excerpt and dashboard filter/export carries a stable anonymous `project_id` (hash of the lexical path key, case rules follow the path's own platform), and basename collisions get a short stable suffix instead of merging two projects.
+- One report timezone now derives date, hour and weekday together: captured once per request (host local, or explicit `--report-timezone`/IANA name/`UTC+HH:MM`), passed explicitly to the analysis Worker, recorded in the report scope and run manifests so a later resume cannot drift; Windows without IANA data gets an actionable tzdata error instead of a silent UTC fallback.
+- Semantic aggregates are content-bound: an accepted aggregate records the digest of the ordered validated facet set plus the contract versions, finalize recomputes it from disk (mtime changes cannot bypass it), stale or unbound aggregates refuse to complete, idempotent resubmission stays valid, and recovery is a rebuild-and-resubmit or an explicit degraded fallback. The semantic schema moves to 1.2.0 in both runtimes; prior runs are refused with "start a new run".
+- Project paths normalize once at the entry: the Python CLI resolves a relative `--project` against the invoking working directory, and the native entry refuses relative paths with an actionable absolute-path message (no process-cwd guessing, no silent empty reports); selection, worker matching, cache scope and resume records share the canonical key.
+- `analyzer_semantics` is now `v4-dsh021rc2.5` (identity version bump); the analyzer version string is `0.6.1-v4-dsh021rc2.5`.
+- CI pins every GitHub Actions use to a verified full commit SHA and adds a `dependency-security` job (`npm audit` for prod and full trees, `pip-audit` over the declared dependency set); scan failures fail the job, empty/unreachable results are never a pass.
+
+### Migration
+
+- Old deterministic (version 8) and semantic (1.1.0) caches are ignored automatically — runs reparse from source. Deleting the leftovers is a deliberate user action: `dsh-session-insights cache --dsh-home <home>` previews roots, `--delete` removes only confirmed cache roots and refuses links or unowned files. Historic copies, backups and model-side retention are unaffected by this deletion and are not claimed as cleaned.
+- Existing 0.6.0 HTML/JSON reports remain openable; they lack `project_id` and report-timezone fields, so pre-upgrade reports keep their historical (merged-basename, mixed-timezone) projections and are not retroactively re-differentiated.
+- Native 0.6.0 runs are not resumable by the 0.6.1 semantic contract; start a new run. Deleting old runs now goes through approval-gated cleanup.
+
 ## 0.6.0
 
 Adapt Session Insights to DSH 0.2.1-rc.2. The floor moves to `>=0.2.1-rc.2`; 0.2.0-rc.2 and 0.2.1-rc.1 are refused. Session format remains V4, but the host adds required event vocabulary and new completion/delegation semantics, so start a new analysis run after upgrading.

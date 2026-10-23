@@ -37,18 +37,18 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 ## 安装 Bundle
 
-`0.6.0` Bundle 需要 DSH `>=0.2.1-rc.2` 和 Node.js `^22.19.0 || >=24.0.0`，无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。
+`0.6.1` Bundle 需要 DSH `>=0.2.1-rc.2` 和 Node.js `^22.19.0 || >=24.0.0`，无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。
 
 **DSH 兼容性：** 软件包要求 `>=0.2.1-rc.2`；DSH `0.2.0-rc.2` 与 `0.2.1-rc.1` 低于支持下限，后续版本按声明的范围准入，不依赖静态版本表。契约与服务测试覆盖合成 V4 输入；源码与合成检查保留在 [0.6.0 开发记录](docs/acceptance/v0.6.0-rc2.1-candidate.md)；原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录。范围准入不代表未来宿主已经过实测。详见 [DSH 兼容性](#dsh-兼容性)。
 
-下方 registry 命令需要 `0.6.0` 已发布。验收候选时，请安装已审查的 tgz 或源码版本；使用 registry 命令前，请先在 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) 核实版本：
+下方 registry 命令需要 `0.6.1` 已发布。验收候选时，请安装已审查的 tgz 或源码版本；使用 registry 命令前，请先在 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) 核实版本：
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.6.0
+dsh plugin --profile web add dsh-session-insights@0.6.1
 dsh web
 ```
 
-从源码安装时，请把 `REVIEWED_REF` 替换为发布后的 `v0.6.0`，或候选制品清单中记录的完整提交号。安装前先选择该版本；仅克隆仓库会检出默认分支，它可能还是其他版本：
+从源码安装时，请把 `REVIEWED_REF` 替换为发布后的 `v0.6.1`，或候选制品清单中记录的完整提交号。安装前先选择该版本；仅克隆仓库会检出默认分支，它可能还是其他版本：
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
@@ -96,7 +96,7 @@ Bundle 需要 Node.js `^22.19.0 || >=24.0.0`，以及 DSH 的 `commands`、`tool
 
 ### 保留与清理
 
-报告和证据会保留到显式删除。先让 agent 用运行目录 `workdir` 调用 `session_insights_cleanup`，预览文件和字节数；再明确要求删除该运行，使用 `confirm: true` 执行。清理会删除整个带标记的运行目录，包括报告，且不可撤销。未标记的旧目录和带链接的条目会被拒绝；其他运行、原始日志和可选 CLI 的共享缓存会保留。旧 CLI 产物请单独检查后处理。
+报告和证据会保留到显式删除。`session_insights_cleanup` 以运行目录 `workdir` 调用时是只读预览（文件数与字节数）。删除需要宿主的人工审批：携带 `confirm: true` 时工具会就这一个 run 向部署的审批服务发起一次请求，只有用户在提示中选择允许（`allowed-once`）才会真正删除——模型自行填写的参数永远不能授权删除，没有审批服务的宿主直接失败关闭。直接键入命令 `session-insights --cleanup <run>` 为预览、`--cleanup <run> --confirm` 为删除，是纯人工入口。清理会删除整个带标记的运行目录，包括报告，且不可撤销。未标记的旧目录和带链接的条目会被拒绝；其他运行、原始日志和可选 CLI 的共享缓存会保留。旧 CLI 缓存可用 `dsh-session-insights cache` 子命令预览，并仅在显式 `--delete` 时删除确认归属的缓存根。
 
 可选 CLI 仍需要 Python 3.11+；读取压缩日志需要 `zstandard>=0.23,<1`，`jsonschema>=4.23,<5` 仅供开发测试使用。其 bootstrap 安装器会调用 pip，并管理独立的 skill/runtime 目录。具体边界及商城策略限制见[安全策略](SECURITY.md)。
 
@@ -122,7 +122,9 @@ Bundle 需要 Node.js `^22.19.0 || >=24.0.0`，以及 DSH 的 `commands`、`tool
   [--locale zh-CN|en] [--deterministic] [--resume] [--workdir RUN] [--no-open]
 ```
 
-项目过滤路径遵循宿主操作系统语法。在 Windows 上请使用 `/session-insights --project C:/path/to/project` 这样的原生路径；如果传入 `/path/to/project` 这类 POSIX 根路径，插件会明确报错，而不是静默匹配不到会话。
+项目过滤必须使用绝对路径。相对路径会被拒绝并给出可操作错误——插件入口无法可靠获知宿主的调用目录，因此拒绝猜测，也不会输出误导性的空报告。在 Windows 上请使用 `/session-insights --project C:/path/to/project` 这样的原生路径；如果传入 `/path/to/project` 这类 POSIX 根路径，插件会明确报错，而不是静默匹配不到会话。可选 Python CLI 会把相对 `--project` 按你调用命令时的工作目录解析一次。
+
+报告的 date、hour、weekday 共用一个报告时区：默认在请求入口捕获宿主本地时区，也可用 `--report-timezone` 显式指定（IANA 名称如 `Asia/Shanghai`，或固定偏移如 `UTC+08:00`）。时区随请求显式传入分析，并记录在报告 scope 与 run manifest 中，后续 resume 不会漂移；原始时间戳保持 UTC 瞬时值。Windows 上 Python 缺少 IANA 数据时会明确报错并提示安装 `tzdata`，不会静默回退 UTC。
 
 语义复盘是默认流程。模型输出无效时最多修复一次，仍失败则明确降级并保留确定性报告。当前复盘会话计入覆盖范围，但标记为元分析，不进入建议生成。
 
