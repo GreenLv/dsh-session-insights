@@ -64,14 +64,19 @@ jobs:
           python scripts/audit_python_deps.py
 
   dsh-contract:
+    # rc.3 is the primary acceptance host; rc.2 keeps compatibility coverage.
+    # Every matrix entry names its real runtime; each result records which
+    # runtime actually ran.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-latest, node: '22.19.0'}
-          - {os: macos-latest, node: '22.19.0'}
-          - {os: windows-latest, node: '22.19.0'}
-          - {os: ubuntu-latest, node: '24.8.0'}
+          - {os: ubuntu-latest, node: '22.19.0', dsh: '0.2.1-rc.3', runtime: tests/dsh-runtime-rc3, primary: true}
+          - {os: macos-latest, node: '22.19.0', dsh: '0.2.1-rc.3', runtime: tests/dsh-runtime-rc3, primary: true}
+          - {os: windows-latest, node: '22.19.0', dsh: '0.2.1-rc.3', runtime: tests/dsh-runtime-rc3, primary: true}
+          - {os: ubuntu-latest, node: '24.8.0', dsh: '0.2.1-rc.3', runtime: tests/dsh-runtime-rc3, primary: true}
+          - {os: ubuntu-latest, node: '22.19.0', dsh: '0.2.1-rc.2', runtime: tests/dsh-runtime, primary: false}
+          - {os: windows-latest, node: '22.19.0', dsh: '0.2.1-rc.2', runtime: tests/dsh-runtime, primary: false}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -79,11 +84,15 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm ci --ignore-scripts
-      - run: npm ci --prefix tests/dsh-runtime --ignore-scripts
-      - run: node scripts/verify_session_contract.mjs --fixture --runtime tests/dsh-runtime --expected-dsh-version 0.2.1-rc.2 --required
-      - run: node scripts/dsh-repair-fixtures.mjs tests/dsh-runtime --check
-      - run: node scripts/dsh-contract-tests.mjs tests/dsh-runtime
-      - run: node scripts/dsh-services.mjs tests/dsh-runtime
+      - run: npm ci --prefix ${{ matrix.runtime }} --ignore-scripts
+      - name: Install the matching full host tree
+        run: npm ci --prefix ${{ matrix.dsh == '0.2.1-rc.3' && 'tests/dsh-host-rc3' || 'tests/dsh-host' }} --ignore-scripts
+      - name: Verify the runtime really is the claimed DSH version
+        run: node scripts/verify_dsh_admission.mjs ${{ matrix.dsh == '0.2.1-rc.3' && 'tests/dsh-host-rc3' || 'tests/dsh-host' }} ${{ matrix.dsh }}
+      - run: node scripts/verify_session_contract.mjs --fixture --runtime ${{ matrix.runtime }} --expected-dsh-version ${{ matrix.dsh }} --required
+      - run: node scripts/dsh-repair-fixtures.mjs ${{ matrix.runtime }} --check
+      - run: node scripts/dsh-contract-tests.mjs ${{ matrix.runtime }}
+      - run: node scripts/dsh-services.mjs ${{ matrix.runtime }}
       - run: npm test
       - name: Freeze the candidate artifact
         if: matrix.os == 'ubuntu-latest' && matrix.node == '22.19.0' && github.event_name == 'push' && github.ref != 'refs/heads/main'

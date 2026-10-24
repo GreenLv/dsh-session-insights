@@ -1,5 +1,11 @@
 // Identity helpers for release tooling. No credentials or local paths are
 // included in returned inventories.
+//
+// Host target selection lives in HOST_TARGETS: every acceptance tool, CI
+// matrix entry and receipt derives its expected host version from here and
+// verifies the actually resolved package/CLI identity against it at runtime —
+// the expected value is never re-declared per script and never taken from the
+// artifact under test.
 import {createHash} from 'node:crypto'
 import {createRequire} from 'node:module'
 import {readFile, readdir, realpath} from 'node:fs/promises'
@@ -8,7 +14,18 @@ import {execFile} from 'node:child_process'
 import {promisify} from 'node:util'
 export const run = promisify(execFile)
 export const digest = value => createHash('sha256').update(value).digest('hex')
-export const TARGET = '0.2.1-rc.2'
+
+// The single map of acceptance host targets. `primary` is the release
+// acceptance host; `compatibility` hosts keep their source/contract coverage.
+export const HOST_TARGETS = Object.freeze({
+  primary: '0.2.1-rc.3',
+  compatibility: Object.freeze(['0.2.1-rc.2']),
+})
+// Back-compat export for tools not yet parameterized (tests, one-off checks):
+// the primary acceptance target.
+export const TARGET = HOST_TARGETS.primary
+export const MINIMUM_DSH_RANGE = '>=0.2.1-rc.2'
+export const PRODUCT_VERSION = '0.6.1'
 
 export async function fileManifest(root) {
   const files = []
@@ -25,7 +42,11 @@ export async function fileManifest(root) {
   return files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
 }
 
-export async function inspectRuntime(root) {
+// Walk the runtime's actual DSH/Cordis closure and assert every member's
+// published identity equals `expectedVersion`. The expected version is an
+// argument, not a constant: the same helper verifies the rc.3 primary runtime
+// and the rc.2 compatibility runtime without reordering anything.
+export async function inspectRuntime(root, expectedVersion = TARGET) {
   const anchor = join(resolve(root), 'package.json')
   const manifest = JSON.parse(await readFile(anchor, 'utf8'))
   const identities = [], seen = new Set()
@@ -46,7 +67,8 @@ export async function inspectRuntime(root) {
     }
     if (seen.has(packagePath)) return
     seen.add(packagePath)
-    if ((name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-')) && metadata.version !== TARGET) throw new Error('mixed DSH runtime closure')
+    if ((name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-')) && metadata.version !== expectedVersion)
+      throw new Error(`mixed DSH runtime closure: ${name}@${metadata.version} at ${packagePath} (expected ${expectedVersion})`)
     if (name === '@deepseek-ai/cordis' && metadata.version !== '4.0.5') throw new Error('unexpected Cordis runtime')
     identities.push({name, version: metadata.version, files: await fileManifest(dir)})
     for (const dependency of Object.keys({...metadata.dependencies, ...metadata.peerDependencies})) {
@@ -65,6 +87,22 @@ export async function inspectRuntime(root) {
   for (const name of roots) await visit(name, anchor)
   identities.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
   return {identities, sha256: digest(JSON.stringify(identities))}
+}
+
+// Check the runtime against its own declared target: read the version from the
+// runtime's package.json dependencies and verify the closure matches it. Used
+// by CI to prove each matrix entry really runs the version it claims.
+export async function inspectRuntimeSelfConsistent(root) {
+  const anchor = join(resolve(root), 'package.json')
+  const manifest = JSON.parse(await readFile(anchor, 'utf8'))
+  const declared = new Set(
+    Object.values(manifest.dependencies || {})
+      .filter(v => v.startsWith('@deepseek-ai/') || /^\d/.test(v)),
+  )
+  if (declared.size !== 1) throw new Error(`runtime root declares mixed DSH versions: ${[...declared].join(', ')}`)
+  const expected = [...declared][0]
+  const closure = await inspectRuntime(root, expected)
+  return {...closure, expected}
 }
 
 export async function npm(args, options = {}) {

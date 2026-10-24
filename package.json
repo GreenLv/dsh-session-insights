@@ -15,6 +15,7 @@
     "src/dsh_session_insights/analyzer.py",
     "src/dsh_session_insights/cli.py",
     "src/dsh_session_insights/plugin_bridge.py",
+    "src/dsh_session_insights/output_safety.py",
     "src/dsh_session_insights/semantic.py",
     "src/dsh_session_insights/assets/__init__.py",
     "src/dsh_session_insights/assets/dashboard.html",

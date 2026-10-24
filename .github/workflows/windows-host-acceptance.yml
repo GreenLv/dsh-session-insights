@@ -16,6 +16,11 @@ on:
         options:
           - pack
           - windows-accept
+      dsh_version:
+        description: 'Official DSH host version to install for acceptance'
+        required: false
+        default: '0.2.1-rc.3'
+        type: string
       commit:
         description: 'Exact candidate commit (full SHA) to check out in both modes'
         required: true
@@ -114,7 +119,7 @@ jobs:
         run: |
           npm ci --prefix tests/dsh-runtime --ignore-scripts
           if ($LASTEXITCODE -ne 0) { throw 'Runtime install failed' }
-          npm install --prefix host-home @deepseek-ai/dsh@0.2.1-rc.2 --ignore-scripts
+          npm install --prefix host-home @deepseek-ai/dsh@${{ inputs.dsh_version || '0.2.1-rc.3' }} --ignore-scripts
           if ($LASTEXITCODE -ne 0) { throw 'Host install failed' }
           npm install --global pnpm@11.22.0 --ignore-scripts
           if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }

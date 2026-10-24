@@ -1,0 +1,7 @@
+{
+  "description": "Full official DSH host tree (rc.3) for admission verification (test-only; not a plugin dependency).",
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-app-boot": "0.2.1-rc.3"
+  }
+}

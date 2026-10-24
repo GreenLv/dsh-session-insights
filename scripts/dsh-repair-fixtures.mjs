@@ -8,8 +8,9 @@ const {sessionFormatCatalog}=await import(pathToFileURL(req.resolve('@deepseek-a
 const {interruptedTurnClosers,TOOL_OUTCOME_UNKNOWN,TOOL_NOT_STARTED}=await import(pathToFileURL(req.resolve('@deepseek-ai/dsh-session')))
 const {releasedV4SessionFormatCodec}=await import(pathToFileURL(req.resolve('@deepseek-ai/dsh-session-format-v3-to-v4')))
 const version=JSON.parse(readFileSync(req.resolve('@deepseek-ai/dsh-session-format-catalog/package.json'))).version
-const TARGET='0.2.1-rc.2'
-if(version!==TARGET)throw Error('exact target DSH '+TARGET+' required, got '+version)
+import { HOST_TARGETS } from './acceptance_identity.mjs'
+const TARGETS=[HOST_TARGETS.primary, ...HOST_TARGETS.compatibility]
+if(!TARGETS.includes(version))throw Error('runtime DSH '+version+' is not an acceptance target ('+TARGETS.join(', ')+')')
 const base=readFileSync(new URL('../tests/fixtures/synthetic-session.jsonl',import.meta.url),'utf8').trim().split('\n').map(JSON.parse)
 const target=new URL('../tests/fixtures/rc2-repairs/',import.meta.url)
 const cases=[]

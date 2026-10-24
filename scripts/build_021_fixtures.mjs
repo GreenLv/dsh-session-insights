@@ -13,7 +13,8 @@ import {readFile, writeFile, mkdir, rm} from 'node:fs/promises'
 import {zstdCompressSync} from 'node:zlib'
 import assert from 'node:assert/strict'
 
-const TARGET = '0.2.1-rc.2'
+import { HOST_TARGETS } from './acceptance_identity.mjs'
+const TARGETS = [HOST_TARGETS.primary, ...HOST_TARGETS.compatibility]
 if (!process.argv[2]) throw new Error('exact target runtime root required')
 const runtime = resolve(process.argv[2])
 const req = createRequire(join(runtime, 'package.json'))
@@ -23,7 +24,7 @@ const {SessionStore, appendPluginRecord} = await load('@deepseek-ai/dsh-session'
 const {sessionFormatCatalog} = await load('@deepseek-ai/dsh-session-format-catalog')
 const {releasedV4SessionFormatCodec} = await load('@deepseek-ai/dsh-session-format-v3-to-v4')
 const version = JSON.parse(await readFile(req.resolve('@deepseek-ai/dsh-session-format-catalog/package.json'), 'utf8')).version
-assert.equal(version, TARGET, `exact runtime ${TARGET} required, got ${version}`)
+assert.ok(TARGETS.includes(version), `runtime DSH ${version} is not an acceptance target (${TARGETS.join(', ')})`)
 
 const root = new URL('../tests/fixtures/rc21/', import.meta.url)
 const source = new URL('../tests/fixtures/synthetic-session.jsonl', import.meta.url)
@@ -499,5 +500,5 @@ if (process.argv.includes('--check')) {
     await writeFile(new URL(`${entry.name}/snapshot.json`, root), JSON.stringify(entry.snapshot, null, 2) + '\n')
   }
 }
-console.log(JSON.stringify({status: 'pass', target: TARGET, cases: cases.map((c) => c.name), events: cases.map((c) => c.snapshot.events.length)}))
+console.log(JSON.stringify({status: 'pass', target: version, cases: cases.map((c) => c.name), events: cases.map((c) => c.snapshot.events.length)}))
 await ctx.fiber.dispose()

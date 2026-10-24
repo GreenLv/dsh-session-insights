@@ -4,10 +4,11 @@ import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const TARGET = '0.2.1-rc.2'
+import { HOST_TARGETS } from './acceptance_identity.mjs'
+const TARGETS = [HOST_TARGETS.primary, ...HOST_TARGETS.compatibility]
 import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
-async function loadValidators(runtime) {
+async function loadValidators(runtime, runtimeVersion) {
   const require = createRequire(join(resolve(runtime), 'package.json'))
   const identities = []
   const modules = {}
@@ -15,7 +16,7 @@ async function loadValidators(runtime) {
     const entry = require.resolve(name)
     const packagePath = join(dirname(entry), '..', 'package.json')
     const metadata = JSON.parse(await readFile(packagePath, 'utf8'))
-    if (metadata.version !== TARGET) throw new Error(`${name}: expected ${TARGET}, got ${metadata.version}`)
+    if (!TARGETS.includes(metadata.version)) throw new Error(`${name}: version ${metadata.version} not an acceptance target (${TARGETS.join(', ')})`)
     identities.push({name, version: metadata.version, path: entry, sha256: createHash('sha256').update(await readFile(entry)).digest('hex')})
     modules[key] = await import(pathToFileURL(entry).href)
   }
@@ -27,7 +28,7 @@ async function loadValidators(runtime) {
     checked.add(entry)
     const packagePath = join(dirname(entry), '..', 'package.json')
     const metadata = JSON.parse(await readFile(packagePath, 'utf8'))
-    if (name.startsWith('@deepseek-ai/dsh-') && metadata.version !== TARGET) throw new Error(`${name}: mixed DSH version ${metadata.version}`)
+    if (name.startsWith('@deepseek-ai/dsh-') && metadata.version !== runtimeVersion) throw new Error(`${name}: actual ${metadata.version} != expected ${runtimeVersion}`)
     identities.push({name,version:metadata.version,path:entry,sha256:createHash('sha256').update(await readFile(entry)).digest('hex')})
     for (const dependency of Object.keys({...metadata.dependencies,...metadata.peerDependencies})) {
       if (dependency.startsWith('@deepseek-ai/dsh-')) {
@@ -171,7 +172,7 @@ async function collectTargets(args) {
 
 async function main() {
   const argv = process.argv.slice(2), paths = []
-  let runtime = process.env.DSH_RUNTIME, expected = TARGET
+  let runtime = process.env.DSH_RUNTIME, expected = null
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--runtime') runtime = argv[++i]
     else if (argv[i] === '--expected-dsh-version') expected = argv[++i]
@@ -180,8 +181,9 @@ async function main() {
     else if (argv[i].startsWith('--')) throw new Error(`unknown option ${argv[i]}`)
     else paths.push(argv[i])
   }
-  if (!runtime || expected !== TARGET) throw new Error('explicit target runtime and exact expected version required')
-  const validators = await loadValidators(runtime)
+  if (!runtime || !expected) throw new Error('explicit target runtime and exact expected version required')
+  if (!TARGETS.includes(expected)) throw new Error(`expected version ${expected} is not an acceptance target (${TARGETS.join(', ')})`)
+  const validators = await loadValidators(runtime, expected)
   const targets = await collectTargets(paths)
   if (!targets.length) throw new Error('no fixture files; validation cannot skip')
   const results = []
@@ -190,7 +192,7 @@ async function main() {
     catch (error) { results.push({path: target, errors: [error.message], events: 0}) }
   }
   const failed = results.some(r => r.errors.length || !r.events)
-  console.log(JSON.stringify({status: failed ? 'fail' : 'pass', targetVersion: TARGET, runtime, packages: validators.identities, checked: results.length, events: results.reduce((n,r) => n+r.events,0), results}, null, 2))
+  console.log(JSON.stringify({status: failed ? 'fail' : 'pass', targetVersion: expected, runtime, packages: validators.identities, checked: results.length, events: results.reduce((n,r) => n+r.events,0), results}, null, 2))
   return failed ? 1 : 0
 }
 try { process.exitCode = await main() }
