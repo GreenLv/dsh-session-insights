@@ -675,8 +675,14 @@ class SessionFormatV4Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             write_v4_session(home, session_id="session-contract-001")
+            # The verifier now requires an explicit expected host version; read
+            # the installed runtime's declared DSH dependency so the check always
+            # names the version it actually runs.
+            runtime_manifest = json.loads((Path(os.environ["DSH_RUNTIME"]) / "package.json").read_text(encoding="utf-8"))
+            expected_version = runtime_manifest["dependencies"]["@deepseek-ai/dsh-session"]
             completed = subprocess.run(
-                ["node", str(script), str(home / "sessions"), "--runtime", os.environ["DSH_RUNTIME"], "--required"],
+                ["node", str(script), str(home / "sessions"), "--runtime", os.environ["DSH_RUNTIME"],
+                 "--expected-dsh-version", expected_version, "--required"],
                 text=True,
                 capture_output=True,
                 check=False,
