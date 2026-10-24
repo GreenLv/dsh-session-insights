@@ -116,7 +116,8 @@ def main() -> int:
             config = config_from_options(options)
             built = analyzer.build_report(config, session_snapshots=snapshots)
             assert isinstance(built, dict)
-            output = Path(str(options["output"])).expanduser().resolve()
+            # Undereferenced absolute path: link evidence must survive to the checks.
+            output = Path(str(options["output"])).expanduser().absolute()
             sessions_root = analyzer.session_source_root(config) / "sessions"
             result = render_report(built, output, locale=str(options.get("locale", "zh-CN")), sessions_root=sessions_root)
         elif operation == "prepare":

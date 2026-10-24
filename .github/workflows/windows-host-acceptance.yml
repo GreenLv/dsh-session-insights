@@ -117,9 +117,18 @@ jobs:
       - name: Install the exact target runtime and host
         shell: pwsh
         run: |
-          npm ci --prefix tests/dsh-runtime --ignore-scripts
+          # One target selection drives host, runtime, and verifier: rc.3 uses
+          # tests/dsh-runtime-rc3, rc.2 uses tests/dsh-runtime. Any other value
+          # is refused before the expensive host install.
+          $supported = @('0.2.1-rc.3', '0.2.1-rc.2')
+          $target = '${{ inputs.dsh_version }}'
+          if (-not $supported -contains $target) { throw "unsupported dsh_version: $target (supported: $($supported -join ', '))" }
+          $runtime = if ($target -eq '0.2.1-rc.3') { 'tests/dsh-runtime-rc3' } else { 'tests/dsh-runtime' }
+          "runtime=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "dsh_target=$target" | Out-File -FilePath $env:GITHUB_ENV -Append
+          npm ci --prefix $runtime --ignore-scripts
           if ($LASTEXITCODE -ne 0) { throw 'Runtime install failed' }
-          npm install --prefix host-home @deepseek-ai/dsh@${{ inputs.dsh_version || '0.2.1-rc.3' }} --ignore-scripts
+          npm install --prefix host-home "@deepseek-ai/dsh@$target" --ignore-scripts
           if ($LASTEXITCODE -ne 0) { throw 'Host install failed' }
           npm install --global pnpm@11.22.0 --ignore-scripts
           if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
@@ -133,7 +142,7 @@ jobs:
             --package "candidate/$tgz" `
             --expected-sha256 $env:ACCEPTED_SHA256 `
             --commit $env:CANDIDATE_COMMIT `
-            --runtime tests/dsh-runtime `
+            --runtime $env:runtime `
             --host host-home `
             --workdir $env:RUNNER_TEMP `
             --annex native-acceptance/annex.json

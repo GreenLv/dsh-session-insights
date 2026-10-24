@@ -2159,8 +2159,47 @@ export const analysisInternals = { identifier, canonical, regex, groupBy, trunca
 // Canonical selection-scope key for a project path: forward slashes, no
 // trailing separator, case-folded for Windows drives (and on Windows itself),
 // so a recorded run scope and a later resume request compare equal.
+// Lexically collapse `.` and `..` segments without touching the filesystem:
+// a historical project directory may not exist, so realpath is never part of
+// identity. UNC anchors keep //server/share; `..` at an absolute anchor stays
+// at the anchor. Mirrors the Python lexically_resolve_path.
+export function lexicallyResolvePath(value) {
+  const path = String(value).replace(/\\/g, '/')
+  let prefix, rest
+  if (/^[A-Za-z]:\//.test(path)) {
+    prefix = path.slice(0, 3)
+    rest = path.slice(3)
+  } else if (path.startsWith('//')) {
+    const parts = path.slice(2).split('/')
+    const server = parts[0] || ''
+    const share = parts[1] || ''
+    prefix = share ? `//${server}/${share}` : `//${server}`
+    rest = parts.slice(2).join('/')
+  } else if (path.startsWith('/')) {
+    prefix = '/'
+    rest = path.slice(1)
+  } else {
+    prefix = ''
+    rest = path
+  }
+  const segments = []
+  for (const segment of rest.split('/')) {
+    if (segment === '' || segment === '.') continue
+    if (segment === '..') {
+      if (segments.length && segments.at(-1) !== '..') segments.pop()
+      else if (prefix) continue
+      else segments.push(segment)
+      continue
+    }
+    segments.push(segment)
+  }
+  if (!segments.length) return prefix || '/'
+  return (prefix ? prefix.replace(/\/+$/, '') + '/' : '') + segments.join('/')
+}
+
 export function normalizeProjectKey(value, platform = process.platform) {
-  const normalized = String(value).replace(/\\/g, '/').replace(/\/+$/, '') || '/'
+  const collapsed = lexicallyResolvePath(String(value))
+  const normalized = collapsed.replace(/\/+$/, '') || '/'
   return platform === 'win32' || /^[A-Za-z]:\//.test(normalized)
     ? normalized.toLowerCase()
     : normalized

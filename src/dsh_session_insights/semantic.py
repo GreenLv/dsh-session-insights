@@ -44,12 +44,31 @@ AGGREGATE_SECTIONS = (
 )
 
 
-def write_json(path: Path, value: Any, *, private: bool = False) -> None:
+def write_json(path: Path, value: Any, *, private: bool = False, sessions_root: Path | None = None) -> None:
+    """Write one JSON artifact through the shared safe writer.
+
+    Links, hard links, and special files anywhere on the path are refused
+    instead of followed, so a cache entry can never redirect a write onto a
+    source log or any other file. Cache artifacts stay private regardless of
+    umask. The sessions root, when provided, additionally excludes targets
+    inside the source tree.
+    """
+    from .output_safety import UnsafeOutputError, atomic_write_text, check_output_target, validate_output_ancestors
+
+    path = path if path.is_absolute() else Path.cwd() / path
+    try:
+        validate_output_ancestors(path)
+        if sessions_root is not None:
+            check_output_target(path, sessions_root)
+        elif path.is_symlink():
+            raise UnsafeOutputError(f"写入目标已是符号链接，拒绝跟随：{path}")
+    except UnsafeOutputError as exc:
+        raise ValueError(str(exc)) from exc
     path.parent.mkdir(parents=True, exist_ok=True)
     if private:
         # Cache artifacts are private regardless of umask.
         os.chmod(path.parent, 0o700)
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_text(path, json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
     if private:
         os.chmod(path, 0o600)
 
@@ -364,12 +383,18 @@ def secret_leak_errors(value: Any, privacy: str) -> list[str]:
                 errors.append("redacted 输出包含绝对路径")
 
     def visit(item: Any) -> None:
-        if isinstance(item, str):
-            check(item)
-        elif isinstance(item, dict):
+        if isinstance(item, dict):
             for key, child in item.items():
+                # The aggregate-input identity envelope is structural, not free
+                # text: its digest is a real hex identity whose shape the model
+                # does not choose. Its correctness is verified by exact
+                # comparison with the prepared identity elsewhere.
+                if key == "aggregate_input_identity" and isinstance(child, dict):
+                    continue
                 check(str(key))
                 visit(child)
+        elif isinstance(item, str):
+            check(item)
         elif isinstance(item, list):
             for child in item:
                 visit(child)
@@ -459,6 +484,11 @@ def validate_batch_file(workdir: Path, batch_id: str, *, update_cache: bool = Tr
                 cache_dir / f"{candidate['fingerprint']}.json",
                 {"semantic_schema_version": SEMANTIC_SCHEMA_VERSION, "fingerprint": candidate["fingerprint"], "facet": facet},
                 private=True,
+                sessions_root=engine.session_source_root(engine.AnalysisConfig(
+                    dsh_home=Path(manifest["config"]["dsh_home"]),
+                    since=engine.parse_datetime(manifest["config"]["since"]),
+                    until=engine.parse_datetime(manifest["config"]["until"]),
+                )),
             )
     return facets
 
@@ -557,6 +587,8 @@ def command_prepare(args: argparse.Namespace) -> int:
     for candidate in candidates:
         cache_path = cache_dir / f"{candidate['fingerprint']}.json"
         if cache_enabled and not args.refresh_semantic_cache and cache_path.is_file():
+            if cache_path.is_symlink():
+                raise ValueError(f"语义缓存条目是符号链接，拒绝跟随：{cache_path.name}")
             cached = read_json(cache_path)
             facet = cached.get("facet") if isinstance(cached, dict) else None
             if cached.get("fingerprint") == candidate["fingerprint"] and not validate_facet(facet, candidate, config.privacy_mode):
@@ -695,9 +727,18 @@ def project_for_analysis(value: Any, privacy: str) -> Any:
     if isinstance(value, list):
         return [project_for_analysis(item, privacy) for item in value]
     if isinstance(value, dict):
+        projected = [(analysis_scrub_text(key, privacy, 200), item, key) for key, item in value.items()]
+        # Counter-shaped dicts (all-numeric values) whose keys collide after
+        # projection must merge counts, not overwrite: two distinct private
+        # kinds projected to the same redacted form stay count-conserved.
+        if projected and all(isinstance(v, (int, float)) and not isinstance(v, bool) for _, v, _ in projected):
+            merged: dict[str, float] = {}
+            for new_key, count, _ in projected:
+                merged[new_key] = merged.get(new_key, 0) + count
+            return merged
         return {
-            analysis_scrub_text(key, privacy, 200): project_for_analysis(item, privacy)
-            for key, item in value.items()
+            new_key: project_for_analysis(item, privacy)
+            for new_key, item, _ in projected
         }
     return analysis_scrub_text(str(value), privacy)
 
@@ -774,7 +815,7 @@ def command_prepare_aggregate(args: argparse.Namespace) -> int:
                 key: project_for_analysis(report[key], analysis_privacy)
                 for key in ("coverage", "totals", "task_family_totals", "projects", "friction_signals")
             },
-            "facets": facets,
+            "facets": project_for_analysis(facets, analysis_privacy),
             "evidence": evidence,
             "selection": {
                 "eligible": manifest["eligible_task_families"], "selected": len(facets),
@@ -782,20 +823,64 @@ def command_prepare_aggregate(args: argparse.Namespace) -> int:
             },
         },
     )
+    aggregate_payload = read_json(workdir / "aggregate-input.json")
+    identity = {
+        "identity_schema": 1,
+        "aggregate_input_digest": facets_digest(aggregate_payload["facets"], manifest),
+    }
+    aggregate_payload["input_identity"] = identity
+    aggregate_payload["output_contract"]["response_envelope"] = {
+        "aggregate_input_identity": (
+            "echo this exact object as aggregate_input_identity at the response root; "
+            "validate-aggregate refuses a response that does not name the prepared input it answers"
+        )
+    }
+    write_json(workdir / "aggregate-input.json", aggregate_payload)
+    write_json(workdir / "aggregate-input-identity.json", identity)
     print(workdir / "aggregate-input.json")
     return 0
+
+
+def aggregate_input_envelope_errors(value: Any, workdir: Path) -> list[str]:
+    """The response must name the aggregate input the model actually saw.
+
+    prepare-aggregate issues an ``aggregate_input_identity`` whose digest
+    covers the projected facets inside the prepared input. At response
+    acceptance the digest is recomputed from the CURRENT validated facet
+    content — a response generated against an earlier facet snapshot names the
+    earlier digest and is refused instead of being re-stamped against whatever
+    is on disk now. Re-running prepare-aggregate (or regenerating the response
+    against the current facets) issues the current identity.
+    """
+    manifest = load_manifest(workdir)
+    current_digest = facets_digest(
+        project_for_analysis(all_facets(workdir), manifest.get("analysis_privacy", manifest["privacy"])),
+        manifest,
+    )
+    envelope = value.get("aggregate_input_identity") if isinstance(value, dict) else None
+    if not isinstance(envelope, dict):
+        return ["aggregate 响应缺少 aggregate_input_identity 信封（见 prepare-aggregate 的 output_contract.response_envelope）"]
+    if envelope.get("identity_schema") != 1 or not isinstance(envelope.get("aggregate_input_digest"), str):
+        return ["aggregate_input_identity 信封无效"]
+    if envelope["aggregate_input_digest"] != current_digest:
+        return [
+            "aggregate 响应未对应当前已验证的 aggregate 输入内容；请重新运行 prepare-aggregate 并基于当前输入重新生成响应"
+        ]
+    return []
 
 
 def command_validate_aggregate(args: argparse.Namespace) -> int:
     workdir = args.workdir.resolve()
     value = read_json(workdir / "semantic-report.json")
     errors = validate_aggregate_value(value, workdir)
+    errors.extend(aggregate_input_envelope_errors(value, workdir))
     if errors:
         raise ValueError("; ".join(errors))
     manifest = load_manifest(workdir)
     digest = facets_digest(all_facets(workdir), manifest)
     # The accepted aggregate is bound to the exact facet content it validated
     # against; finalize recomputes this identity from the files on disk.
+    prepared = read_json(workdir / "aggregate-input-identity.json")
     write_json(
         workdir / "aggregate-binding.json",
         {
@@ -804,6 +889,7 @@ def command_validate_aggregate(args: argparse.Namespace) -> int:
             "analyzer_semantics": IDENTITY["analyzer_semantics"],
             "scope_fingerprint": manifest.get("scope_fingerprint", ""),
             "facets_digest": digest,
+            "aggregate_input_digest": prepared["aggregate_input_digest"],
         },
     )
     print(json.dumps({"valid": True, "facets_digest": digest, "sections": {key: len(value[key]) for key in AGGREGATE_SECTIONS}}, ensure_ascii=False))
@@ -811,7 +897,14 @@ def command_validate_aggregate(args: argparse.Namespace) -> int:
 
 
 def aggregate_freshness(workdir: Path) -> dict[str, Any]:
-    """Compare the stored binding with the facet content currently on disk."""
+    """Compare the stored binding with the facet/prepared-input state on disk.
+
+    A binding is stale not only when facet bytes changed after acceptance but
+    also when prepare-aggregate re-issued a different input identity — the
+    accepted response then answers an input the model workflow no longer
+    presents, and finalize refuses it until the aggregate is re-prepared and
+    re-accepted.
+    """
     manifest = load_manifest(workdir)
     current = facets_digest(all_facets(workdir), manifest)
     binding_path = workdir / "aggregate-binding.json"
@@ -826,6 +919,15 @@ def aggregate_freshness(workdir: Path) -> dict[str, Any]:
         or binding.get("scope_fingerprint") != manifest.get("scope_fingerprint", "")
     ):
         return {"current": current, "binding": binding, "status": "unbound"}
+    identity_path = workdir / "aggregate-input-identity.json"
+    if identity_path.is_file():
+        prepared = read_json(identity_path)
+        if (
+            isinstance(prepared, dict)
+            and prepared.get("aggregate_input_digest")
+            and binding.get("aggregate_input_digest") != prepared.get("aggregate_input_digest")
+        ):
+            return {"current": current, "binding": binding, "status": "stale"}
     status = "current" if binding.get("facets_digest") == current else "stale"
     return {"current": current, "binding": binding, "status": status}
 
@@ -860,9 +962,12 @@ def render_output(report: dict[str, Any], config: engine.AnalysisConfig, args: a
         rendered = engine.render_markdown(report)
     else:
         rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    output = args.output.expanduser().resolve() if args.output else engine.default_html_output(config).with_suffix(
-        {"html": ".html", "markdown": ".md", "json": ".json"}[args.format]
-    ).resolve()
+    # Never resolve() a caller-supplied output: the undereferenced path carries
+    # the link evidence the safety checks need. Only make it absolute.
+    output = (args.output.expanduser().absolute() if args.output
+              else engine.default_html_output(config).with_suffix(
+                  {"html": ".html", "markdown": ".md", "json": ".json"}[args.format]
+              ).absolute())
     from .output_safety import (
         UnsafeOutputError,
         atomic_write_text,

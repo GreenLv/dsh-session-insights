@@ -349,7 +349,10 @@ def resolve_report_timezone(value: str | None) -> str:
 
     named = None
     tz_env = os.environ.get("TZ")
-    if tz_env and "/" in tz_env:
+    # Any valid IANA name counts, with or without a slash ("UTC", "GMT",
+    # "Asia/Shanghai"): TZ=UTC is a legal POSIX setting and must not be
+    # silently ignored in favor of /etc/localtime.
+    if tz_env:
         try:
             ZoneInfo(tz_env)
             named = tz_env
@@ -847,12 +850,14 @@ def normalize_path(value: str) -> str:
 def normalize_project_key(value: str) -> str:
     """Canonical project key shared by the Node runtime (normalizeProjectKey).
 
-    Forward slashes, no trailing separator, case-folded for Windows drives and
-    on Windows itself. Foreign paths keep their own case semantics: a POSIX
-    path is never case-folded just because the analyzing machine is Windows,
-    and vice versa. This function must stay byte-identical to the Node export.
+    Forward slashes, dot segments collapsed lexically, no trailing separator,
+    case-folded for Windows drives and on Windows itself. Foreign paths keep
+    their own case semantics: a POSIX path is never case-folded just because
+    the analyzing machine is Windows, and vice versa. This function must stay
+    byte-identical to the Node export.
     """
     path = str(value).replace("\\", "/")
+    path = lexically_resolve_path(path)
     path = re.sub(r"/+$", "", path) or "/"
     if os.name == "nt" or re.match(r"^[A-Za-z]:/", path):
         return path.lower()
@@ -869,18 +874,59 @@ def is_absolute_project_path(value: str) -> bool:
     )
 
 
+def lexically_resolve_path(value: str) -> str:
+    """Collapse ``.`` and ``..`` segments lexically, per path platform form.
+
+    No filesystem access: a historical session's project directory may not
+    exist, and realpath must never be required to compare identities. POSIX
+    paths keep a leading ``/``; Windows drive/UNC forms keep their anchors.
+    A ``..`` at the anchor root is dropped (stays at the root).
+    """
+    path = value.replace("\\", "/")
+    if re.match(r"^[A-Za-z]:/", path):
+        prefix, rest = path[:3], path[3:]
+    elif path.startswith("//"):
+        # UNC: keep the //server/share anchor intact, resolve only below it.
+        parts = path[2:].split("/", 2)
+        server = parts[0] if parts else ""
+        share = parts[1] if len(parts) > 1 else ""
+        prefix = f"//{server}/{share}" if share else f"//{server}"
+        rest = parts[2] if len(parts) > 2 else ""
+    elif path.startswith("/"):
+        prefix, rest = "/", path[1:]
+    else:
+        prefix, rest = "", path
+    segments = []
+    for segment in rest.split("/"):
+        if segment in ("", "."):
+            continue
+        if segment == "..":
+            if segments and segments[-1] != "..":
+                segments.pop()
+            elif prefix:
+                continue  # .. at an absolute anchor stays at the anchor
+            else:
+                segments.append(segment)  # relative .. stays lexical
+            continue
+        segments.append(segment)
+    if not segments:
+        return prefix or "/"
+    return (prefix.rstrip("/") + "/" if prefix else "") + "/".join(segments)
+
+
 def canonical_project_input(value: str) -> str:
     """Resolve and canonicalize one CLI --project value exactly once.
 
     The CLI resolves a relative value against the invoking working directory
     (documented CLI semantics); the native plugin entry refuses relative paths
-    instead of guessing a host cwd. Either way, every later consumer —
+    instead of guessing a host cwd. Dot segments collapse lexically, so
+    ``/a/x/../b`` selects exactly what ``/a/b`` selects. Every later consumer —
     selection, parsing, cache scope, resume records — sees the same key.
     """
     expanded = os.path.expanduser(value)
     if not is_absolute_project_path(expanded):
         expanded = str(Path.cwd() / expanded)
-    return normalize_project_key(expanded)
+    return normalize_project_key(lexically_resolve_path(expanded))
 
 
 def matches_project(cwd: str, requested: str | None) -> bool:
@@ -4063,6 +4109,26 @@ CACHE_SESSION_FIELDS: frozenset[str] = frozenset({
 })
 
 
+def check_cache_entry_path(cache_path: Path, cache_dir: Path) -> None:
+    """Reject links, hard links, or special files at a cache-entry location.
+
+    Applies to reads and writes of every cache entry: a pre-existing symlink
+    or hard link under the cache root must never be followed or replaced, and
+    the entry itself must be a regular singly-linked file.
+    """
+    import stat as stat_module
+
+    if cache_path.is_symlink():
+        raise OSError(f"缓存条目是符号链接，拒绝跟随：{cache_path.name}")
+    if cache_path.exists():
+        metadata = cache_path.lstat()
+        if not stat_module.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise OSError(f"缓存条目不是普通单链文件：{cache_path.name}")
+    # The cache root itself must be a real directory, never a link.
+    if cache_dir.is_symlink() or (cache_dir.exists() and not cache_dir.is_dir()):
+        raise OSError(f"缓存根不是目录：{cache_dir}")
+
+
 def project_session_for_cache(session: dict[str, Any] | None) -> dict[str, Any] | None:
     """Reduce one parsed session to the whitelisted, pre-projected cache form."""
     if session is None:
@@ -4154,6 +4220,7 @@ def parse_with_deterministic_cache(
     header_proven_in_scope = scope.status == "in_scope"
     if header_proven_in_scope and not config.refresh_deterministic_cache and cache_path.is_file():
         try:
+            check_cache_entry_path(cache_path, cache_dir)
             cached = json.loads(cache_path.read_text(encoding="utf-8"))
             if (
                 cached.get("cache_version") == DETERMINISTIC_CACHE_VERSION
@@ -4200,6 +4267,7 @@ def parse_with_deterministic_cache(
     }
     temporary = cache_path.with_name(f".{cache_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
     try:
+        check_cache_entry_path(cache_path, cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         # mkdir applies umask; enforce the private mode explicitly and never
         # follow a pre-existing link at the cache root.

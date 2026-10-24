@@ -311,6 +311,7 @@ async function cleanupRun(ctx, store, workdir, confirm, exec) {
     toolName: 'session_insights_cleanup',
     callId: exec?.callId,
     reason: `Permanently delete the session-insights run at ${plan.workdir} (${plan.files.length} files, ${plan.bytes} bytes).`,
+    signal: exec?.signal,
   })
   if (outcome !== 'allowed-once')
     throw new Error(
@@ -458,8 +459,15 @@ export function apply(ctx) {
       output: textOutput(),
       async execute(args, exec) {
         cancelled(exec?.signal)
-        const value = await owned(exec?.signal, signal => execute(args, signal))
-        return { text: JSON.stringify(value, null, 2) }
+        // Tools receive the full execution context (agent, callId, signal) so
+        // approval-gated operations can bind the host's one-shot approval to
+        // this exact call; the combined signal still honours plugin lifetime.
+        const combined = exec?.signal ? AbortSignal.any([exec.signal, lifetime.signal]) : lifetime.signal
+        cancelled(combined)
+        const promise = Promise.resolve().then(() => execute(args, { ...exec, signal: combined }))
+        pending.add(promise)
+        promise.then(() => pending.delete(promise), () => pending.delete(promise))
+        return { text: JSON.stringify(await promise, null, 2) }
       },
     })
   register(
@@ -539,6 +547,16 @@ export function apply(ctx) {
       return owned(invocation.signal, async signal => {
       try {
         const options = parseCommandInput(invocation.rawInput)
+        // Typed --cleanup is the trusted human deletion entry promised in the
+        // docs: it runs before any analysis, never queues model work, previews
+        // by default and deletes exactly one named managed run with --confirm.
+        if (options.cleanup) {
+          const result = new Store().cleanup(options.cleanup, options.confirm === true)
+          return {
+            kind: 'success',
+            text: JSON.stringify(result, null, 2),
+          }
+        }
         const viewHint = options.no_open
           ? ''
           : '\nOpen the report file in a local browser to view it; the HTML works offline and nothing is uploaded.'

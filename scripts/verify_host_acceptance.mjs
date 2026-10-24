@@ -7,14 +7,14 @@ import {pathToFileURL} from 'node:url'
 import {resolve, join, dirname, basename} from 'node:path'
 import {readFile, writeFile, mkdir, mkdtemp, rm, readdir, symlink, cp, realpath, stat} from 'node:fs/promises'
 import assert from 'node:assert/strict'
-import {run, digest, fileManifest, inspectRuntime, TARGET, MINIMUM_DSH_RANGE, PRODUCT_VERSION} from './acceptance_identity.mjs'
+import {run, digest, fileManifest, inspectRuntime, HOST_TARGETS, MINIMUM_DSH_RANGE, PRODUCT_VERSION} from './acceptance_identity.mjs'
 
 const TOOLS = ['session_insights_prepare', 'session_insights_get_batch', 'session_insights_submit_batch', 'session_insights_get_aggregate', 'session_insights_submit_aggregate', 'session_insights_finalize', 'session_insights_cleanup']
 const REQUIRED = ['artifact_digest', 'artifact_identity', 'runtime_closure', 'host_cli_identity', 'install_official_cli', 'installed_manifest', 'uninstall_official_cli', 'reload_official_cli', 'reloaded_manifest', 'loaded_manifest', 'load_and_register', 'project_isolation', 'deterministic_report', 'cancel_recovers', 'rerun_after_cancel', 'registration_reload', 'dispose_cleanup']
 
 function parseArgs(argv) {
   const result = {}, paths = new Set(['package', 'runtime', 'host', 'workdir', 'annex'])
-  const keys = ['package', 'expected-sha256', 'commit', 'runtime', 'host', 'workdir', 'annex']
+  const keys = ['package', 'expected-sha256', 'commit', 'runtime', 'host', 'workdir', 'annex', 'host-version']
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i].slice(2)
     if (argv[i] !== '--' + key || !keys.includes(key) || result[key] || !argv[i + 1]) throw new Error('invalid or duplicate option')
@@ -22,6 +22,13 @@ function parseArgs(argv) {
   }
   if (keys.some(key => !result[key])) throw new Error('all acceptance options are required')
   if (!/^[0-9a-f]{40}$/.test(result.commit) || !/^[0-9a-f]{64}$/.test(result['expected-sha256'])) throw new Error('full commit and lowercase SHA-256 are required')
+  // The expected host version is an explicit option (defaulting to the primary
+  // acceptance target) and must be one of the mapped targets; the verifier
+  // then checks the runtime closure and the real host CLI against it.
+  result['host-version'] = result['host-version'] || HOST_TARGETS.primary
+  const allTargets = [HOST_TARGETS.primary, ...HOST_TARGETS.compatibility]
+  if (!allTargets.includes(result['host-version']))
+    throw new Error(`host-version ${result['host-version']} is not an acceptance target (${allTargets.join(', ')})`)
   return result
 }
 
@@ -78,16 +85,17 @@ async function main() {
       record('artifact_identity', true, `${PRODUCT_VERSION}, exact host, embedded commit, ${files.length} files`)
     })
     await gate('runtime_closure', async () => {
-      const runtime = await inspectRuntime(options.runtime)
+      const runtime = await inspectRuntime(options.runtime, options['host-version'])
       annex.runtime_tree_sha256 = runtime.sha256
-      record('runtime_closure', true, `${runtime.identities.length} resolved DSH/Cordis package inventories`, {kind: 'runtime_tree', id: runtime.sha256})
+      record('runtime_closure', true, `${runtime.identities.length} resolved DSH/Cordis package inventories (${options['host-version']})`, {kind: 'runtime_tree', id: runtime.sha256})
     })
     const hostPackage = await realpath(join(options.host, 'node_modules/@deepseek-ai/dsh/package.json'))
     const dshBin = join(dirname(hostPackage), 'lib/bin.js')
     await gate('host_cli_identity', async () => {
-      assert.equal(JSON.parse(await readFile(hostPackage, 'utf8')).version, TARGET)
-      assert.equal((await run(process.execPath, [dshBin, '--version'], {env: {...process.env}, cwd: work})).stdout.trim(), TARGET)
-      record('host_cli_identity', true, `actual CLI --version ${TARGET}`)
+      const expectedHost = options['host-version']
+      assert.equal(JSON.parse(await readFile(hostPackage, 'utf8')).version, expectedHost)
+      assert.equal((await run(process.execPath, [dshBin, '--version'], {env: {...process.env}, cwd: work})).stdout.trim(), expectedHost)
+      record('host_cli_identity', true, `actual CLI --version ${expectedHost}`)
     })
     const cliEnv = {...process.env, npm_config_cache: join(work, 'npm-cache'), npm_config_store_dir: join(work, 'pnpm-store'), XDG_CACHE_HOME: join(work, 'cache'), XDG_DATA_HOME: join(work, 'data')}
     const cli = args => run(process.execPath, [dshBin, 'plugin', '--profile', 'web', ...args], {env: cliEnv, cwd: work, maxBuffer: 8 * 1024 * 1024, timeout: 180000})

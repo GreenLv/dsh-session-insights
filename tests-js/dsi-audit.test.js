@@ -63,6 +63,9 @@ function aggregateFor(store, run) {
   value.strengths = [{ title: '稳定交付', text: '会话完成目标。',
     supporting_task_family_ids: [family], evidence_refs: [evidence],
     confidence: 'high', measurement: 'measured' }]
+  // The response names the prepared input it answers; callers run
+  // prepareAggregate first so the issued identity matches the current facets.
+  value.aggregate_input_identity = JSON.parse(readFileSync(join(run, 'aggregate-input-identity.json'), 'utf8'))
   return value
 }
 
@@ -253,6 +256,7 @@ test('F11: stale aggregate refuses, rebuild recovers, fallback degrades explicit
       }
     }
     submit('实现完成')
+    prepareAggregate(store, run)
     submitAggregate(store, run, aggregateFor(store, run))
     assert.equal(aggregateFreshness(store, run).status, 'current')
     const complete = finalize(store, run)
@@ -260,17 +264,23 @@ test('F11: stale aggregate refuses, rebuild recovers, fallback degrades explicit
 
     // Same content resubmitted: idempotent, still current.
     submit('实现完成')
+    prepareAggregate(store, run)
     submitAggregate(store, run, aggregateFor(store, run))
     assert.equal(aggregateFreshness(store, run).status, 'current')
 
-    // Changed facet conclusion: the old aggregate must not complete.
+    // Changed facet conclusion: the old aggregate must not complete. The
+    // stale response names the earlier prepared input; acceptance recomputes
+    // the input digest from the current facets and refuses it.
     submit('未实现完成')
+    assert.throws(() => submitAggregate(store, run, aggregateFor(store, run)), /current validated aggregate input/)
     assert.equal(aggregateFreshness(store, run).status, 'stale')
     assert.throws(() => finalize(store, run), /aggregate is stale/)
     const fallback = finalize(store, run, true)
     assert.equal(fallback.status, 'fallback')
 
-    // Positive recovery: re-accept the aggregate against current content.
+    // Positive recovery: re-prepare the input (new identity) and regenerate
+    // the response against it — a genuine rebuild, not a re-stamp.
+    prepareAggregate(store, run)
     submitAggregate(store, run, aggregateFor(store, run))
     assert.equal(aggregateFreshness(store, run).status, 'current')
     assert.equal(finalize(store, run).status, 'complete')
@@ -292,7 +302,7 @@ test('F11: stale aggregate refuses, rebuild recovers, fallback degrades explicit
 })
 
 // --- G2: cleanup deletion requires a trusted human approval ------------------
-function harnessWithApproval(outcome) {
+function harnessWithApproval(outcome, { holdOpen = false } = {}) {
   const tools = []
   const requests = []
   apply({
@@ -301,7 +311,23 @@ function harnessWithApproval(outcome) {
     tools: { register(value) { tools.push(value) } },
     sessionQuery: {},
     approval: {
-      async request(req) { requests.push(req); return outcome },
+      // Shaped like the official ApprovalService.request prechecks: the agent
+      // and call identity must be present, and cancellation settles
+      // 'cancelled' without asking the answerer.
+      async request(req) {
+        assert.ok(req.agent !== undefined, 'approval request must carry the agent')
+        assert.ok(req.callId !== undefined || req.toolName === 'session_insights_cleanup', 'approval request must identify the call')
+        requests.push(req)
+        if (req.signal?.aborted) return 'cancelled'
+        if (holdOpen) {
+          // Hold the decision open until the caller's signal aborts, so a
+          // withdrawal during an in-flight request settles 'cancelled'.
+          await new Promise((resolveWait) =>
+            req.signal.addEventListener('abort', resolveWait, { once: true }))
+          return 'cancelled'
+        }
+        return outcome
+      },
     },
   })
   return { tools: new Map(tools.map((item) => [item.name, item])), requests }
@@ -337,9 +363,34 @@ test('G2: cleanup preview is read-only and deletion needs an allowed-once approv
     // One allowed-once approval scoped to this call completes the deletion.
     const allowed = harnessWithApproval('allowed-once')
     const allowedCleanup = allowed.tools.get('session_insights_cleanup')
-    const result = await allowedCleanup.execute({ workdir: run, confirm: true }, { signal: null, agent: {}, callId: 'c2' })
+    const controller = new AbortController()
+    const result = await allowedCleanup.execute(
+      { workdir: run, confirm: true },
+      { signal: controller.signal, agent: { session: { synthetic: true } }, callId: 'c2' },
+    )
     assert.equal(JSON.parse(result.text).deleted, true)
     assert.ok(!existsSync(join(run, 'report.json')))
+    // The approval request bound this exact call: agent, callId and the live
+    // signal all reached the service.
+    assert.equal(allowed.requests[0].agent.session.synthetic, true)
+    assert.equal(allowed.requests[0].callId, 'c2')
+    assert.ok(allowed.requests[0].signal instanceof AbortSignal)
+
+    // Cancellation settles 'cancelled' without deletion: abort while the
+    // approval request is in flight, not before the call starts.
+    const cancelRun = new Store(tmp).create()
+    writeFileSync(join(cancelRun, 'report.json'), '{}')
+    const canceller = harnessWithApproval('allowed-once', { holdOpen: true })
+    const cancelCleanup = canceller.tools.get('session_insights_cleanup')
+    const aborter = new AbortController()
+    const inflight = assert.rejects(
+      () => cancelCleanup.execute({ workdir: cancelRun, confirm: true },
+        { signal: aborter.signal, agent: {}, callId: 'c3' }),
+      /not approved \(cancelled\)/,
+    )
+    setTimeout(() => aborter.abort(), 5)
+    await inflight
+    assert.ok(existsSync(join(cancelRun, 'report.json')))
   } finally {
     if (previousHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previousHome
@@ -374,4 +425,36 @@ test('G2: without an approval service the deletion fails closed', async () => {
     else process.env.DSH_HOME = previousHome
     rmSync(tmp, { recursive: true, force: true })
   }
+})
+
+// --- AC-04: facets + category keys obey analysis privacy, counts conserved ---
+test('F4: aggregate facets and job-kind keys project with count conservation', () => {
+  const rows = readFileSync(new URL('../tests/fixtures/synthetic-session.jsonl', import.meta.url), 'utf8').trim().split('\n').map(JSON.parse)
+  const events = rows.slice(1)
+  for (const [i, kind] of ['/synthetic/private-a/path task', '/synthetic/private-b/path task'].entries())
+    events.push({ type: 'job/registered', seq: events.length, time: rows[0].createdAt + 1000,
+      data: { jobId: `synthetic-job-${i}`, owner: 'synthetic', kind, label: 'fixture', startedAt: rows[0].createdAt } })
+  const built = buildReport([{ session: rows[0], events }], { now: rows[0].createdAt + 86400000, days: 30, privacy: 'local', analysis_privacy: 'redacted', locale: 'en' })
+  const tmp = mkdtempSync(join(tmpdir(), 'f4b-'))
+  try {
+    const store = new Store(tmp)
+    const run = store.create()
+    const prepared = prepareSemantic(store, run, built)
+    for (const id of prepared.batches) {
+      const batch = getBatch(store, run, id)
+      submitBatch(store, run, id, { facets: batch.tasks.map((t) => ({
+        task_family_id: t.task_family_id, goal: 'Contact alice+synthetic@example.invalid',
+        task_type: 'implementation', interaction_style: 'detailed', instruction_handling: 'followed',
+        tool_execution: 'strong', verification_quality: 'strong', handoff_quality: 'clear',
+        frictions: ['none'], strengths: ['clear'], outcome_inference: 'fully_achieved',
+        evidence_refs: [t.evidence[0].id],
+      })) })
+    }
+    const input = prepareAggregate(store, run)
+    const serialized = JSON.stringify(input)
+    assert.ok(!serialized.includes('alice+synthetic@example.invalid'), 'facet email leaked into aggregate input')
+    assert.ok(!serialized.includes('/synthetic/private-a/path task'), 'raw private kind leaked')
+    const jobs = input.full_scope_summary.totals.jobs.by_kind
+    assert.equal(Object.values(jobs).reduce((a, b) => a + b, 0), 2, 'counter collision lost counts')
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
 })

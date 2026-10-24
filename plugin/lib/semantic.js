@@ -11,6 +11,7 @@ const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const { regex, truncate } = analysisInternals
 const strings = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string')
 const nonempty = (v) => typeof v === 'string' && v.trim().length > 0
+const is_nonempty_string = nonempty
 const FIELDS = [
   'task_family_id',
   'goal',
@@ -525,9 +526,23 @@ export function projectForAnalysis(value, privacy) {
   if (typeof value === 'number' || typeof value === 'boolean') return value
   if (typeof value === 'string') return analysisScrubText(value, privacy)
   if (Array.isArray(value)) return value.map((item) => projectForAnalysis(item, privacy))
+  const projectedEntries = Object.entries(value).map(
+    ([k, v]) => [analysisScrubText(k, privacy, 200), v, k],
+  )
+  // Counter-shaped dicts (all-numeric values) whose keys collide after
+  // projection must MERGE counts, not overwrite: two distinct private kinds
+  // projected to the same redacted form stay count-conserved.
+  const counterShaped =
+    projectedEntries.length > 0 &&
+    projectedEntries.every(([, v]) => typeof v === 'number' && Number.isFinite(v))
+  if (counterShaped) {
+    const merged = {}
+    for (const [newKey, v] of projectedEntries)
+      merged[newKey] = (merged[newKey] || 0) + v
+    return merged
+  }
   const out = {}
-  for (const [k, v] of Object.entries(value))
-    out[analysisScrubText(k, privacy, 200)] = projectForAnalysis(v, privacy)
+  for (const [newKey, v] of projectedEntries) out[newKey] = projectForAnalysis(v, privacy)
   return out
 }
 
@@ -567,13 +582,17 @@ export function prepareAggregate(store, run) {
           ? 'Write user-visible text in English.'
           : '所有用户可见文本使用简体中文。',
       ],
+      response_envelope: {
+        aggregate_input_identity:
+          'echo this exact object as aggregate_input_identity at the response root; submit_aggregate refuses a response that does not name the prepared input it answers',
+      },
     },
     full_scope_summary: Object.fromEntries(
       ['coverage', 'totals', 'task_family_totals', 'projects', 'friction_signals'].map(
         (k) => [k, projectForAnalysis(report[k], analysisPrivacy)],
       ),
     ),
-    facets,
+    facets: projectForAnalysis(facets, analysisPrivacy),
     evidence: candidates.flatMap((c) => c.evidence),
     selection: {
       eligible: m.eligible_task_families,
@@ -582,7 +601,16 @@ export function prepareAggregate(store, run) {
       truncated_families: m.truncated_families,
     },
   }
+  // The prepared input carries its own content identity. A response may only
+  // be accepted against the exact prepared input the model actually saw, so a
+  // response prepared from an earlier facet snapshot can never be stamped as
+  // current after the facets change.
+  value.input_identity = {
+    identity_schema: 1,
+    aggregate_input_digest: facetsDigest(value.facets, m),
+  }
   store.write(run, 'aggregate-input.json', value)
+  store.write(run, 'aggregate-input-identity.json', value.input_identity)
   return value
 }
 export function validateAggregate(value, candidates, privacy) {
@@ -640,14 +668,43 @@ export function validateAggregate(value, candidates, privacy) {
       }
     }
   }
-  errors.push(...forbidClaims(value), ...secretErrors(value, privacy))
+  errors.push(...forbidClaims(value), ...secretErrors(envelopeStripped(value), privacy))
   return errors
+}
+// The aggregate-input identity envelope is structural, not model free text:
+// its digest is a real hex identity verified by exact comparison elsewhere, so
+// content rules (e.g. the long-token pattern) must not see it.
+function envelopeStripped(value) {
+  if (!object(value)) return value
+  const rest = {...value}
+  delete rest.aggregate_input_identity
+  return rest
 }
 export function submitAggregate(store, run, value) {
   const facets = allFacets(store, run)
   const m = loadManifest(store, run),
     errors = validateAggregate(value, candidatesFor(store, run, m), m.privacy)
   if (errors.length) throw new Error(errors.join('; '))
+  // The response must name the aggregate input the model actually saw. The
+  // digest is recomputed from the CURRENT validated facet content — a
+  // response generated against an earlier facet snapshot names the earlier
+  // digest and is refused instead of being re-stamped against whatever is on
+  // disk now. Re-running get_aggregate issues the current identity.
+  const analysisPrivacy = m.analysis_privacy || m.privacy
+  const currentInputDigest = facetsDigest(projectForAnalysis(facets, analysisPrivacy), m)
+  if (
+    !object(value) ||
+    !object(value.aggregate_input_identity) ||
+    value.aggregate_input_identity.identity_schema !== 1 ||
+    !is_nonempty_string(value.aggregate_input_identity.aggregate_input_digest)
+  )
+    throw new Error(
+      'aggregate response lacks a valid aggregate_input_identity envelope; call session_insights_get_aggregate and include its input_identity in the response',
+    )
+  if (value.aggregate_input_identity.aggregate_input_digest !== currentInputDigest)
+    throw new Error(
+      'aggregate response does not match the current validated aggregate input; call session_insights_get_aggregate again and regenerate the response from the current input',
+    )
   store.write(run, 'semantic-report.json', value)
   // The binding records the exact validated facet content this aggregate was
   // accepted against; finalize recomputes it from the files on disk.
@@ -657,6 +714,7 @@ export function submitAggregate(store, run, value) {
     analyzer_semantics: INPUT_IDENTITY.analyzer_semantics,
     scope_fingerprint: m.scope_fingerprint,
     facets_digest: facetsDigest(facets, m),
+    aggregate_input_digest: currentInputDigest,
   })
   return { valid: true, facets_digest: facetsDigest(facets, m) }
 }
@@ -674,6 +732,16 @@ export function aggregateFreshness(store, run) {
   } catch {
     return { current, binding: null, status: 'unbound' }
   }
+  // The accepted response must still answer the CURRENT prepared input: if
+  // get_aggregate re-issued a new input identity after the aggregate was
+  // accepted (facet changes re-prepared), the old acceptance is stale even
+  // though the file was validated in its own moment.
+  let prepared = null
+  try {
+    prepared = store.read(run, 'aggregate-input-identity.json')
+  } catch {
+    prepared = null
+  }
   if (
     binding.binding_schema !== 1 ||
     binding.semantic_schema_version !== VERSION ||
@@ -681,6 +749,12 @@ export function aggregateFreshness(store, run) {
     binding.scope_fingerprint !== m.scope_fingerprint
   )
     return { current, binding, status: 'unbound' }
+  if (
+    prepared &&
+    prepared.aggregate_input_digest &&
+    binding.aggregate_input_digest !== prepared.aggregate_input_digest
+  )
+    return { current, binding, status: 'stale' }
   return {
     current,
     binding,

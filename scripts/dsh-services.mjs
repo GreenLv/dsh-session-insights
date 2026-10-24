@@ -2,14 +2,28 @@
 // This is service/codec evidence, not a GUI or real-model acceptance claim.
 import {createRequire} from 'node:module'
 import {pathToFileURL} from 'node:url'
-import {resolve,join} from 'node:path'
-import {readFile,writeFile,mkdtemp,rm} from 'node:fs/promises'
+import {resolve,join,dirname} from 'node:path'
+import {readFile,writeFile,mkdtemp,rm,cp,mkdir,readdir as readDir,realpath} from 'node:fs/promises'
+import {createHash} from 'node:crypto'
 import {tmpdir} from 'node:os'
 import assert from 'node:assert/strict'
-const runtime=process.argv[2], packageRoot=resolve(process.argv[3] || '.')
+const runtime=resolve(process.argv[2] || ''), packageRoot=resolve(process.argv[3] || '.')
+if(!runtime)throw new Error('target runtime root required (tests/dsh-runtime or tests/dsh-runtime-rc3)')
 if(!runtime) throw new Error('runtime required')
 const req=createRequire(join(resolve(runtime),'package.json'))
 const load=async name=>import(pathToFileURL(req.resolve(name)).href)
+async function fileTreeDigest(root){
+  const files=[]
+  async function walk(dir){
+    for(const entry of await readDir(dir,{withFileTypes:true})){
+      const path=join(dir,entry.name)
+      if(entry.isDirectory())await walk(path)
+      else files.push([join(dir,entry.name).slice(root.length),createHash('sha256').update(await readFile(path)).digest('hex')])
+    }
+  }
+  await walk(root)
+  return createHash('sha256').update(JSON.stringify(files.sort((a,b)=>a[0]<b[0]?-1:1))).digest('hex')
+}
 const {Context}=await load('@deepseek-ai/cordis')
 const {SessionStore,Session}=await load('@deepseek-ai/dsh-session')
 const {SessionQueryEngine}=await load('@deepseek-ai/dsh-session-query')
@@ -18,7 +32,31 @@ const {ToolRuntime}=await load('@deepseek-ai/dsh-tools')
 const {SystemPrompt}=await load('@deepseek-ai/dsh-system-prompt')
 const {sessionFormatCatalog}=await load('@deepseek-ai/dsh-session-format-catalog')
 const {releasedV4SessionFormatCodec}=await load('@deepseek-ai/dsh-session-format-v3-to-v4')
-const plugin=await import(pathToFileURL(join(packageRoot,'plugin/lib/index.js')).href)
+// Bind the plugin into the TARGET runtime's resolution context: Node resolves
+// the plugin's own imports (e.g. @deepseek-ai/dsh-llm) relative to the plugin
+// file's location, so a copy staged inside the runtime tree executes against
+// that tree's official packages. The staged copy's identity is verified
+// byte-for-byte against the production plugin before use, and its resolved
+// dsh-llm version must equal the runtime's target.
+const stagedRoot=join(resolve(runtime),'node_modules','.dsh-session-insights-under-test')
+const stagedPlugin=join(stagedRoot,'plugin')
+await rm(stagedRoot,{recursive:true,force:true})
+await mkdir(dirname(stagedPlugin),{recursive:true})
+await cp(join(packageRoot,'plugin'),stagedPlugin,{recursive:true})
+const stagedFiles=await fileTreeDigest(stagedPlugin)
+const liveFiles=await fileTreeDigest(join(packageRoot,'plugin'))
+assert.equal(stagedFiles,liveFiles,'staged plugin differs from the production plugin')
+const plugin=await import(pathToFileURL(join(stagedPlugin,'lib/index.js')).href)
+{
+  const pluginReq=createRequire(join(stagedPlugin,'lib/index.js'))
+  const llmPath=pluginReq.resolve('@deepseek-ai/dsh-llm/package.json')
+  const llmVersion=JSON.parse(await readFile(llmPath,'utf8')).version
+  const runtimeReq=createRequire(join(runtime,'package.json'))
+  const expectedVersion=JSON.parse(await readFile(runtimeReq.resolve('@deepseek-ai/dsh-llm/package.json'),'utf8')).version
+  assert.equal(llmVersion,expectedVersion,`staged plugin resolved dsh-llm ${llmVersion}, runtime is ${expectedVersion}`)
+  assert.equal(await realpath(llmPath),await realpath(runtimeReq.resolve('@deepseek-ai/dsh-llm/package.json')),'staged plugin resolved dsh-llm outside the target runtime tree')
+  console.log(`plugin-under-test resolved @deepseek-ai/dsh-llm ${llmVersion} from the ${runtime} tree`)
+}
 const rows=(await readFile(new URL('../tests/fixtures/synthetic-session.jsonl',import.meta.url),'utf8')).trim().split('\n').map(JSON.parse)
 const {type,...header}=rows[0]
 const ctx=new Context()
@@ -41,6 +79,29 @@ const live=sessions.create(header.id,{seed:rows.slice(1),meta:header,inheritedEv
 assert.equal((await query.listSessions()).length,1)
 const detached=await plugin._test.collectSnapshots({sessionQuery:query},{now:header.createdAt+86400000,days:30})
 assert.equal(detached[0].events.length,live.snapshotEvents().length)
+// U4 production-dedupe proof inside the real target sessionQuery: reusing the
+// SAME session id (the rc.3 New Session reuse shape) must not multiply
+// selections — the production entry itself dedupes by header id.
+{
+  const reusedRecords=await query.listSessions()
+  assert.equal(reusedRecords.length,1,'fixture precondition: one record')
+  const seen=new Set()
+  const allRecords=[...reusedRecords,...reusedRecords,...reusedRecords] // id repeated as the host reuse does
+  const selected=[]
+  for(const record of allRecords){
+    const id=record?.header?.id
+    if(seen.has(id))continue
+    seen.add(id)
+    selected.push(record)
+  }
+  assert.equal(selected.length,1,'production selection dedupes reused session ids')
+  const snapshots=await plugin._test.collectSnapshots({sessionQuery:{
+    async listSessions(signal){return allRecords},
+    async observeSession(id,opts){return query.observeSession(id,{...(opts||{}),projectionMode:'none'})},
+  }},{now:header.createdAt+86400000,days:30})
+  assert.equal(snapshots.length,1,'collectSnapshots yields one session for a reused id')
+  console.log('production selection deduped a thrice-repeated session id to one snapshot')
+}
 const notice=plugin._test.orchestrationPrompt({workdir:'/synthetic/run'},'en')
 live.append('turn/start',{turn:2})
 live.append('user/message',notice,{surfaceOp:'append'})

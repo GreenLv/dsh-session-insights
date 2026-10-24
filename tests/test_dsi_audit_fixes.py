@@ -486,7 +486,13 @@ class F11AggregateFreshnessTests(unittest.TestCase):
                 })
             semantic.write_json(workdir / "facet-outputs" / f"{batch_id}.json", {"facets": facets})
 
-    def _write_aggregate(self, workdir, manifest):
+    def _write_aggregate(self, workdir, manifest, *, current_input=True):
+        """Write an aggregate response naming the prepared input identity.
+
+        current_input=False simulates a response generated against an earlier
+        facet snapshot (its identity was captured before a revision) — the
+        state machine must refuse it.
+        """
         candidates = json.loads((workdir / "semantic-evidence.json").read_text(encoding="utf-8"))["candidates"]
         family = candidates[0]["task_family_id"]
         evidence = candidates[0]["evidence"][0]["id"]
@@ -496,6 +502,20 @@ class F11AggregateFreshnessTests(unittest.TestCase):
             "supporting_task_family_ids": [family], "evidence_refs": [evidence],
             "confidence": "high", "measurement": "measured",
         }]
+        # A response is only acceptable when it names the prepared input it
+        # answers; the identity file records what prepare-aggregate issued.
+        identity = json.loads((workdir / "aggregate-input-identity.json").read_text(encoding="utf-8"))
+        if current_input:
+            value["aggregate_input_identity"] = identity
+        else:
+            # A digest from a DIFFERENT prepared input: same shape as a real
+            # one (so it passes output-content rules) but not the current
+            # identity — exactly what a stale response carries.
+            other = dict(identity)
+            other["aggregate_input_digest"] = hashlib.sha256(
+                b"aggregate input generated before the facet revision"
+            ).hexdigest()
+            value["aggregate_input_identity"] = other
         semantic.write_json(workdir / "semantic-report.json", value)
 
     def test_digest_vectors_match_frozen_expectations(self):
@@ -513,6 +533,7 @@ class F11AggregateFreshnessTests(unittest.TestCase):
             workdir = Path(temp) / "work"
             manifest = self._prepared_workdir(home, workdir)
             self._write_facets(workdir, manifest, "实现完成")
+            self.assertEqual(run_cli(["semantic", "prepare-aggregate", "--workdir", str(workdir)], home).returncode, 0)
             self._write_aggregate(workdir, manifest)
             validate = run_cli(["semantic", "validate-aggregate", "--workdir", str(workdir)], home)
             self.assertEqual(validate.returncode, 0, validate.stderr)
@@ -526,7 +547,14 @@ class F11AggregateFreshnessTests(unittest.TestCase):
                              "--format", "json", "--output", str(Path(temp) / "b.json")], home)
             self.assertNotEqual(stale.returncode, 0)
             self.assertIn("已过期", stale.stderr)
-            # positive recovery: revalidate the aggregate against current facets
+            # A late response carrying the OLD prepared-input identity is refused
+            # at validate time (not re-stamped as current).
+            old_identity_validate = run_cli(["semantic", "validate-aggregate", "--workdir", str(workdir)], home)
+            self.assertNotEqual(old_identity_validate.returncode, 0)
+            # Positive recovery: re-prepare the aggregate input (new identity) and
+            # regenerate the response against it — a genuine rebuild.
+            self.assertEqual(run_cli(["semantic", "prepare-aggregate", "--workdir", str(workdir)], home).returncode, 0)
+            self._write_aggregate(workdir, manifest)
             recover = run_cli(["semantic", "validate-aggregate", "--workdir", str(workdir)], home)
             self.assertEqual(recover.returncode, 0, recover.stderr)
             finalized = run_cli(["semantic", "finalize", "--workdir", str(workdir), "--keep-workdir",
@@ -540,6 +568,7 @@ class F11AggregateFreshnessTests(unittest.TestCase):
             workdir = Path(temp) / "work"
             manifest = self._prepared_workdir(home, workdir)
             self._write_facets(workdir, manifest, "实现完成")
+            self.assertEqual(run_cli(["semantic", "prepare-aggregate", "--workdir", str(workdir)], home).returncode, 0)
             self._write_aggregate(workdir, manifest)
             first = json.loads(run_cli(["semantic", "validate-aggregate", "--workdir", str(workdir)], home).stdout)
             # same content, submitted again: digest unchanged, still current
@@ -555,6 +584,43 @@ class F11AggregateFreshnessTests(unittest.TestCase):
             os.utime(path, ns=(stat_before.st_atime_ns, stat_before.st_mtime_ns))
             self.assertEqual(semantic.aggregate_freshness(workdir)["status"], "stale")
 
+    def test_delayed_response_with_old_input_identity_is_refused(self):
+        """prepare(A) → facet(B) → the stale A response cannot complete.
+
+        The response names the aggregate-input identity it was generated
+        against; prepare-aggregate re-issue after the facet change produces a
+        different identity, so the late response is refused instead of being
+        re-stamped against the current facets.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            write_session(home)
+            workdir = Path(temp) / "work"
+            manifest = self._prepared_workdir(home, workdir)
+            self._write_facets(workdir, manifest, "实现完成")
+            self.assertEqual(run_cli(["semantic", "prepare-aggregate", "--workdir", str(workdir)], home).returncode, 0)
+            prepared_a = json.loads((workdir / "aggregate-input-identity.json").read_text(encoding="utf-8"))
+            self._write_aggregate(workdir, manifest)
+            # facet revision WITHOUT re-preparing: the response still names A;
+            # acceptance recomputes the input digest from the CURRENT validated
+            # facet content, so the stale response is refused at validate time
+            # (never re-stamped, never finalized complete).
+            self._write_facets(workdir, manifest, "未实现完成")
+            validate = run_cli(["semantic", "validate-aggregate", "--workdir", str(workdir)], home)
+            self.assertNotEqual(validate.returncode, 0, "a stale response was re-stamped as current")
+            self.assertIn("aggregate 输入", validate.stderr)
+            final = run_cli(["semantic", "finalize", "--workdir", str(workdir), "--keep-workdir",
+                             "--format", "json", "--output", str(Path(temp) / "late.json")], home)
+            self.assertNotEqual(final.returncode, 0, "a response prepared from the earlier input completed")
+            # after re-prepare the identity changes; the same stale response bytes
+            # (still naming A) are refused at validate time too.
+            self.assertEqual(run_cli(["semantic", "prepare-aggregate", "--workdir", str(workdir)], home).returncode, 0)
+            prepared_b = json.loads((workdir / "aggregate-input-identity.json").read_text(encoding="utf-8"))
+            self.assertNotEqual(prepared_a["aggregate_input_digest"], prepared_b["aggregate_input_digest"])
+            refused = run_cli(["semantic", "validate-aggregate", "--workdir", str(workdir)], home)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn("aggregate 输入", refused.stderr)
+
     def test_unbound_manual_aggregate_is_refused_but_fallback_works(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
@@ -562,6 +628,7 @@ class F11AggregateFreshnessTests(unittest.TestCase):
             workdir = Path(temp) / "work"
             manifest = self._prepared_workdir(home, workdir)
             self._write_facets(workdir, manifest, "实现完成")
+            self.assertEqual(run_cli(["semantic", "prepare-aggregate", "--workdir", str(workdir)], home).returncode, 0)
             self._write_aggregate(workdir, manifest)
             # no validate-aggregate call: the file is untrusted input
             refused = run_cli(["semantic", "finalize", "--workdir", str(workdir), "--keep-workdir",
@@ -640,3 +707,48 @@ class U4BlankAndReuseBoundaryTests(unittest.TestCase):
         self.assertEqual(row["turns"], 2)
         self.assertEqual(row["status"], "completed")
         self.assertEqual(row["session_header_records"], 2)
+
+
+class F4AggregateProjectionTests(unittest.TestCase):
+    """AC-04: every model-visible object obeys analysis privacy with counts conserved."""
+
+    def test_facets_and_category_keys_follow_analysis_privacy(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            rows = session_rows()
+            rows.append({"type": "job/registered", "seq": 4, "time": epoch_ms(NOW),
+                         "data": {"jobId": "j1", "owner": "synthetic", "kind": "/synthetic/private-a/path task",
+                                  "label": "fixture", "startedAt": epoch_ms(NOW)}})
+            rows.append({"type": "job/registered", "seq": 5, "time": epoch_ms(NOW),
+                         "data": {"jobId": "j2", "owner": "synthetic", "kind": "/synthetic/private-b/path task",
+                                  "label": "fixture", "startedAt": epoch_ms(NOW)}})
+            write_plain(home, rows)
+            workdir = Path(temp) / "work"
+            result = run_cli(["semantic", "prepare", "--workdir", str(workdir), "--privacy", "local",
+                              "--analysis-privacy", "redacted", "--no-semantic-cache"], home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # facet output with a synthetic email in the goal is what the model
+            # wrote; prepare-aggregate must not pass it through unprojected.
+            manifest = json.loads((workdir / "manifest.json").read_text(encoding="utf-8"))
+            for batch_id in manifest["batch_ids"]:
+                batch = json.loads((workdir / "batches" / f"{batch_id}.json").read_text(encoding="utf-8"))
+                facets = [{
+                    "task_family_id": t["task_family_id"],
+                    "goal": "Contact alice+synthetic@example.invalid about the change",
+                    "task_type": "implementation", "interaction_style": "detailed",
+                    "instruction_handling": "followed", "tool_execution": "strong",
+                    "verification_quality": "strong", "handoff_quality": "clear",
+                    "frictions": ["none"], "strengths": ["clear"], "outcome_inference": "fully_achieved",
+                    "evidence_refs": [t["evidence"][0]["id"]],
+                } for t in batch["tasks"]]
+                semantic.write_json(workdir / "facet-outputs" / f"{batch_id}.json", {"facets": facets})
+            self.assertEqual(run_cli(["semantic", "prepare-aggregate", "--workdir", str(workdir)], home).returncode, 0)
+            aggregate = json.loads((workdir / "aggregate-input.json").read_text(encoding="utf-8"))
+            serialized = json.dumps(aggregate, ensure_ascii=False)
+            self.assertNotIn("alice+synthetic@example.invalid", serialized,
+                             "facet free text entered the aggregate unprojected")
+            jobs = aggregate["full_scope_summary"]["totals"]["jobs"]["by_kind"]
+            self.assertEqual(sum(jobs.values()), 2, "counter collision must merge, not overwrite")
+            self.assertNotIn("/synthetic/private-a/path task", serialized)
+            self.assertNotIn("/synthetic/private-b/path task", serialized)
+
