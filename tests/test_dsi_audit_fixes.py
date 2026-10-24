@@ -577,3 +577,66 @@ class F11AggregateFreshnessTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class U4BlankAndReuseBoundaryTests(unittest.TestCase):
+    """rc.3 New Session / draft-reuse read boundary (supplement U4).
+
+    The plugin reads sessions; UI drafts are not reads. A blank or reused
+    session adds no user work; a later real submit on the reused id is read
+    normally; header records are not extra sessions.
+    """
+
+    def _rows(self, created):
+        return [
+            {"type": "session", "version": 4, "id": "synthetic-blank", "createdAt": created,
+             "cwd": "/synthetic/app", "agentPreset": "standard", "delegationDepth": 0, "isSeeded": False},
+        ]
+
+    def test_blank_reused_and_submitted_session_counts_once(self):
+        created = epoch_ms(NOW)
+        rows = self._rows(created)
+        # events of the reused id as one materialized stream (seq == index)
+        events = [
+            {"type": "turn/start", "seq": 0, "time": created + 1000, "data": {"turn": 1}},
+            {"type": "user/message", "seq": 1, "time": created + 1000, "surfaceOp": "append",
+             "data": {"content": [{"type": "text", "text": "draft autosave reminder"}],
+                      "id": "notice-1", "role": "user", "source": {"kind": "skill-catalog", "form": "notice"}}},
+            {"type": "turn/end", "seq": 2, "time": created + 2000, "data": {"reason": {"kind": "completed"}, "turn": 1}},
+            {"type": "turn/start", "seq": 3, "time": created + 2000, "data": {"turn": 2}},
+            {"type": "user/message", "seq": 4, "time": created + 2000, "surfaceOp": "append",
+             "data": {"content": [{"type": "text", "text": "Now the real task begins."}],
+                      "id": "m-real", "role": "user", "source": {"kind": "user"}}},
+            {"type": "user/message", "seq": 5, "time": created + 2100, "surfaceOp": "append",
+             "data": {"content": [{"type": "text", "text": "Second message of the same task."}],
+                      "id": "m-real-2", "role": "user", "source": {"kind": "user"}}},
+            {"type": "turn/end", "seq": 6, "time": created + 3000, "data": {"reason": {"kind": "completed"}, "turn": 2}},
+            {"type": "session", "seq": 7, "time": created + 2200, "data": {}},
+        ]
+        records = rows + self._rows(created + 1000) + self._rows(created + 2000)
+        # selection-level dedupe: reused ids select once
+        seen, selected = set(), []
+        for record in records:
+            if record["id"] not in seen:
+                seen.add(record["id"])
+                selected.append(record)
+        self.assertEqual(len(selected), 1)
+
+        snapshot = {"session": rows[0], "events": events}
+        from datetime import timedelta
+        cfg = replace(
+            config(Path("/synthetic")), privacy_mode="redacted", metrics_only=False,
+            since=datetime.fromtimestamp(created / 1000, tz=timezone.utc) - timedelta(days=1),
+            until=datetime.fromtimestamp(created / 1000, tz=timezone.utc) + timedelta(days=1),
+        )
+        report = analyzer.build_report(cfg, session_snapshots=[snapshot])
+        self.assertEqual(report["totals"]["sessions"], 1)
+        self.assertEqual(report["totals"]["user_messages"], 2)
+        self.assertEqual(report["totals"]["injected_user_messages"], 1)
+        row = report["rollout_summaries"][0]
+        self.assertEqual(row["user_messages"], 2)
+        self.assertEqual(row["injected_user_messages"], 1)
+        self.assertEqual(row["injected_source_kinds"].get("skill-catalog"), 1)
+        self.assertEqual(row["turns"], 2)
+        self.assertEqual(row["status"], "completed")
+        self.assertEqual(row["session_header_records"], 2)
