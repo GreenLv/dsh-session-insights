@@ -90,6 +90,13 @@ function facets(batch) {
   }
 }
 function aggregate(input) {
+  // The response must name the prepared aggregate input it answers.
+  const value = aggregateBody(input)
+  value.aggregate_input_identity = input.input_identity
+  return value
+}
+
+function aggregateBody(input) {
   const first = input.evidence[0]
   const item = {
     title: 'Bounded observation',

@@ -6,7 +6,7 @@
 
 ## 0.6.1
 
-面向 0.6.0 的安全与正确性补丁：关闭下列输出边界、缓存最小化、隐私投影、项目身份、时区与汇总新鲜度缺陷，为 run 删除引入可信人工审批，并在 CI 接入依赖审计。会话格式仍为 V4、DSH `>=0.2.1-rc.2`；升级后请开始新的分析运行；旧缓存会被自动忽略，删除属于可选的主动清理（见迁移说明）。
+面向 0.6.0 的安全与正确性补丁：关闭下列输出边界、缓存最小化、隐私投影、项目身份、时区与汇总新鲜度缺陷，为 run 删除引入可信人工审批，并在 CI 接入依赖审计。DSH `0.2.1-rc.3` 是本版本的主验收宿主，`0.2.1-rc.2` 仍为最低支持下限并保留兼容覆盖；下述源码级结论由双 runtime 的合成回归验证，原生宿主、模型与 UI 验收仍是独立门槛。会话格式仍为 V4、DSH `>=0.2.1-rc.2`；升级后请开始新的分析运行；旧缓存会被自动忽略，删除属于可选的主动清理（见迁移说明）。
 
 ### 安全
 
@@ -17,13 +17,13 @@
 - `injected_source_kinds` 中的扩展 `source.kind` 遵循共享分类词汇表：已文档化的种类保持可读，扩展种类按隐私模式脱敏/伪名化，凭据在任何模式（含 local）都不落盘。
 - 模型输出校验覆盖完整输入脱敏契约（含加号的邮箱、URL userinfo/query、标识符、路径，值与对象键同查）；无效替换保留先前有效字节，未经 submit 路径放置的 aggregate 文件属于不可信输入，finalize 拒绝。
 - 头部可判定范围外的项目损坏日志在有界读取后直接跳过（不解析、不缓存、不阻断健康项目）；范围内损坏仍显式失败关闭，并附带隐私安全的会话定位符与行号。
-- 原生 run 删除必须经宿主 `ctx.approval` 接缝获得人工审批（`allowed-once`，仅作用于当次调用）；模型自填 `confirm=true` 不再能删除任何内容，无审批服务即失败关闭，直接键入 DSH 命令 `/session-insights --cleanup <run> --confirm` 是纯人工入口。
+- 原生 run 删除必须经宿主 `ctx.approval` 接缝获得人工审批（`allowed-once`，仅作用于当次调用，并以调用方的 agent、call id 与取消信号执行）；模型自填 `confirm=true` 不再能删除任何内容，无审批服务即失败关闭。直接键入 DSH 命令 `/session-insights --cleanup <run> [--confirm]` 是纯人工入口：默认仅预览，`--confirm` 恰好删除一个指定 run，且不运行任何分析。
 
 ### 变更
 
 - 项目身份与显示标签分离：会话、任务族、项目汇总、摘录与仪表盘筛选/导出都携带稳定匿名的 `project_id`（词法路径键哈希，大小写规则跟随路径所属平台），同名 basename 项目以短稳定后缀区分而不是被合并。
 - 单一报告时区统一派生 date、hour、weekday：每次请求入口捕获一次（默认宿主本地，或显式 `--report-timezone`/IANA 名称/`UTC+HH:MM`），显式传给分析 Worker，记录在报告 scope 与 run manifest 中，后续 resume 不会漂移；Windows 缺 IANA 数据时给出可操作的 tzdata 安装指引而不是静默回退 UTC。
-- 语义 aggregate 绑定内容身份：被接受的 aggregate 记录有序已验证 facet 集合的摘要及影响结果的契约版本，finalize 从磁盘重新计算（mtime 不变的手工编辑无法绕过），过期或未绑定的 aggregate 拒绝完成，同内容重复提交保持有效，正向恢复是重建并重新提交或显式降级 fallback。两端语义 schema 升至 1.2.0；旧 run 以“开始新运行”拒绝。
+- 语义 aggregate 绑定内容身份：`get_aggregate` 签发标明已准备输入的 `aggregate_input_identity`，响应必须回显该身份，接受时按当前已验证 facet 内容重算输入摘要——针对较早 facet 快照生成的响应会被拒绝而不是被重新盖章（迟到的响应无法完成）。finalize 另从磁盘复核 facet 字节与已准备输入摘要（保持 mtime 的手工编辑无法绕过）；过期或未绑定的 aggregate 拒绝完成，同内容重复提交保持有效，正向恢复是重建并重新提交或显式降级 fallback。两端语义 schema 升至 1.2.0；旧 run 以“开始新运行”拒绝。
 - 项目路径在入口一次规范化：Python CLI 将相对 `--project` 按调用工作目录解析，原生入口以可操作的绝对路径错误拒绝相对路径（不猜测 process.cwd、不输出误导性空报告）；选择、Worker 匹配、缓存范围与 resume 记录共用同一规范键。
 - `analyzer_semantics` 升为 `v4-dsh021rc2.5`（身份版本升级）；分析器版本串为 `0.6.1-v4-dsh021rc2.5`。
 - CI 将全部 GitHub Actions 用法 pin 到核实的完整提交 SHA，并新增 `dependency-security` job（生产与全量 `npm audit`、按声明依赖集的 `pip-audit`）；扫描失败即 job 失败，空结果/不可达永不视为通过。

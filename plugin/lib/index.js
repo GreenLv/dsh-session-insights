@@ -484,7 +484,7 @@ export function apply(ctx) {
       resume: { type: 'boolean' },
       workdir: { type: 'string' },
     }),
-    (args, signal) => prepare(ctx, args, signal, scheduleAnalysis),
+    (args, exec) => prepare(ctx, args, exec?.signal, scheduleAnalysis),
   )
   const runSchema = (extra) =>
     schema({ workdir: { type: 'string' }, ...extra }, [

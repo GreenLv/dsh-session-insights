@@ -39,7 +39,7 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 `0.6.1` Bundle 需要 DSH `>=0.2.1-rc.2` 和 Node.js `^22.19.0 || >=24.0.0`，无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。 从 0.6.0 升级后请开始新的分析运行。
 
-**DSH 兼容性：** 软件包要求 `>=0.2.1-rc.2`；DSH `0.2.0-rc.2` 与 `0.2.1-rc.1` 低于支持下限，后续版本按声明的范围准入，不依赖静态版本表。契约与服务测试覆盖合成 V4 输入；源码与合成检查保留在 [0.6.0 开发记录](docs/acceptance/v0.6.0-rc2.1-candidate.md)；原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录。范围准入不代表未来宿主已经过实测。详见 [DSH 兼容性](#dsh-兼容性)。
+**DSH 兼容性：** 软件包要求 `>=0.2.1-rc.2`——`0.2.1-rc.3` 是本版本主验收宿主，`0.2.1-rc.2` 保留兼容覆盖。DSH `0.2.0-rc.2` 与 `0.2.1-rc.1` 低于支持下限；范围内未来版本按声明准入但尚未实测。契约与服务测试覆盖合成 V4 输入；源码与合成检查保留在 [0.6.0 开发记录](docs/acceptance/v0.6.0-rc2.1-candidate.md)；原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录。范围准入不代表未来宿主已经过实测。详见 [DSH 兼容性](#dsh-兼容性)。
 
 下方 registry 命令需要 `0.6.1` 已发布。验收候选时，请安装已审查的 tgz 或源码版本；使用 registry 命令前，请先在 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) 核实版本：
 
@@ -96,7 +96,7 @@ Bundle 需要 Node.js `^22.19.0 || >=24.0.0`，以及 DSH 的 `commands`、`tool
 
 ### 保留与清理
 
-报告和证据会保留到显式删除。`session_insights_cleanup` 以运行目录 `workdir` 调用时是只读预览（文件数与字节数）。删除需要宿主的人工审批：携带 `confirm: true` 时工具会就这一个 run 向部署的审批服务发起一次请求，只有用户在提示中选择允许（`allowed-once`）才会真正删除——模型自行填写的参数永远不能授权删除，没有审批服务的宿主直接失败关闭。直接键入 DSH 命令 `/session-insights --cleanup <run>` 为预览、`/session-insights --cleanup <run> --confirm` 为删除，是纯人工入口。清理会删除整个带标记的运行目录，包括报告，且不可撤销。未标记的旧目录和带链接的条目会被拒绝；其他运行、原始日志和可选 CLI 的共享缓存会保留。旧 CLI 缓存可用 `dsh-session-insights cache` 子命令预览，并仅在显式 `--delete` 时删除确认归属的缓存根。
+报告和证据会保留到显式删除。`session_insights_cleanup` 以运行目录 `workdir` 调用时是只读预览（文件数与字节数）。删除需要宿主的人工审批：携带 `confirm: true` 时工具会就这一个 run 向部署的审批服务发起一次请求，只有用户在提示中选择允许（`allowed-once`）才会真正删除——模型自行填写的参数永远不能授权删除，没有审批服务的宿主直接失败关闭。直接键入 DSH 命令 `/session-insights --cleanup <run>` 为预览、`/session-insights --cleanup <run> --confirm` 恰好删除一个指定 run——该命令不运行分析、不排队模型工作，是纯人工入口。清理会删除整个带标记的运行目录，包括报告，且不可撤销。未标记的旧目录和带链接的条目会被拒绝；其他运行、原始日志和可选 CLI 的共享缓存会保留。旧 CLI 缓存可用 `dsh-session-insights cache` 子命令预览，并仅在显式 `--delete` 时删除确认归属的缓存根。
 
 可选 CLI 仍需要 Python 3.11+；读取压缩日志需要 `zstandard>=0.23,<1`，`jsonschema>=4.23,<5` 仅供开发测试使用。其 bootstrap 安装器会调用 pip，并管理独立的 skill/runtime 目录。具体边界及商城策略限制见[安全策略](SECURITY.md)。
 

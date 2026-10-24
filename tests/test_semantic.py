@@ -153,6 +153,8 @@ class SemanticTests(unittest.TestCase):
             recommendation.update({"recommendation_key": "verification_evidence", "action": "保留短验证摘要。",
                                    "copy_prompt": "请运行验证并报告摘要。", "singleton_observation": True})
             sections["recommendations"] = [recommendation]
+            sections["aggregate_input_identity"] = json.loads(
+                (work / "aggregate-input-identity.json").read_text(encoding="utf-8"))
             (work / "semantic-report.json").write_text(json.dumps(sections, ensure_ascii=False), encoding="utf-8")
             self.run_cli("validate-aggregate", "--workdir", str(work))
             output = Path(temp) / "complete.html"
@@ -204,6 +206,8 @@ class SemanticTests(unittest.TestCase):
                 "singleton_observation": True,
             })
             sections["recommendations"] = [recommendation]
+            sections["aggregate_input_identity"] = json.loads(
+                (work / "aggregate-input-identity.json").read_text(encoding="utf-8"))
             (work / "semantic-report.json").write_text(json.dumps(sections), encoding="utf-8")
             self.run_cli("validate-aggregate", "--workdir", str(work))
             output = Path(temp) / "complete-en.html"
