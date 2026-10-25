@@ -385,11 +385,19 @@ def secret_leak_errors(value: Any, privacy: str) -> list[str]:
     def visit(item: Any) -> None:
         if isinstance(item, dict):
             for key, child in item.items():
-                # The aggregate-input identity envelope is structural, not free
-                # text: its digest is a real hex identity whose shape the model
-                # does not choose. Its correctness is verified by exact
-                # comparison with the prepared identity elsewhere.
-                if key == "aggregate_input_identity" and isinstance(child, dict):
+                # Only a canonical aggregate_input_identity envelope (exactly
+                # identity_schema:int==1 + aggregate_input_digest:64-hex) is
+                # structural and exempt from free-text rules — and only its two
+                # verified fields skip the check. Anything else inside or around
+                # the envelope goes through content rules like model text.
+                if (
+                    key == "aggregate_input_identity"
+                    and isinstance(child, dict)
+                    and set(child) == {"identity_schema", "aggregate_input_digest"}
+                    and child.get("identity_schema") == 1
+                    and isinstance(child.get("aggregate_input_digest"), str)
+                    and len(child["aggregate_input_digest"]) == 64
+                ):
                     continue
                 check(str(key))
                 visit(child)
@@ -480,15 +488,16 @@ def validate_batch_file(workdir: Path, batch_id: str, *, update_cache: bool = Tr
         cache_dir.mkdir(parents=True, exist_ok=True)
         for facet in facets:
             candidate = candidates[facet["task_family_id"]]
+            sessions_boundary = (engine.session_source_root(engine.AnalysisConfig(
+                dsh_home=Path(manifest["config"]["dsh_home"]),
+                since=engine.parse_datetime(manifest["config"]["since"]),
+                until=engine.parse_datetime(manifest["config"]["until"]),
+            )) / "sessions")
             write_json(
                 cache_dir / f"{candidate['fingerprint']}.json",
                 {"semantic_schema_version": SEMANTIC_SCHEMA_VERSION, "fingerprint": candidate["fingerprint"], "facet": facet},
                 private=True,
-                sessions_root=engine.session_source_root(engine.AnalysisConfig(
-                    dsh_home=Path(manifest["config"]["dsh_home"]),
-                    since=engine.parse_datetime(manifest["config"]["since"]),
-                    until=engine.parse_datetime(manifest["config"]["until"]),
-                )),
+                sessions_root=sessions_boundary,
             )
     return facets
 
@@ -858,9 +867,20 @@ def aggregate_input_envelope_errors(value: Any, workdir: Path) -> list[str]:
         manifest,
     )
     envelope = value.get("aggregate_input_identity") if isinstance(value, dict) else None
+    # The envelope is a canonical two-field object: unknown fields, wrong
+    # types or nested values make the whole response invalid — arbitrary
+    # model content cannot hide inside the structural exemption.
     if not isinstance(envelope, dict):
         return ["aggregate 响应缺少 aggregate_input_identity 信封（见 prepare-aggregate 的 output_contract.response_envelope）"]
-    if envelope.get("identity_schema") != 1 or not isinstance(envelope.get("aggregate_input_digest"), str):
+    if set(envelope) != {"identity_schema", "aggregate_input_digest"}:
+        return [
+            "aggregate_input_identity 信封只能包含 identity_schema 与 aggregate_input_digest 两个字段；额外字段已拒绝"
+        ]
+    if (
+        envelope.get("identity_schema") != 1
+        or not isinstance(envelope.get("aggregate_input_digest"), str)
+        or len(envelope["aggregate_input_digest"]) != 64
+    ):
         return ["aggregate_input_identity 信封无效"]
     if envelope["aggregate_input_digest"] != current_digest:
         return [

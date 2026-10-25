@@ -487,9 +487,11 @@ export function calendarInZone(epochMs, zone) {
 }
 const pathKey = (value) => {
   const path = String(value).replace(/\\/g, '/')
-  // Preserve absolute roots; trimming C:/ first would lose drive identity.
-  if (/^\/+$/.test(path)) return '/'
-  const key = path.replace(/\/+$/, '')
+  // Dot segments collapse exactly as in normalizeProjectKey, so a cwd spelled
+  // with '..' shares one project identity with its canonical spelling. A bare
+  // root stays '/'; drive roots keep their trailing slash (c:/).
+  const resolved = lexicallyResolvePath(path)
+  const key = resolved.replace(/\/+$/, '') || '/'
   return /^[A-Za-z]:\//.test(path) ? (key + (/^[A-Za-z]:$/.test(key) ? '/' : '')).toLowerCase() : key
 }
 const finiteNumber = (value) => typeof value === 'number' && Number.isFinite(value)
@@ -580,10 +582,10 @@ export function parseSnapshot(snapshot, opts, coverage) {
     // absolute, so the same shared key function decides membership here.
     const actual = normalizeProjectKey(cwd),
       requested = String(opts.project)
-    if (
-      actual !== requested &&
-      !actual.startsWith(requested.endsWith('/') ? requested : requested + '/')
-    ) {
+    const member = requested === '/'
+      ? actual.startsWith('/')
+      : actual === requested || actual.startsWith(requested.endsWith('/') ? requested : requested + '/')
+    if (!member) {
       coverage.skipped_project++
       return null
     }
@@ -2198,9 +2200,12 @@ export function lexicallyResolvePath(value) {
 }
 
 export function normalizeProjectKey(value, platform = process.platform) {
-  const collapsed = lexicallyResolvePath(String(value))
+  const original = String(value).replace(/\\/g, '/')
+  const collapsed = lexicallyResolvePath(original)
   const normalized = collapsed.replace(/\/+$/, '') || '/'
-  return platform === 'win32' || /^[A-Za-z]:\//.test(normalized)
-    ? normalized.toLowerCase()
-    : normalized
+  if (/^[A-Za-z]:\//.test(original)) {
+    // A bare drive root keeps its trailing slash (c:/); a drive path folds.
+    return (/^[A-Za-z]:$/.test(normalized) ? normalized + '/' : normalized).toLowerCase()
+  }
+  return platform === 'win32' ? normalized.toLowerCase() : normalized
 }

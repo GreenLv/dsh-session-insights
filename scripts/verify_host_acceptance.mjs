@@ -14,18 +14,24 @@ const REQUIRED = ['artifact_digest', 'artifact_identity', 'runtime_closure', 'ho
 
 function parseArgs(argv) {
   const result = {}, paths = new Set(['package', 'runtime', 'host', 'workdir', 'annex'])
-  const keys = ['package', 'expected-sha256', 'commit', 'runtime', 'host', 'workdir', 'annex', 'host-version']
+  // host-version is optional: when omitted it defaults to the primary
+  // acceptance target; when given it must be one of the mapped targets. The
+  // default is applied BEFORE the required check, so a seven-argument
+  // invocation (as the Windows workflow passes) is accepted.
+  const keys = ['package', 'expected-sha256', 'commit', 'runtime', 'host', 'workdir', 'annex']
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i].slice(2)
+    if (argv[i] === '--host-version') {
+      if (result['host-version'] || !argv[i + 1]) throw new Error('invalid or duplicate option')
+      result['host-version'] = argv[++i]
+      continue
+    }
     if (argv[i] !== '--' + key || !keys.includes(key) || result[key] || !argv[i + 1]) throw new Error('invalid or duplicate option')
     result[key] = paths.has(key) ? resolve(argv[++i]) : argv[++i]
   }
+  result['host-version'] = result['host-version'] || HOST_TARGETS.primary
   if (keys.some(key => !result[key])) throw new Error('all acceptance options are required')
   if (!/^[0-9a-f]{40}$/.test(result.commit) || !/^[0-9a-f]{64}$/.test(result['expected-sha256'])) throw new Error('full commit and lowercase SHA-256 are required')
-  // The expected host version is an explicit option (defaulting to the primary
-  // acceptance target) and must be one of the mapped targets; the verifier
-  // then checks the runtime closure and the real host CLI against it.
-  result['host-version'] = result['host-version'] || HOST_TARGETS.primary
   const allTargets = [HOST_TARGETS.primary, ...HOST_TARGETS.compatibility]
   if (!allTargets.includes(result['host-version']))
     throw new Error(`host-version ${result['host-version']} is not an acceptance target (${allTargets.join(', ')})`)

@@ -674,10 +674,24 @@ export function validateAggregate(value, candidates, privacy) {
 // The aggregate-input identity envelope is structural, not model free text:
 // its digest is a real hex identity verified by exact comparison elsewhere, so
 // content rules (e.g. the long-token pattern) must not see it.
+function isCanonicalEnvelope(envelope) {
+  return (
+    object(envelope) &&
+    Object.keys(envelope).every(
+      (k) => k === 'identity_schema' || k === 'aggregate_input_digest',
+    ) &&
+    envelope.identity_schema === 1 &&
+    is_nonempty_string(envelope.aggregate_input_digest) &&
+    envelope.aggregate_input_digest.length === 64
+  )
+}
 function envelopeStripped(value) {
   if (!object(value)) return value
   const rest = {...value}
-  delete rest.aggregate_input_identity
+  // Only a canonical envelope is structural and exempt; any other content
+  // under that key stays subject to the content rules.
+  if (isCanonicalEnvelope(rest.aggregate_input_identity))
+    delete rest.aggregate_input_identity
   return rest
 }
 export function submitAggregate(store, run, value) {
@@ -692,16 +706,21 @@ export function submitAggregate(store, run, value) {
   // disk now. Re-running get_aggregate issues the current identity.
   const analysisPrivacy = m.analysis_privacy || m.privacy
   const currentInputDigest = facetsDigest(projectForAnalysis(facets, analysisPrivacy), m)
+  const envelope = object(value) ? value.aggregate_input_identity : undefined
+  // Canonical two-field envelope only: unknown fields, wrong types or nested
+  // content invalidate the whole response — nothing can hide in the
+  // structural exemption.
   if (
-    !object(value) ||
-    !object(value.aggregate_input_identity) ||
-    value.aggregate_input_identity.identity_schema !== 1 ||
-    !is_nonempty_string(value.aggregate_input_identity.aggregate_input_digest)
+    !object(envelope) ||
+    Object.keys(envelope).some((k) => k !== 'identity_schema' && k !== 'aggregate_input_digest') ||
+    envelope.identity_schema !== 1 ||
+    !is_nonempty_string(envelope.aggregate_input_digest) ||
+    envelope.aggregate_input_digest.length !== 64
   )
     throw new Error(
-      'aggregate response lacks a valid aggregate_input_identity envelope; call session_insights_get_aggregate and include its input_identity in the response',
+      'aggregate_input_identity envelope must contain exactly identity_schema and aggregate_input_digest; call session_insights_get_aggregate and echo its input_identity',
     )
-  if (value.aggregate_input_identity.aggregate_input_digest !== currentInputDigest)
+  if (envelope.aggregate_input_digest !== currentInputDigest)
     throw new Error(
       'aggregate response does not match the current validated aggregate input; call session_insights_get_aggregate again and regenerate the response from the current input',
     )

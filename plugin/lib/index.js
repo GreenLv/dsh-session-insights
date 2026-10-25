@@ -123,6 +123,7 @@ function matchesProject(cwd, project) {
   // canonicalized the request once), so no process-cwd resolution happens here.
   const key = normalizeProjectKey(String(cwd || ''))
   const root = String(project)
+  if (root === '/') return key.startsWith('/')
   return key === root || key.startsWith(root.endsWith('/') ? root : root + '/')
 }
 

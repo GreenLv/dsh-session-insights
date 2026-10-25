@@ -752,3 +752,39 @@ class F4AggregateProjectionTests(unittest.TestCase):
             self.assertNotIn("/synthetic/private-a/path task", serialized)
             self.assertNotIn("/synthetic/private-b/path task", serialized)
 
+
+class AC13EnvelopeShapeTests(unittest.TestCase):
+    """The structural identity envelope cannot smuggle model free text."""
+
+    def test_noncanonical_envelope_is_refused_and_secret_never_reaches_report(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            write_session(home)
+            workdir = Path(temp) / "work"
+            t = F11AggregateFreshnessTests()
+            manifest = t._prepared_workdir(home, workdir)
+            t._write_facets(workdir, manifest, "实现完成")
+            self.assertEqual(run_cli(["semantic", "prepare-aggregate", "--workdir", str(workdir)], home).returncode, 0)
+            t._write_aggregate(workdir, manifest)
+            path = workdir / "semantic-report.json"
+            value = json.loads(path.read_text(encoding="utf-8"))
+            value["aggregate_input_identity"]["note"] = "Bearer SYNTHETIC-REPAIR-TOKEN-1234567890"
+            path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+            validate = run_cli(["semantic", "validate-aggregate", "--workdir", str(workdir)], home)
+            self.assertNotEqual(validate.returncode, 0, "noncanonical envelope accepted")
+            result = Path(temp) / "report.json"
+            finalize = run_cli(["semantic", "finalize", "--workdir", str(workdir), "--keep-workdir",
+                                "--format", "json", "--output", str(result)], home)
+            self.assertNotEqual(finalize.returncode, 0)
+            self.assertFalse(result.exists())
+            # a canonical envelope still validates and completes
+            value["aggregate_input_identity"] = json.loads(
+                (workdir / "aggregate-input-identity.json").read_text(encoding="utf-8"))
+            path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+            ok = run_cli(["semantic", "validate-aggregate", "--workdir", str(workdir)], home)
+            self.assertEqual(ok.returncode, 0, ok.stderr)
+            good = run_cli(["semantic", "finalize", "--workdir", str(workdir), "--keep-workdir",
+                            "--format", "json", "--output", str(result)], home)
+            self.assertEqual(good.returncode, 0, good.stderr)
+            self.assertNotIn("SYNTHETIC-REPAIR-TOKEN", result.read_text(encoding="utf-8"))
+

@@ -458,3 +458,28 @@ test('F4: aggregate facets and job-kind keys project with count conservation', (
     assert.equal(Object.values(jobs).reduce((a, b) => a + b, 0), 2, 'counter collision lost counts')
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })
+
+// --- AC-13: noncanonical identity envelope is refused; canonical passes ------
+test('F6/AC-13: envelope extra fields are rejected and never reach the report', () => {
+  const rows = readFileSync(new URL('../tests/fixtures/synthetic-session.jsonl', import.meta.url), 'utf8').trim().split('\n').map(JSON.parse)
+  const built = buildReport([{ session: rows[0], events: rows.slice(1) }], { now: rows[0].createdAt + 86400000, days: 30, privacy: 'redacted', locale: 'zh-CN', analysis_depth: 'evidence', report_timezone: 'UTC' })
+  const tmp = mkdtempSync(join(tmpdir(), 'ac13-'))
+  try {
+    const store = new Store(tmp)
+    const run = store.create()
+    const prepared = prepareSemantic(store, run, built)
+    for (const id of prepared.batches) {
+      const batch = getBatch(store, run, id)
+      submitBatch(store, run, id, { facets: batch.tasks.map((t) => facetFor(t, '实现完成')) })
+    }
+    const input = prepareAggregate(store, run)
+    const value = aggregateFor(store, run)
+    value.aggregate_input_identity = { ...input.input_identity, note: 'Bearer SYNTHETIC-REPAIR-TOKEN-1234567890' }
+    assert.throws(() => submitAggregate(store, run, value), /exactly identity_schema and aggregate_input_digest|secret signal|aggregate_input_identity/)
+    // canonical envelope still accepted
+    const clean = aggregateFor(store, run)
+    submitAggregate(store, run, clean)
+    const result = finalize(store, run)
+    assert.ok(!readFileSync(result.data, 'utf8').includes('SYNTHETIC-REPAIR-TOKEN'))
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+})

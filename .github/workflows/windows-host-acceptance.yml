@@ -122,7 +122,9 @@ jobs:
           # is refused before the expensive host install.
           $supported = @('0.2.1-rc.3', '0.2.1-rc.2')
           $target = '${{ inputs.dsh_version }}'
-          if (-not $supported -contains $target) { throw "unsupported dsh_version: $target (supported: $($supported -join ', '))" }
+          # -not (a -contains b) parses as (-not a) -contains b because -not
+          # binds tighter; use the explicit -notcontains operator.
+          if ($supported -notcontains $target) { throw "unsupported dsh_version: $target (supported: $($supported -join ', '))" }
           $runtime = if ($target -eq '0.2.1-rc.3') { 'tests/dsh-runtime-rc3' } else { 'tests/dsh-runtime' }
           "runtime=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Append
           "dsh_target=$target" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -145,7 +147,8 @@ jobs:
             --runtime $env:runtime `
             --host host-home `
             --workdir $env:RUNNER_TEMP `
-            --annex native-acceptance/annex.json
+            --annex native-acceptance/annex.json `
+            --host-version $env:dsh_target
           if ($LASTEXITCODE -ne 0) { throw 'Portable installed-artifact acceptance failed' }
           python scripts/validate_host_annex.py native-acceptance/annex.json
           if ($LASTEXITCODE -ne 0) { throw 'Invalid acceptance annex' }

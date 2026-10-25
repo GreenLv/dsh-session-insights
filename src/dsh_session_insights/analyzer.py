@@ -850,16 +850,21 @@ def normalize_path(value: str) -> str:
 def normalize_project_key(value: str) -> str:
     """Canonical project key shared by the Node runtime (normalizeProjectKey).
 
-    Forward slashes, dot segments collapsed lexically, no trailing separator,
-    case-folded for Windows drives and on Windows itself. Foreign paths keep
-    their own case semantics: a POSIX path is never case-folded just because
-    the analyzing machine is Windows, and vice versa. This function must stay
-    byte-identical to the Node export.
+    Forward slashes, dot segments collapsed lexically, no trailing separator
+    (a bare drive root keeps ``c:/``), case-folded for Windows drives and on
+    Windows itself. Foreign paths keep their own case semantics: a POSIX path
+    is never case-folded just because the analyzing machine is Windows, and
+    vice versa. Byte-identical to the Node export, and the same rule as
+    cwd_path_key so filter, identity and scope never diverge.
     """
-    path = str(value).replace("\\", "/")
-    path = lexically_resolve_path(path)
+    original = str(value).replace("\\", "/")
+    path = lexically_resolve_path(original)
     path = re.sub(r"/+$", "", path) or "/"
-    if os.name == "nt" or re.match(r"^[A-Za-z]:/", path):
+    drive_form = re.match(r"^[A-Za-z]:/", original)
+    if drive_form:
+        key = path if re.fullmatch(r"[A-Za-z]:", path) else path
+        return (key + ("/" if re.fullmatch(r"[A-Za-z]:", path) else "")).lower()
+    if os.name == "nt":
         return path.lower()
     return path
 
@@ -934,6 +939,8 @@ def matches_project(cwd: str, requested: str | None) -> bool:
         return True
     actual = normalize_project_key(cwd)
     target = normalize_project_key(requested)
+    if target == "/":
+        return actual.startswith("/")  # the absolute root selects every absolute descendant
     return actual == target or actual.startswith(target + "/")
 
 
@@ -2968,14 +2975,22 @@ def cwd_label(cwd: str) -> str:
 
 
 def cwd_path_key(cwd: str) -> str:
-    """Trajectory identity only; keep the established project-filter contract."""
+    """Trajectory and project-identity key: the shared lexical platform rule.
+
+    Dot segments collapse exactly as in normalize_project_key/lexically_resolve_path,
+    so a filter spelled with ``..`` groups under the same project_id as its
+    canonical spelling. Drive roots keep their trailing slash (``c:/``); a bare
+    root stays ``/``. No filesystem access: historical project directories may
+    not exist.
+    """
     path = cwd.replace("\\", "/")
     if path and not path.strip("/"):
         return "/"
-    key = path.rstrip("/")
+    resolved = lexically_resolve_path(path)
+    key = resolved.rstrip("/")
     if re.match(r"^[A-Za-z]:/", path):
         return (key + ("/" if re.fullmatch(r"[A-Za-z]:", key) else "")).lower()
-    return key
+    return key or "/"
 
 
 def cwd_platform_form(key: str) -> str:
@@ -4109,24 +4124,42 @@ CACHE_SESSION_FIELDS: frozenset[str] = frozenset({
 })
 
 
-def check_cache_entry_path(cache_path: Path, cache_dir: Path) -> None:
-    """Reject links, hard links, or special files at a cache-entry location.
+def check_cache_entry_path(cache_path: Path, cache_dir: Path, sessions_root: Path | None = None) -> None:
+    """Reject links, hard links, or special files on a cache-entry path.
 
-    Applies to reads and writes of every cache entry: a pre-existing symlink
-    or hard link under the cache root must never be followed or replaced, and
-    the entry itself must be a regular singly-linked file.
+    Applies to reads and writes of every cache entry:
+    - the entry itself and every existing ancestor component must be link-free,
+      regular directories/files without extra hard links;
+    - the resolved location must stay outside the session source tree, so a
+      redirected cache root can never drop entries (or a deterministic-9/
+      directory) into the source tree;
+    - the cache root must be a real directory.
+    ``sessions_root`` is the resolved ``<home>/sessions`` boundary; when given,
+    both the undereferenced and resolved forms of the cache path are checked
+    against it.
     """
     import stat as stat_module
+    from .output_safety import UnsafeOutputError, resolve_sessions_root
 
-    if cache_path.is_symlink():
-        raise OSError(f"缓存条目是符号链接，拒绝跟随：{cache_path.name}")
-    if cache_path.exists():
-        metadata = cache_path.lstat()
-        if not stat_module.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
-            raise OSError(f"缓存条目不是普通单链文件：{cache_path.name}")
-    # The cache root itself must be a real directory, never a link.
+    for component in [cache_path, *cache_path.parents]:
+        if not component.exists() and not component.is_symlink():
+            continue
+        metadata = component.lstat()
+        if stat_module.S_ISLNK(metadata.st_mode):
+            raise OSError(f"缓存路径包含符号链接组件，拒绝跟随：{component}")
+        is_terminal = component == cache_path
+        if is_terminal:
+            if not stat_module.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                raise OSError(f"缓存条目不是普通单链文件：{cache_path}")
+        elif not stat_module.S_ISDIR(metadata.st_mode):
+            raise OSError(f"缓存路径的父组件不是目录：{component}")
     if cache_dir.is_symlink() or (cache_dir.exists() and not cache_dir.is_dir()):
         raise OSError(f"缓存根不是目录：{cache_dir}")
+    if sessions_root is not None:
+        boundary = resolve_sessions_root(sessions_root)
+        for form in (cache_path, cache_path.resolve()):
+            if form == boundary or form.is_relative_to(boundary):
+                raise OSError(f"缓存条目位于会话源目录内，已拒绝：{cache_path}")
 
 
 def project_session_for_cache(session: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -4220,7 +4253,7 @@ def parse_with_deterministic_cache(
     header_proven_in_scope = scope.status == "in_scope"
     if header_proven_in_scope and not config.refresh_deterministic_cache and cache_path.is_file():
         try:
-            check_cache_entry_path(cache_path, cache_dir)
+            check_cache_entry_path(cache_path, cache_dir, session_source_root(config) / "sessions")
             cached = json.loads(cache_path.read_text(encoding="utf-8"))
             if (
                 cached.get("cache_version") == DETERMINISTIC_CACHE_VERSION
@@ -4267,7 +4300,7 @@ def parse_with_deterministic_cache(
     }
     temporary = cache_path.with_name(f".{cache_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
     try:
-        check_cache_entry_path(cache_path, cache_dir)
+        check_cache_entry_path(cache_path, cache_dir, session_source_root(config) / "sessions")
         cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         # mkdir applies umask; enforce the private mode explicitly and never
         # follow a pre-existing link at the cache root.
