@@ -307,6 +307,7 @@ function harnessWithApproval(outcome, { holdOpen = false } = {}) {
   const requests = []
   apply({
     effect() {},
+    get(name) { return name === 'approval' ? this.approval : undefined },
     commands: { register() {} },
     tools: { register(value) { tools.push(value) } },
     sessionQuery: {},

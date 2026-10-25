@@ -293,11 +293,9 @@ async function deterministicReport(ctx, raw, signal, scheduleAnalysis) {
 // confirm=true alone never authorizes deletion; without an approval service
 // the operation fails closed.
 function approvalService(ctx) {
-  try {
-    return ctx.approval ?? null
-  } catch {
-    return null
-  }
+  // Approval is optional: the public lookup observes active sibling providers
+  // without making the whole plugin depend on the service being installed.
+  return ctx.get?.('approval') ?? null
 }
 async function cleanupRun(ctx, store, workdir, confirm, exec) {
   if (!confirm) return store.cleanup(workdir, false)
