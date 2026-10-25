@@ -4146,7 +4146,13 @@ def check_cache_entry_path(cache_path: Path, cache_dir: Path, sessions_root: Pat
             continue
         metadata = component.lstat()
         if stat_module.S_ISLNK(metadata.st_mode):
-            raise OSError(f"缓存路径包含符号链接组件，拒绝跟随：{component}")
+            # Root-owned prefix aliases (macOS /var -> /private/var) are not
+            # user-writable redirects; user-owned links are refused. Resolution
+            # containment below binds the final location either way.
+            from .output_safety import _is_os_managed
+            if not _is_os_managed(component, metadata):
+                raise OSError(f"缓存路径包含符号链接组件，拒绝跟随：{component}")
+            continue
         is_terminal = component == cache_path
         if is_terminal:
             if not stat_module.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
