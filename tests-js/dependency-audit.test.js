@@ -23,6 +23,24 @@ test('single-release exception accepts the real 23-node report with one advisory
   assert.equal(result.graph_sha256,policy.report_graph_sha256)
 })
 
+for(const scope of ['prod','full'])test('real npm10 CI '+scope+' report retains the exact accepted via graph despite omitted reverse effects',()=>{
+  const value=JSON.parse(readFileSync(new URL('../tests/fixtures/npm-audit-ci-'+scope+'.json',import.meta.url),'utf8'))
+  const result=assess(value)
+  assert.equal(result.graph_sha256,policy.report_graph_sha256)
+  assert.equal(result.affected_packages,23)
+})
+
+test('omitted reverse effects do not remove or broaden validated advisory chains',()=>{
+  const value=clone(report)
+  for(const row of Object.values(value.vulnerabilities))row.effects=[]
+  assert.equal(assess(value).graph_sha256,policy.report_graph_sha256)
+})
+
+test('a reported effect contradicting the complete via map remains rejected',()=>{
+  const value=clone(report);value.vulnerabilities.zod.effects=['zod']
+  assert.throws(()=>assess(value),/inconsistent advisory effects/)
+})
+
 function smallCycle(exitToLeaf){
   const value=clone(report),tools='@deepseek-ai/dsh-tools',todo='@deepseek-ai/dsh-tool-todo'
   value.vulnerabilities=Object.fromEntries(['zod',tools,todo].map(n=>[n,value.vulnerabilities[n]]))

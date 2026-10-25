@@ -93,13 +93,17 @@ export function inspectReport(report,lock){
       }
     }
     requireThat(new Set(via.map(canonical)).size===via.length,'duplicate advisory edges')
-    graph.push({name,severity:row.severity,isDirect:row.isDirect,range:row.range,nodes:[...row.nodes].sort(),effects:[...row.effects].sort(),via:via.sort((a,b)=>canonical(a)<canonical(b)?-1:canonical(a)>canonical(b)?1:0)})
+    graph.push({name,severity:row.severity,isDirect:row.isDirect,range:row.range,nodes:[...row.nodes].sort(),effects:[],via:via.sort((a,b)=>canonical(a)<canonical(b)?-1:canonical(a)>canonical(b)?1:0)})
     counts[row.severity]++
   }
   requireThat(directLeaves===1&&resolved.has('zod'),'expected exactly one known zod advisory leaf')
-  for(const name of Object.keys(rows)){
-    const effects=Object.keys(rows).filter(other=>rows[other].via.includes(name)).sort()
-    requireThat(canonical([...rows[name].effects].sort())===canonical(effects),'inconsistent advisory effects')
+  for(const row of graph){
+    // npm 10 can omit reverse edges in effects. The complete via map is
+    // validated against the lock above; derive its inverse without trusting
+    // omitted display metadata, and reject any contradictory reported edge.
+    const effects=graph.filter(other=>other.via.includes(row.name)).map(other=>other.name).sort()
+    requireThat(rows[row.name].effects.every(effect=>effects.includes(effect)),'inconsistent advisory effects')
+    row.effects=effects
   }
   const state=new Map(),byName=new Map(graph.map(row=>[row.name,row]))
   function visit(name){

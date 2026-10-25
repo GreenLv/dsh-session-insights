@@ -2,3 +2,19 @@
 tests/fixtures/**/*.jsonl text eol=lf
 tests/fixtures/**/*.json text eol=lf
 *.zstd binary
+
+# Audit cohort hashes bind exact Git bytes on every checkout platform.
+package.json text eol=lf
+package-lock.json text eol=lf
+pyproject.toml text eol=lf
+src/dsh_session_insights/__init__.py text eol=lf
+tests/dsh-runtime/package.json text eol=lf
+tests/dsh-runtime/package-lock.json text eol=lf
+tests/dsh-runtime-rc3/package.json text eol=lf
+tests/dsh-runtime-rc3/package-lock.json text eol=lf
+tests/dsh-host/package.json text eol=lf
+tests/dsh-host/package-lock.json text eol=lf
+tests/dsh-host-rc3/package.json text eol=lf
+tests/dsh-host-rc3/package-lock.json text eol=lf
+scripts/acceptance_identity.mjs text eol=lf
+.github/workflows/ci.yml text eol=lf
