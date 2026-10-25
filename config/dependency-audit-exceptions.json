@@ -1,0 +1,56 @@
+{
+  "schema": "dsi-node-audit-exception/v1",
+  "product_version": "0.6.1",
+  "authorization": {
+    "decision": "accepted",
+    "recorded_on": "2026-10-26",
+    "authority": "Repository maintainer",
+    "scope": "Only the stated upstream risk for this release and frozen cohort; not a security fix or a low-probability assurance"
+  },
+  "exception": {
+    "advisory": "GHSA-mrhx-c7xc-m3w5",
+    "cve": "CVE-2023-54404",
+    "package": "zod",
+    "version": "4.4.3",
+    "severity": "high",
+    "range": "<4.6.6",
+    "patched_version": "4.6.6"
+  },
+  "audited_scope": "Only root package-lock npm production and full scans. No exception for other DSH trees or unrelated advisories.",
+  "prerequisite": "The advisory describes oversized invalid array inputs without a maximum-length bound accumulating validation issues and exhausting memory. Reachability through a specific DSH entry and real-world likelihood are not established.",
+  "cohort": {
+    "files": {
+      "package.json": "1279c5ef0c58dd5673340a2b6beec9e89625b9de72638bfef8b9317273ef3a09",
+      "package-lock.json": "59a7565e6e82966118a0b02dee69976946e5229dd34eed0591f683718f10d34a",
+      "pyproject.toml": "91a2cb39105810747f03444a5f75528acea5d9dc4a38d93f7b3fa9dfaaa10e92",
+      "src/dsh_session_insights/__init__.py": "99b711287340d0fc61ce5138c1fdd070f5bcced11cc774a1f01556944cea9a77",
+      "tests/dsh-runtime/package.json": "65d30d2a7101433bdbb4c2fcaf960ca544d04d5fac0357f4a8168819868b95aa",
+      "tests/dsh-runtime/package-lock.json": "8b51fa9714452e72e43cb7b2d91588dfbc987a7bc6da30eac807e53eb47e3db6",
+      "tests/dsh-runtime-rc3/package.json": "e94697bbf902bff19c35b800122eb36b9572cb76169c4db00ad701a5d8774e6a",
+      "tests/dsh-runtime-rc3/package-lock.json": "c8df99eb2b303f412696e488c904cc294700813543d3c74a12d8addebb705762",
+      "tests/dsh-host/package.json": "418badd91175d5fd9eac2c77165da122db6ffae6bc3c415352725acaa194468d",
+      "tests/dsh-host/package-lock.json": "747f45d50de77174d93057a10606aaf9eca5340475184a3149b120fe99139b64",
+      "tests/dsh-host-rc3/package.json": "0d25b0b20a334fe7dd559e6128f8583d1a46f66f3ecb29dbeeb1420d71004e37",
+      "tests/dsh-host-rc3/package-lock.json": "961df03facb676c88c6418709d6208f1ad612113098a2e13ae589581d5138185",
+      "scripts/acceptance_identity.mjs": "1cccbbf890a99ee1cbbd6c2ede8a27929441a28f1a0134915b5655ac366d20b2"
+    },
+    "host_queue_sha256": "4730ab1178134ab64cabfc07b4170586fdbf24817d6bd9e4a974106186626c88"
+  },
+  "report_graph_sha256": "b3b647f4af6be5146493b175889906c7884f749fb337281430e564af7daa5bac",
+  "expiry": {
+    "kind": "event_bound",
+    "events": [
+      "Project version changes from 0.6.1",
+      "Next DSH host upgrade, including any primary or compatibility host pin/queue change",
+      "Any pinned dependency, manifest or lock cohort changes"
+    ],
+    "required_action": "Remove this exception or obtain a new explicit maintainer assessment in the next DSH upgrade batch; never carry it to a future rc or release automatically.",
+    "calendar_expiry": null,
+    "automatic_monitoring": false
+  },
+  "sources": [
+    "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+    "https://nvd.nist.gov/vuln/detail/CVE-2023-54404",
+    "https://github.com/deepseek-ai/deepseek-harness/discussions/10847"
+  ]
+}

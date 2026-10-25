@@ -41,6 +41,8 @@ The `0.6.1` Bundle requires DSH `>=0.2.1-rc.2` and Node.js `^22.19.0 || >=24.0.0
 
 **DSH compatibility:** The package requires `>=0.2.1-rc.2` — `0.2.1-rc.3` is the primary host this release is acceptance-tested against, and `0.2.1-rc.2` keeps compatibility coverage. DSH `0.2.0-rc.2` and `0.2.1-rc.1` are below the supported floor and later releases are admitted by the declared range, not by static version tables; a future host version inside the range is admitted but not yet tested. Contract and service tests cover synthetic V4 input. Source and synthetic checks are preserved in the [0.6.0 development record](docs/acceptance/v0.6.0-rc2.1-candidate.md). Native, model and UI results are recorded separately in the acceptance receipts attached to each exact release artifact; range admission does not establish testing of future hosts. See [DSH compatibility](#dsh-compatibility).
 
+**Known upstream security gap:** DSH rc.2/rc.3 pins vulnerable `zod@4.4.3` (GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404). The 0.6.1 release accepts this specific unresolved memory-exhaustion risk; everyday trigger probability has not been established. The exception must be reassessed at the next DSH upgrade. Read the [risk and exception scope](SECURITY.md#known-upstream-dependency-gap-in-061) before installing.
+
 The registry command below requires `0.6.1` to be published. When testing a candidate, install its reviewed tarball or source revision instead. Check the version on [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) before using the registry command:
 
 ```bash
@@ -98,7 +100,7 @@ A run accepts at most 2,000 selected snapshots and 64 MiB of serialized snapshot
 
 Reports and evidence remain on disk until explicitly deleted. `session_insights_cleanup` with a run's `workdir` is a read-only preview of its files and bytes. Deletion needs the human approval of the host: with `confirm: true` the tool asks the deployment's approval service once for exactly that run, and only an `allowed-once` grant (answering the prompt the user sees) deletes anything — a model-supplied flag alone never authorizes deletion, and hosts without an approval service fail closed. Typing the DSH command `/session-insights --cleanup <run>` previews and `/session-insights --cleanup <run> --confirm` deletes exactly one named run — the command runs no analysis and queues no model work, acting as the direct human entry. Cleanup removes the whole marked run, including its report, and cannot be undone. It refuses unmarked legacy directories and linked entries. Other runs, source logs and the optional CLI's shared caches are preserved. Review old CLI artifacts separately before removing them; the `dsh-session-insights cache` subcommand previews and (with `--delete`) removes only confirmed cache roots.
 
-The optional CLI still requires Python 3.11+ and `zstandard>=0.23,<1` for compressed logs; `jsonschema>=4.23,<5` is used only by development tests. Its bootstrap installer runs pip and manages its own skill/runtime directories. See [Security Policy](SECURITY.md) for the separate boundaries and STORE policy limits.
+The optional CLI still requires Python 3.11+ and `zstandard>=0.23,<1` for compressed logs; `jsonschema>=4.23,<5` and `tzdata>=2024.1` are used only by development tests. Its bootstrap installer runs pip and manages its own skill/runtime directories. See [Security Policy](SECURITY.md) for the separate boundaries and STORE policy limits.
 
 ## Privacy modes
 

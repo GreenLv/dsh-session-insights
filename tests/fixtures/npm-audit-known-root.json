@@ -1,0 +1,554 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "@deepseek-ai/dsh-agent": {
+      "name": "@deepseek-ai/dsh-agent",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-session",
+        "@deepseek-ai/dsh-session-projection",
+        "@deepseek-ai/dsh-system-prompt"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-commands",
+        "@deepseek-ai/dsh-compaction-image-offload",
+        "@deepseek-ai/dsh-sandbox-policy",
+        "@deepseek-ai/dsh-session-title",
+        "@deepseek-ai/dsh-tool-todo",
+        "@deepseek-ai/dsh-tools",
+        "@deepseek-ai/dsh-user-approval",
+        "@deepseek-ai/dsh-working-directory"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-agent"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-commands": {
+      "name": "@deepseek-ai/dsh-commands",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-session",
+        "zod"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-compaction"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-commands"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-compaction": {
+      "name": "@deepseek-ai/dsh-compaction",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-commands",
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-session"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-compaction-image-offload"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-compaction"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-compaction-image-offload": {
+      "name": "@deepseek-ai/dsh-compaction-image-offload",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-compaction",
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-session"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-session-format-catalog"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-compaction-image-offload"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-fs": {
+      "name": "@deepseek-ai/dsh-fs",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-sandbox"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-working-directory"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-fs"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-llm": {
+      "name": "@deepseek-ai/dsh-llm",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "zod"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-commands",
+        "@deepseek-ai/dsh-compaction",
+        "@deepseek-ai/dsh-compaction-image-offload",
+        "@deepseek-ai/dsh-fs",
+        "@deepseek-ai/dsh-sandbox",
+        "@deepseek-ai/dsh-session",
+        "@deepseek-ai/dsh-session-format-v1-to-v2",
+        "@deepseek-ai/dsh-session-query",
+        "@deepseek-ai/dsh-session-title",
+        "@deepseek-ai/dsh-system-prompt",
+        "@deepseek-ai/dsh-tools",
+        "@deepseek-ai/dsh-user-approval",
+        "@deepseek-ai/dsh-working-directory"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-llm"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-ptc-runtime": {
+      "name": "@deepseek-ai/dsh-ptc-runtime",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-sandbox"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-tools"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-ptc-runtime"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-sandbox": {
+      "name": "@deepseek-ai/dsh-sandbox",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-session"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-fs",
+        "@deepseek-ai/dsh-ptc-runtime",
+        "@deepseek-ai/dsh-sandbox-policy",
+        "@deepseek-ai/dsh-tools"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-sandbox"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-sandbox-policy": {
+      "name": "@deepseek-ai/dsh-sandbox-policy",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-sandbox",
+        "@deepseek-ai/dsh-session",
+        "@deepseek-ai/dsh-session-projection",
+        "@deepseek-ai/dsh-system-prompt",
+        "zod"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-tools"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-sandbox-policy"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-session": {
+      "name": "@deepseek-ai/dsh-session",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-llm"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-commands",
+        "@deepseek-ai/dsh-compaction",
+        "@deepseek-ai/dsh-compaction-image-offload",
+        "@deepseek-ai/dsh-sandbox",
+        "@deepseek-ai/dsh-sandbox-policy",
+        "@deepseek-ai/dsh-session-format-catalog",
+        "@deepseek-ai/dsh-session-projection",
+        "@deepseek-ai/dsh-session-query",
+        "@deepseek-ai/dsh-session-title",
+        "@deepseek-ai/dsh-tool-todo",
+        "@deepseek-ai/dsh-tools",
+        "@deepseek-ai/dsh-user-approval",
+        "@deepseek-ai/dsh-working-directory"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-session"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-session-format-catalog": {
+      "name": "@deepseek-ai/dsh-session-format-catalog",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-compaction-image-offload",
+        "@deepseek-ai/dsh-session",
+        "@deepseek-ai/dsh-session-format-v1-to-v2",
+        "@deepseek-ai/dsh-session-format-v2-to-v3",
+        "@deepseek-ai/dsh-session-format-v3-to-v4"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-session-query"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-session-format-catalog"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-session-format-v1-to-v2": {
+      "name": "@deepseek-ai/dsh-session-format-v1-to-v2",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-llm"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-session-format-catalog",
+        "@deepseek-ai/dsh-session-format-v2-to-v3"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-session-format-v1-to-v2"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-session-format-v2-to-v3": {
+      "name": "@deepseek-ai/dsh-session-format-v2-to-v3",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-session-format-v1-to-v2"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-session-format-catalog",
+        "@deepseek-ai/dsh-session-format-v3-to-v4"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-session-format-v2-to-v3"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-session-format-v3-to-v4": {
+      "name": "@deepseek-ai/dsh-session-format-v3-to-v4",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-session-format-v2-to-v3"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-session-format-catalog"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-session-format-v3-to-v4"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-session-projection": {
+      "name": "@deepseek-ai/dsh-session-projection",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-session",
+        "zod"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-sandbox-policy",
+        "@deepseek-ai/dsh-session-query",
+        "@deepseek-ai/dsh-session-title",
+        "@deepseek-ai/dsh-tool-todo",
+        "@deepseek-ai/dsh-working-directory"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-session-projection"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-session-query": {
+      "name": "@deepseek-ai/dsh-session-query",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-session",
+        "@deepseek-ai/dsh-session-format-catalog",
+        "@deepseek-ai/dsh-session-projection",
+        "@deepseek-ai/dsh-session-title",
+        "@deepseek-ai/dsh-tool-todo"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-session-query"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-session-title": {
+      "name": "@deepseek-ai/dsh-session-title",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-session",
+        "@deepseek-ai/dsh-session-projection",
+        "zod"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-session-query"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-session-title"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-system-prompt": {
+      "name": "@deepseek-ai/dsh-system-prompt",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-llm"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-sandbox-policy",
+        "@deepseek-ai/dsh-tools",
+        "@deepseek-ai/dsh-user-approval",
+        "@deepseek-ai/dsh-working-directory"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-system-prompt"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-tool-todo": {
+      "name": "@deepseek-ai/dsh-tool-todo",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-session",
+        "@deepseek-ai/dsh-session-projection",
+        "@deepseek-ai/dsh-tools",
+        "zod"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-session-query"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-tool-todo"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-tools": {
+      "name": "@deepseek-ai/dsh-tools",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-ptc-runtime",
+        "@deepseek-ai/dsh-sandbox",
+        "@deepseek-ai/dsh-sandbox-policy",
+        "@deepseek-ai/dsh-session",
+        "@deepseek-ai/dsh-system-prompt",
+        "@deepseek-ai/dsh-user-approval",
+        "@deepseek-ai/dsh-working-directory"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-tool-todo"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-tools"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-user-approval": {
+      "name": "@deepseek-ai/dsh-user-approval",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-session",
+        "@deepseek-ai/dsh-system-prompt"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-tools"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-user-approval"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "@deepseek-ai/dsh-working-directory": {
+      "name": "@deepseek-ai/dsh-working-directory",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-fs",
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-session",
+        "@deepseek-ai/dsh-session-projection",
+        "@deepseek-ai/dsh-system-prompt"
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-tools"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@deepseek-ai/dsh-working-directory"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    },
+    "zod": {
+      "name": "zod",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1243066,
+          "name": "zod",
+          "dependency": "zod",
+          "title": "Zod can exhaust memory while validating oversized constrained collections",
+          "url": "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+          "severity": "high",
+          "cwe": [
+            "CWE-770"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<4.6.6"
+        }
+      ],
+      "effects": [
+        "@deepseek-ai/dsh-commands",
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-sandbox-policy",
+        "@deepseek-ai/dsh-session-projection",
+        "@deepseek-ai/dsh-session-title",
+        "@deepseek-ai/dsh-tool-todo"
+      ],
+      "range": "<4.6.6",
+      "nodes": [
+        "node_modules/zod"
+      ],
+      "fixAvailable": {
+        "isSemVerMajor": true
+      }
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 23,
+      "critical": 0,
+      "total": 23
+    },
+    "dependencies": {
+      "prod": 1,
+      "dev": 1,
+      "optional": 0,
+      "peer": 36,
+      "peerOptional": 0,
+      "total": 37
+    }
+  }
+}

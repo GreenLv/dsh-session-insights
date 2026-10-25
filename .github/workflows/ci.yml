@@ -41,9 +41,8 @@ jobs:
 
   dependency-security:
     # Runtime and development dependency auditing. A scan that cannot reach
-    # its advisory database fails the job (never counts as a pass); applicable
-    # high/critical findings block the candidate. Exceptions need a recorded
-    # CVE, affected path, exploit precondition, expiry and maintainer decision.
+    # its advisory database fails the job. Only the exact single-release,
+    # host/lock-bound upstream exception is eligible; raw npm exits stay intact.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -54,14 +53,39 @@ jobs:
         with:
           python-version: '3.12'
       - run: npm ci --ignore-scripts
-      - name: Audit production Node dependencies (high and above)
-        run: npm audit --omit=dev --audit-level=high
-      - name: Audit the full Node dependency tree (high and above)
-        run: npm audit --audit-level=high
+      - name: Audit production Node dependencies and retain raw results
+        id: audit_prod
+        if: always()
+        continue-on-error: true
+        run: node scripts/audit_node_deps.mjs --scope prod --output reports/dependency-audit/prod
+      - name: Audit the full Node dependency tree and retain raw results
+        id: audit_full
+        if: always()
+        continue-on-error: true
+        run: node scripts/audit_node_deps.mjs --scope full --output reports/dependency-audit/full
       - name: Audit Python runtime and development dependencies
+        id: audit_python
+        if: always()
+        continue-on-error: true
         run: |
-          python -m pip install --disable-pip-version-check pip-audit
-          python scripts/audit_python_deps.py
+          set -euo pipefail
+          mkdir -p reports/dependency-audit
+          python -m pip install --disable-pip-version-check pip-audit 2>&1 | tee reports/dependency-audit/python-install.log
+          python scripts/audit_python_deps.py 2>&1 | tee reports/dependency-audit/python.log
+      - name: Require all three audits and validate the narrow exception
+        if: always()
+        env:
+          AUDIT_PROD_OUTCOME: ${{ steps.audit_prod.outcome }}
+          AUDIT_FULL_OUTCOME: ${{ steps.audit_full.outcome }}
+          AUDIT_PYTHON_OUTCOME: ${{ steps.audit_python.outcome }}
+        run: node scripts/audit_node_deps.mjs --verify-results reports/dependency-audit
+      - name: Retain raw dependency audit evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dependency-audit
+          path: reports/dependency-audit
+          if-no-files-found: error
 
   dsh-contract:
     # rc.3 is the primary acceptance host; rc.2 keeps compatibility coverage.
