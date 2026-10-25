@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 from . import __version__, analyzer, semantic
+from .output_safety import configure_cli_text_streams
 
 
 PRODUCT = "dsh-session-insights"
@@ -222,6 +223,7 @@ def cache_cleanup(home: Path) -> dict[str, object]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_cli_text_streams()
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in {"-h", "--help"}:
         print("usage: dsh-session-insights {report|semantic|doctor|install|uninstall} ...")

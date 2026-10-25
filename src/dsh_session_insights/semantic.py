@@ -1208,6 +1208,9 @@ def make_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from .output_safety import configure_cli_text_streams
+
+    configure_cli_text_streams()
     args = make_parser().parse_args(argv)
     try:
         return int(args.func(args))

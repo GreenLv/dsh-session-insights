@@ -5100,6 +5100,9 @@ def make_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from .output_safety import configure_cli_text_streams
+
+    configure_cli_text_streams()
     parser = make_parser()
     args = parser.parse_args(argv)
     try:

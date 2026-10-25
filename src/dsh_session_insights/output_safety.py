@@ -14,8 +14,27 @@ refused.
 from __future__ import annotations
 
 import os
+import io
+import sys
 import uuid
 from pathlib import Path
+
+
+def configure_cli_text_streams() -> None:
+    """Give CLI pipes the same UTF-8 contract as report files.
+
+    Windows consoles already support Unicode, but redirected streams may use
+    a legacy code page. Call only at CLI entry, never at library import time.
+    Keep invalid output strict; error diagnostics can escape a bad surrogate.
+    Embedded callers may provide StringIO or another non-reconfigurable stream.
+    """
+    for stream, errors in ((sys.stdout, "strict"), (sys.stderr, "backslashreplace")):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors=errors)
+            except (io.UnsupportedOperation, NotImplementedError):
+                pass
 
 
 class UnsafeOutputError(ValueError):

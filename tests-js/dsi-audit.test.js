@@ -159,15 +159,19 @@ test('F6: output validation rejects emails, URLs and paths by report privacy', (
 test('F8: native entry refuses relative project paths with an actionable error', () => {
   for (const value of ['.', 'src', 'a/b', '~workspace'])
     assert.throws(() => _test.normalizeOptions({ project: value }), /project must be an absolute path/)
-  assert.equal(_test.normalizeOptions({ project: '/synthetic/app/' }).project, '/synthetic/app')
+  const project = process.platform === 'win32' ? 'c:/synthetic/app' : '/synthetic/app'
+  assert.equal(_test.normalizeOptions({ project: project + '/' }).project, project)
   assert.equal(_test.normalizeProjectInput('C:\\Synthetic\\App\\', 'win32'), 'C:\\Synthetic\\App\\')
+  assert.throws(() => _test.normalizeProjectInput('/synthetic/app', 'win32'), /project must use a Windows path/)
 
 })
 
 test('F8: selection, worker and resume share the canonical key', () => {
-  const opts = _test.normalizeOptions({ project: '/synthetic/customer-a/app/', report_timezone: 'UTC' })
-  const inside = snapshot(1, '/synthetic/customer-a/app/sub')
-  const outside = snapshot(2, '/synthetic/customer-b/app')
+  const root = process.platform === 'win32' ? 'c:/synthetic' : '/synthetic'
+  const project = root + '/customer-a/app'
+  const opts = _test.normalizeOptions({ project: project + '/', report_timezone: 'UTC' })
+  const inside = snapshot(1, project + '/sub')
+  const outside = snapshot(2, root + '/customer-b/app')
   const coverageIn = { skipped_project: 0, skipped_outside_window: 0 }
   const coverageOut = { skipped_project: 0, skipped_outside_window: 0 }
   const { parseSnapshot } = await_import_free()
@@ -175,10 +179,10 @@ test('F8: selection, worker and resume share the canonical key', () => {
   parseSnapshot(outside, { ...opts, now: NOW + 60000, days: 30 }, coverageOut)
   assert.equal(coverageIn.skipped_project, 0)
   assert.equal(coverageOut.skipped_project, 1)
-  const scope = _test.requestedScope({ project: '/synthetic/customer-a/app/', report_timezone: 'UTC' })
-  assert.equal(scope.project, '/synthetic/customer-a/app')
+  const scope = _test.requestedScope({ project: project + '/', report_timezone: 'UTC' })
+  assert.equal(scope.project, project)
   // a different project is a different recorded scope, not a widening alias
-  assert.notEqual(_test.requestedScope({ project: '/synthetic/customer-a/app/other', report_timezone: 'UTC' }).project, scope.project)
+  assert.notEqual(_test.requestedScope({ project: project + '/other', report_timezone: 'UTC' }).project, scope.project)
 })
 
 function await_import_free() {
@@ -220,6 +224,27 @@ test('F10: shared timezone vectors hold in the native projection', () => {
     assert.deepEqual(got, { date: vector.date, hour: vector.hour, weekday: vector.weekday }, vector.name)
   }
   assert.throws(() => validateReportTimezone('Nowhere/Central'), RangeError)
+})
+
+test('F10: entry captures the default zone before the worker and host zone changes', async () => {
+  const saved = process.env.TZ
+  try {
+    process.env.TZ = 'Etc/UTC'
+    const options = { ..._test.normalizeOptions({}), now: NOW + 60000 }
+    const captured = new Intl.DateTimeFormat().resolvedOptions().timeZone
+    assert.equal(options.report_timezone, captured)
+    process.env.TZ = 'Asia/Shanghai'
+    const { report } = await _test.analyze([snapshot(1, '/synthetic/app')], options)
+    const row = report.session_summaries[0]
+    assert.equal(row.timezone, captured)
+    const expected = calendarInZone(NOW, captured)
+    assert.equal(row.date, expected.date)
+    assert.equal(row.start_hour_local, expected.hour)
+    assert.equal(row.weekday, expected.weekday)
+  } finally {
+    if (saved === undefined) delete process.env.TZ
+    else process.env.TZ = saved
+  }
 })
 
 test('F10: report rows record the zone and manifest selection carries it', () => {

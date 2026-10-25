@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import zstandard
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -73,7 +74,7 @@ def run_cli(args, home, pin_now=True):
     if args and args[0] in ("report",):
         command += ["--dsh-home", str(home)]
     return subprocess.run(
-        command, capture_output=True, text=True, cwd=str(ROOT),
+        command, capture_output=True, text=True, encoding="utf-8", cwd=str(ROOT),
         env={**os.environ, "PYTHONPATH": str(ROOT / "src"), "DSH_HOME": str(home)},
     )
 
@@ -159,7 +160,10 @@ class F1OutputBoundaryTests(unittest.TestCase):
             finally:
                 os.umask(old)
             self.assertEqual(target.read_text(encoding="utf-8"), "hello")
-            self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+            if os.name != "nt":
+                # F1/F2 specify POSIX mode bits; Windows inherits the private
+                # parent ACL and needs its separate native access readback.
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
             self.assertEqual(list(target.parent.iterdir()), [target])
 
     def test_semantic_finalize_uses_safe_output_paths(self):
@@ -200,10 +204,10 @@ class F2CacheBoundaryTests(unittest.TestCase):
                 os.umask(old)
             files = sorted((home / "insights" / "cache").rglob("*.json"))
             self.assertEqual(len(files), 1)
-            mode = stat.S_IMODE(files[0].stat().st_mode)
-            directory_mode = stat.S_IMODE(files[0].parent.stat().st_mode)
-            self.assertEqual(mode, 0o600)
-            self.assertEqual(directory_mode, 0o700)
+            if os.name != "nt":
+                # stat's read/write bits on Windows do not measure ACL access.
+                self.assertEqual(stat.S_IMODE(files[0].stat().st_mode), 0o600)
+                self.assertEqual(stat.S_IMODE(files[0].parent.stat().st_mode), 0o700)
             blob = files[0].read_text(encoding="utf-8")
             for marker in ("sk-test-", "sensitive-home"):
                 self.assertNotIn(marker, blob)
@@ -412,6 +416,16 @@ class F9ProjectIdentityTests(unittest.TestCase):
 
 
 class F10ReportTimezoneTests(unittest.TestCase):
+    def test_default_zone_is_captured_and_does_not_drift_after_host_change(self):
+        with mock.patch.dict(os.environ, {"TZ": "Etc/UTC"}):
+            captured = analyzer.resolve_report_timezone(None)
+        self.assertEqual(captured, "Etc/UTC")
+        instant = datetime(2026, 10, 22, 17, tzinfo=timezone.utc)
+        cfg = replace(config(Path("/synthetic")), report_timezone=captured)
+        with mock.patch.dict(os.environ, {"TZ": "Asia/Shanghai"}):
+            self.assertEqual(analyzer.resolve_report_timezone(None), "Asia/Shanghai")
+            self.assertEqual(instant.astimezone(analyzer.report_zone(cfg)).hour, 17)
+
     def test_shared_vectors_hold(self):
         for case in TZ_VECTORS["cases"]:
             with self.subTest(case=case["name"]):
@@ -1027,4 +1041,3 @@ class AC13FacetRootIdentityTests(unittest.TestCase):
             result = Path(temp) / "good.json"
             self.assertEqual(run_cli(["semantic", "finalize", "--workdir", str(workdir), "--keep-workdir",
                                       "--format", "json", "--output", str(result)], home).returncode, 0)
-

@@ -26,11 +26,15 @@ class NativeParityTests(unittest.TestCase):
                 with self.subTest(privacy=privacy, locale=locale):
                     self.compare(snapshots, privacy, locale)
 
-    def compare(self, snapshots, privacy='redacted', locale='en'):
+    def compare(self, snapshots, privacy='redacted', locale='en', report_timezone=None):
         now = datetime.fromisoformat(NOW.replace('Z', '+00:00'))
-        config = analyzer.AnalysisConfig(dsh_home=Path('/synthetic'), since=now-timedelta(days=30), until=now, generated_at=now, privacy_mode=privacy, metrics_only=privacy=='metrics', semantic_capture=True, deterministic_cache=False, locale=locale)
+        # One request has one captured zone. Independent host discovery may
+        # legitimately name the same clock UTC, Etc/UTC or UTC+00:00; parity
+        # must compare the same explicit input without dropping its label.
+        zone = report_timezone or analyzer.resolve_report_timezone(None)
+        config = analyzer.AnalysisConfig(dsh_home=Path('/synthetic'), since=now-timedelta(days=30), until=now, generated_at=now, privacy_mode=privacy, metrics_only=privacy=='metrics', semantic_capture=True, deterministic_cache=False, locale=locale, report_timezone=zone)
         reference = analyzer.build_report(config, session_snapshots=snapshots)
-        output = subprocess.run(['node', str(ROOT/'tests-js/fixtures/native-report.mjs')], input=json.dumps({'snapshots':snapshots,'options':{'now':int(now.timestamp()*1000),'days':30,'privacy':privacy,'locale':locale,'analysis_depth':'evidence'}}), text=True, encoding='utf-8', capture_output=True)
+        output = subprocess.run(['node', str(ROOT/'tests-js/fixtures/native-report.mjs')], input=json.dumps({'snapshots':snapshots,'options':{'now':int(now.timestamp()*1000),'days':30,'privacy':privacy,'locale':locale,'analysis_depth':'evidence','report_timezone':zone}}), text=True, encoding='utf-8', capture_output=True)
         self.assertEqual(output.returncode, 0, output.stderr)
         native = json.loads(output.stdout)['report']
         for key, value in reference['totals'].items():
@@ -45,6 +49,19 @@ class NativeParityTests(unittest.TestCase):
         for expected, actual in zip(reference['task_families'], native['task_families'], strict=True):
             self.assertEqual(actual, expected, 'task_family')
         return native
+
+    def test_equivalent_utc_zone_labels_remain_explicit_and_have_equal_calendars(self):
+        rows = records()
+        snapshots = [{'session': rows[0], 'events': rows[1:]}]
+        calendars = []
+        for zone in ('UTC', 'Etc/UTC', 'UTC+00:00'):
+            with self.subTest(zone=zone):
+                report = self.compare(snapshots, report_timezone=zone)
+                self.assertEqual(report['scope']['report_timezone'], zone)
+                self.assertEqual(report['session_summaries'][0]['timezone'], zone)
+                calendars.append([(row['date'], row['start_hour_local'], row['weekday']) for row in report['session_summaries']])
+        self.assertEqual(calendars[0], calendars[1])
+        self.assertEqual(calendars[0], calendars[2])
 
     def test_retry_approval_and_partial_turn_statistics(self):
         snapshot={'session':v4_header('retries'),'events':[]}

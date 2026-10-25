@@ -21,7 +21,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["jsonschema>=4.23,<5"]
+dev = ["jsonschema>=4.23,<5", "tzdata>=2024.1"]
 
 [project.scripts]
 dsh-session-insights = "dsh_session_insights.cli:main"
