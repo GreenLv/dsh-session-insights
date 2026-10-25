@@ -352,23 +352,32 @@ def select_families(families: list[dict[str, Any]], limit: int) -> list[dict[str
     return selected
 
 
-def secret_leak_errors(value: Any, privacy: str) -> list[str]:
-    """Reject model output that is wider than the sanitize contract.
+def secret_leak_errors(
+    value: Any,
+    privacy: str,
+    *,
+    allow_aggregate_identity: bool = False,
+    issued_identity: dict[str, Any] | None = None,
+) -> list[str]:
+    """Content rules for one model-produced structure.
 
-    Strings are visited individually (values and object keys): serializing to
-    one JSON blob would let backslash escaping hide Windows paths. The checked
-    categories mirror what input sanitization removes — including URL
-    userinfo/query in every mode — so validated output can never carry more
-    identity than the evidence the model was shown.
+    The structural exemption is caller-granted and narrow: only the aggregate
+    validation path — after it has confirmed the root envelope's digest
+    matches the identity prepare-aggregate actually issued — may pass
+    ``allow_aggregate_identity=True`` with that exact issued ``dict``. Facets
+    and every other caller use the default (no exemption): a facet never
+    receives an aggregate identity, so a same-named canonical-shaped object
+    there is unverified content and goes through every content rule. The
+    exemption covers only the two verified fields of that exact object;
+    nothing else in the structure is spared.
     """
     errors: list[str] = []
-    # The root aggregate identity envelope, when canonical, is the only
-    # structure exempt from free-text rules. shape is verified strictly:
-    # exactly two fields, identity_schema must be the INTEGER 1 (bool is not
-    # an int here), aggregate_input_digest a 64-char lowercase hex digest.
     root_envelope = None
-    if isinstance(value, dict):
-        envelope = value.get("aggregate_input_identity")
+    if allow_aggregate_identity and issued_identity is not None:
+        # Only an exact-shape canonical object qualifies for the exemption;
+        # the caller must additionally have verified its digest against the
+        # identity prepare-aggregate issued for this run.
+        envelope = issued_identity
         if (
             isinstance(envelope, dict)
             and set(envelope) == {"identity_schema", "aggregate_input_digest"}
@@ -398,13 +407,9 @@ def secret_leak_errors(value: Any, privacy: str) -> list[str]:
             if engine.ABS_UNIX_PATH_RE.search(text) or engine.ABS_WINDOWS_PATH_RE.search(text):
                 errors.append("redacted 输出包含绝对路径")
 
-    def visit(item: Any, *, at_root: bool = False) -> None:
+    def visit(item: Any) -> None:
         if item is root_envelope:
-            # Structural exemption applies ONLY to this exact object — the
-            # verified root aggregate identity whose two fields were checked
-            # by type and hex shape in aggregate_input_envelope_errors. The
-            # same key at any other position (facet, nested item, array) is
-            # ordinary model content and goes through every content rule.
+            # Caller-granted exemption for THIS exact verified object only.
             return
         if isinstance(item, dict):
             for key, child in item.items():
@@ -523,7 +528,7 @@ def all_facets(workdir: Path) -> list[dict[str, Any]]:
     return facets
 
 
-def validate_aggregate_value(value: Any, workdir: Path) -> list[str]:
+def validate_aggregate_value(value: Any, workdir: Path, *, verified_identity: dict[str, Any] | None = None) -> list[str]:
     manifest = load_manifest(workdir)
     candidates = candidate_map(workdir)
     allowed_families = set(manifest["selected_task_family_ids"])
@@ -570,7 +575,10 @@ def validate_aggregate_value(value: Any, workdir: Path) -> list[str]:
                 singleton = item.get("singleton_observation") is True
                 if len(set(families)) < 2 and not singleton:
                     errors.append(f"{prefix} 只有一个支持任务族，必须标记 singleton_observation=true")
-    errors.extend(secret_leak_errors(value, manifest["privacy"]))
+    # The structural exemption is granted only when the caller has ALREADY
+    # verified (via aggregate_input_envelope_errors) that the response names
+    # the identity prepare-aggregate issued. The facet path never grants it.
+    errors.extend(secret_leak_errors(value, manifest["privacy"], allow_aggregate_identity=verified_identity is not None, issued_identity=verified_identity))
     return errors
 
 
@@ -901,8 +909,15 @@ def aggregate_input_envelope_errors(value: Any, workdir: Path) -> list[str]:
 def command_validate_aggregate(args: argparse.Namespace) -> int:
     workdir = args.workdir.resolve()
     value = read_json(workdir / "semantic-report.json")
-    errors = validate_aggregate_value(value, workdir)
-    errors.extend(aggregate_input_envelope_errors(value, workdir))
+    # Envelope verification must precede content scanning: only after the
+    # response's identity matches the issued one is the root envelope granted
+    # the narrow structural exemption during content checks.
+    envelope_errors = aggregate_input_envelope_errors(value, workdir)
+    verified_identity = None
+    if not envelope_errors:
+        verified_identity = value.get("aggregate_input_identity")
+    errors = validate_aggregate_value(value, workdir, verified_identity=verified_identity)
+    errors.extend(envelope_errors)
     if errors:
         raise ValueError("; ".join(errors))
     manifest = load_manifest(workdir)
@@ -1058,7 +1073,12 @@ def command_finalize(args: argparse.Namespace) -> int:
             )
         facets = all_facets(workdir)
         aggregate = read_json(workdir / "semantic-report.json")
-        errors = validate_aggregate_value(aggregate, workdir)
+        envelope_errors = aggregate_input_envelope_errors(aggregate, workdir)
+        verified_identity = None
+        if not envelope_errors:
+            verified_identity = aggregate.get("aggregate_input_identity")
+        errors = validate_aggregate_value(aggregate, workdir, verified_identity=verified_identity)
+        errors.extend(envelope_errors)
         if errors:
             raise ValueError("; ".join(errors))
         candidates = candidate_map(workdir)

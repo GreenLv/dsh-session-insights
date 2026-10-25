@@ -816,6 +816,20 @@ class AC13NestedEnvelopeTests(unittest.TestCase):
             } for task in batch["tasks"]]
             semantic.write_json(workdir / "facet-outputs" / f"{batch_id}.json", {"facets": facets})
 
+    def _facets(self, workdir, manifest):
+        for batch_id in manifest["batch_ids"]:
+            batch = json.loads((workdir / "batches" / f"{batch_id}.json").read_text(encoding="utf-8"))
+            facets = [{
+                "task_family_id": task["task_family_id"], "goal": "实现完成",
+                "task_type": "implementation", "interaction_style": "detailed",
+                "instruction_handling": "followed", "tool_execution": "strong",
+                "verification_quality": "strong", "handoff_quality": "clear",
+                "frictions": ["none"], "strengths": ["clear goal"],
+                "outcome_inference": "fully_achieved",
+                "evidence_refs": [task["evidence"][0]["id"]],
+            } for task in batch["tasks"]]
+            semantic.write_json(workdir / "facet-outputs" / f"{batch_id}.json", {"facets": facets})
+
     def _aggregate(self, workdir, transform=None):
         candidates = json.loads((workdir / "semantic-evidence.json").read_text(encoding="utf-8"))["candidates"]
         family = candidates[0]["task_family_id"]
@@ -884,4 +898,133 @@ class AC13NestedEnvelopeTests(unittest.TestCase):
             self.assertEqual(run_cli(["semantic", "finalize", "--workdir", str(workdir), "--keep-workdir",
                                       "--format", "json", "--output", str(result)], home).returncode, 0)
             self.assertNotIn("SYNTHETIC", result.read_text(encoding="utf-8"))
+
+
+class AC13FacetRootIdentityTests(unittest.TestCase):
+    TOKEN = "a1b2c3d4" * 8  # 64-hex long-token control, explicitly synthetic
+
+    """Round-4 AC-13: the identity exemption is caller-granted.
+
+    A facet never receives an aggregate identity, so its root — or any nested
+    position — carrying a canonical-shaped aggregate_input_identity goes
+    through every content rule. Only the aggregate validation path, after
+    confirming the response names the issued identity, grants the exemption
+    for that exact verified object.
+    """
+
+    def _facets(self, workdir, manifest):
+        for batch_id in manifest["batch_ids"]:
+            batch = json.loads((workdir / "batches" / f"{batch_id}.json").read_text(encoding="utf-8"))
+            facets = [{
+                "task_family_id": task["task_family_id"], "goal": "实现完成",
+                "task_type": "implementation", "interaction_style": "detailed",
+                "instruction_handling": "followed", "tool_execution": "strong",
+                "verification_quality": "strong", "handoff_quality": "clear",
+                "frictions": ["none"], "strengths": ["clear goal"],
+                "outcome_inference": "fully_achieved",
+                "evidence_refs": [task["evidence"][0]["id"]],
+            } for task in batch["tasks"]]
+            semantic.write_json(workdir / "facet-outputs" / f"{batch_id}.json", {"facets": facets})
+
+    def _aggregate(self, workdir):
+        candidates = json.loads((workdir / "semantic-evidence.json").read_text(encoding="utf-8"))["candidates"]
+        family = candidates[0]["task_family_id"]
+        evidence = candidates[0]["evidence"][0]["id"]
+        value = {section: [] for section in semantic.AGGREGATE_SECTIONS}
+        value["strengths"] = [{"title": "稳定交付", "text": "会话完成目标。",
+            "supporting_task_family_ids": [family], "evidence_refs": [evidence],
+            "confidence": "high", "measurement": "measured"}]
+        value["aggregate_input_identity"] = json.loads(
+            (workdir / "aggregate-input-identity.json").read_text(encoding="utf-8"))
+        semantic.write_json(workdir / "semantic-report.json", value)
+
+    def _facet_with_root_identity(self):
+        return {
+            "task_family_id": "task-x", "goal": "g", "task_type": "implementation",
+            "interaction_style": "detailed", "instruction_handling": "followed",
+            "tool_execution": "strong", "verification_quality": "strong",
+            "handoff_quality": "clear", "frictions": [], "strengths": ["s"],
+            "outcome_inference": "fully_achieved", "evidence_refs": ["evidence-1"],
+            "aggregate_input_identity": {"identity_schema": 1, "aggregate_input_digest": self.TOKEN},
+        }
+
+    def test_same_token_free_content_vs_facet_root(self):
+        free = semantic.secret_leak_errors({"payload": self.TOKEN}, "redacted")
+        facet_root = semantic.secret_leak_errors(self._facet_with_root_identity(), "redacted")
+        self.assertTrue(free, "control: the token is a long token as free content")
+        self.assertTrue(facet_root, "facet-root canonical-shape identity must NOT be exempt")
+        nested = semantic.secret_leak_errors(
+            {"items": [{"aggregate_input_identity": {"identity_schema": 1, "aggregate_input_digest": self.TOKEN}}]},
+            "redacted")
+        self.assertTrue(nested, "nested identity object must NOT be exempt")
+
+    def test_aggregate_grants_exemption_only_after_verification(self):
+        identity = {"identity_schema": 1, "aggregate_input_digest": self.TOKEN}
+        value = {"aggregate_input_identity": dict(identity),
+                 "strengths": [{"title": "t", "text": "t", "supporting_task_family_ids": ["a"],
+                                "evidence_refs": ["b"], "confidence": "high", "measurement": "measured"}]}
+        # without caller grant: scanned like content (no exemption)
+        self.assertTrue(semantic.secret_leak_errors(value, "redacted"))
+        # The caller contract: confirm the response names the issued identity,
+        # THEN pass that exact response envelope as issued_identity.
+        assert value["aggregate_input_identity"] == identity
+        self.assertFalse(semantic.secret_leak_errors(
+            value, "redacted", allow_aggregate_identity=True, issued_identity=value["aggregate_input_identity"]))
+        # A response envelope that does NOT match the issued one must first be
+        # refused by the envelope check; if the caller (incorrectly) granted it
+        # anyway, only the matching object would be exempt — the mismatching
+        # envelope here carries a different digest and stays scanned.
+        other = {"identity_schema": 1,
+                 "aggregate_input_digest": self.TOKEN}  # digest differs from the issued one
+        mismatch = {"aggregate_input_identity": other,
+                    "strengths": value["strengths"]}
+        self.assertTrue(semantic.secret_leak_errors(
+            mismatch, "redacted", allow_aggregate_identity=True, issued_identity=identity),
+            "a non-issued envelope must stay scanned even under a grant")
+
+    def test_production_facet_with_root_identity_is_refused(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            write_plain(home, session_rows())
+            workdir = Path(temp) / "work"
+            t = F11AggregateFreshnessTests()
+            manifest = t._prepared_workdir(home, workdir)
+            for batch_id in manifest["batch_ids"]:
+                batch = json.loads((workdir / "batches" / f"{batch_id}.json").read_text(encoding="utf-8"))
+                facets = [{
+                    "task_family_id": task["task_family_id"], "goal": "实现完成",
+                    "task_type": "implementation", "interaction_style": "detailed",
+                    "instruction_handling": "followed", "tool_execution": "strong",
+                    "verification_quality": "strong", "handoff_quality": "clear",
+                    "frictions": ["none"], "strengths": ["clear goal"],
+                    "outcome_inference": "fully_achieved",
+                    "evidence_refs": [task["evidence"][0]["id"]],
+                    "aggregate_input_identity": {"identity_schema": 1, "aggregate_input_digest": self.TOKEN},
+                } for task in batch["tasks"]]
+                semantic.write_json(workdir / "facet-outputs" / f"{batch_id}.json", {"facets": facets})
+            validate = run_cli(["semantic", "validate-batch", "--workdir", str(workdir),
+                                "--batch", manifest["batch_ids"][0]], home)
+            self.assertNotEqual(validate.returncode, 0, "facet identity object exempted in production validate-batch")
+            prepare = run_cli(["semantic", "prepare-aggregate", "--workdir", str(workdir)], home)
+            self.assertNotEqual(prepare.returncode, 0, "facet identity leaked into aggregate input")
+            final = Path(temp) / "report.json"
+            finalize = run_cli(["semantic", "finalize", "--workdir", str(workdir), "--keep-workdir",
+                                "--format", "json", "--output", str(final)], home)
+            self.assertNotEqual(finalize.returncode, 0)
+            self.assertFalse(finalize.returncode == 0 and self.TOKEN in final.read_text(encoding="utf-8"))
+
+    def test_production_aggregate_with_verified_identity_still_passes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            write_plain(home, session_rows())
+            workdir = Path(temp) / "work"
+            t = F11AggregateFreshnessTests()
+            manifest = t._prepared_workdir(home, workdir)
+            self._facets(workdir, manifest)
+            self.assertEqual(run_cli(["semantic", "prepare-aggregate", "--workdir", str(workdir)], home).returncode, 0)
+            self._aggregate(workdir)
+            self.assertEqual(run_cli(["semantic", "validate-aggregate", "--workdir", str(workdir)], home).returncode, 0)
+            result = Path(temp) / "good.json"
+            self.assertEqual(run_cli(["semantic", "finalize", "--workdir", str(workdir), "--keep-workdir",
+                                      "--format", "json", "--output", str(result)], home).returncode, 0)
 
