@@ -1,0 +1,141 @@
+{
+  "schema": "release-receipt/v2",
+  "status": "passed",
+  "release_profile": "package",
+  "repository": {
+    "url": "https://github.com/GreenLv/dsh-session-insights",
+    "commit": "d27d64a2e740b7b5d51217191c30f4dcd0e946e5"
+  },
+  "version": "0.6.1",
+  "tag": "v0.6.1",
+  "artifact": {
+    "filename": "dsh-session-insights-0.6.1.tgz",
+    "sha256": "0c684a8d1b60a5ed8fd528f9cf0ca215978703aa32123e0f9272286592bf6fd6",
+    "size_bytes": 189879
+  },
+  "channels": [
+    {
+      "id": "source_tag",
+      "kind": "source_tag",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/tree/v0.6.1",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.6.1",
+        "commit": "d27d64a2e740b7b5d51217191c30f4dcd0e946e5",
+        "artifact_sha256": null
+      },
+      "observed": {
+        "version": "0.6.1",
+        "commit": "d27d64a2e740b7b5d51217191c30f4dcd0e946e5",
+        "artifact_sha256": null
+      }
+    },
+    {
+      "id": "package_registry",
+      "kind": "package_registry",
+      "required": true,
+      "status": "verified",
+      "url": "https://www.npmjs.com/package/dsh-session-insights/v/0.6.1",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.6.1",
+        "commit": "d27d64a2e740b7b5d51217191c30f4dcd0e946e5",
+        "artifact_sha256": "0c684a8d1b60a5ed8fd528f9cf0ca215978703aa32123e0f9272286592bf6fd6"
+      },
+      "observed": {
+        "version": "0.6.1",
+        "commit": "d27d64a2e740b7b5d51217191c30f4dcd0e946e5",
+        "artifact_sha256": "0c684a8d1b60a5ed8fd528f9cf0ca215978703aa32123e0f9272286592bf6fd6"
+      }
+    },
+    {
+      "id": "github_release",
+      "kind": "repository_release",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.6.1",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.6.1",
+        "commit": "d27d64a2e740b7b5d51217191c30f4dcd0e946e5",
+        "artifact_sha256": "0c684a8d1b60a5ed8fd528f9cf0ca215978703aa32123e0f9272286592bf6fd6"
+      },
+      "observed": {
+        "version": "0.6.1",
+        "commit": "d27d64a2e740b7b5d51217191c30f4dcd0e946e5",
+        "artifact_sha256": "0c684a8d1b60a5ed8fd528f9cf0ca215978703aa32123e0f9272286592bf6fd6"
+      }
+    },
+    {
+      "id": "public_readback",
+      "kind": "public_readback",
+      "required": true,
+      "status": "verified",
+      "url": "https://registry.npmjs.org/dsh-session-insights/-/dsh-session-insights-0.6.1.tgz",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.6.1",
+        "commit": "d27d64a2e740b7b5d51217191c30f4dcd0e946e5",
+        "artifact_sha256": "0c684a8d1b60a5ed8fd528f9cf0ca215978703aa32123e0f9272286592bf6fd6"
+      },
+      "observed": {
+        "version": "0.6.1",
+        "commit": "d27d64a2e740b7b5d51217191c30f4dcd0e946e5",
+        "artifact_sha256": "0c684a8d1b60a5ed8fd528f9cf0ca215978703aa32123e0f9272286592bf6fd6"
+      }
+    }
+  ],
+  "assets": [
+    {
+      "filename": "acceptance-components.json",
+      "sha256": "166bbacbd9f35dda484723077debf06e21ea3539fa820a7981283c2870eef6eb",
+      "size_bytes": 4914,
+      "role": "other"
+    },
+    {
+      "filename": "artifact.json",
+      "sha256": "73aea87d30c7efc2ee5312aaccf547bee707e4ad113d7e09e2cc88fffd537f7b",
+      "size_bytes": 4105,
+      "role": "manifest"
+    },
+    {
+      "filename": "dsh-session-insights-0.6.1.tgz",
+      "sha256": "0c684a8d1b60a5ed8fd528f9cf0ca215978703aa32123e0f9272286592bf6fd6",
+      "size_bytes": 189879,
+      "role": "artifact"
+    },
+    {
+      "filename": "macos-portable-annex.json",
+      "sha256": "f33a4af735a24b56a125da1199708dd30314580c23cda131bc71ec4bcda29e6b",
+      "size_bytes": 11316,
+      "role": "native_annex"
+    },
+    {
+      "filename": "reader-review.json",
+      "sha256": "d299ec97b25825deee7c3a570912bc46dfb3bb7947df877a9e04bfdd93159e9f",
+      "size_bytes": 4783,
+      "role": "other"
+    },
+    {
+      "filename": "tgz.sha256",
+      "sha256": "cd7171a4977cf0a3c452242631f85ca401e42117735e826172d38c5892ad7705",
+      "size_bytes": 97,
+      "role": "checksum"
+    },
+    {
+      "filename": "windows-portable-annex.json",
+      "sha256": "8b89caced0a6615467d59dfc9550a2b142c75bf80d13635b952bfd8e7732042b",
+      "size_bytes": 11316,
+      "role": "native_annex"
+    }
+  ],
+  "run": {
+    "started_at": "2026-10-25T17:06:06Z",
+    "finished_at": "2026-10-25T17:17:32.411877+00:00"
+  },
+  "unperformed_actions": [
+    "promotion"
+  ]
+}
