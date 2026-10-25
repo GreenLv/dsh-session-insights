@@ -788,3 +788,100 @@ class AC13EnvelopeShapeTests(unittest.TestCase):
             self.assertEqual(good.returncode, 0, good.stderr)
             self.assertNotIn("SYNTHETIC-REPAIR-TOKEN", result.read_text(encoding="utf-8"))
 
+
+class AC13NestedEnvelopeTests(unittest.TestCase):
+    """Round-3 AC-13: only the verified ROOT identity envelope is exempt.
+
+    The same key inside a nested aggregate item, inside a facet, or with a
+    bool identity_schema goes through every content rule and is refused; the
+    canonical root envelope still validates and completes.
+    """
+
+    def _prepared(self, home, workdir):
+        t = F11AggregateFreshnessTests()
+        manifest = t._prepared_workdir(home, workdir)
+        return t, manifest
+
+    def _facets(self, workdir, manifest):
+        for batch_id in manifest["batch_ids"]:
+            batch = json.loads((workdir / "batches" / f"{batch_id}.json").read_text(encoding="utf-8"))
+            facets = [{
+                "task_family_id": task["task_family_id"], "goal": "实现完成",
+                "task_type": "implementation", "interaction_style": "detailed",
+                "instruction_handling": "followed", "tool_execution": "strong",
+                "verification_quality": "strong", "handoff_quality": "clear",
+                "frictions": ["none"], "strengths": ["clear goal"],
+                "outcome_inference": "fully_achieved",
+                "evidence_refs": [task["evidence"][0]["id"]],
+            } for task in batch["tasks"]]
+            semantic.write_json(workdir / "facet-outputs" / f"{batch_id}.json", {"facets": facets})
+
+    def _aggregate(self, workdir, transform=None):
+        candidates = json.loads((workdir / "semantic-evidence.json").read_text(encoding="utf-8"))["candidates"]
+        family = candidates[0]["task_family_id"]
+        evidence = candidates[0]["evidence"][0]["id"]
+        value = {section: [] for section in semantic.AGGREGATE_SECTIONS}
+        value["strengths"] = [{"title": "稳定交付", "text": "会话完成目标。",
+            "supporting_task_family_ids": [family], "evidence_refs": [evidence],
+            "confidence": "high", "measurement": "measured"}]
+        value["aggregate_input_identity"] = json.loads(
+            (workdir / "aggregate-input-identity.json").read_text(encoding="utf-8"))
+        if transform:
+            transform(value)
+        semantic.write_json(workdir / "semantic-report.json", value)
+
+    def test_nested_identity_in_aggregate_item_is_refused(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            write_plain(home, session_rows())
+            workdir = Path(temp) / "work"
+            _, manifest = self._prepared(home, workdir)
+            self._facets(workdir, manifest)
+            self.assertEqual(run_cli(["semantic", "prepare-aggregate", "--workdir", str(workdir)], home).returncode, 0)
+            secret = "Bearer SYNTHETIC-NESTED-LEAK-1234567890".ljust(64, "x")
+            self._aggregate(workdir, lambda v: v["strengths"][0].__setitem__(
+                "aggregate_input_identity", {"identity_schema": 1, "aggregate_input_digest": secret}))
+            validate = run_cli(["semantic", "validate-aggregate", "--workdir", str(workdir)], home)
+            self.assertNotEqual(validate.returncode, 0, "nested identity object was exempted")
+            result = Path(temp) / "out.json"
+            finalize = run_cli(["semantic", "finalize", "--workdir", str(workdir), "--keep-workdir",
+                                "--format", "json", "--output", str(result)], home)
+            self.assertNotEqual(finalize.returncode, 0)
+            self.assertFalse(result.exists())
+
+    def test_nested_identity_in_facet_is_refused(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            write_plain(home, session_rows())
+            workdir = Path(temp) / "work"
+            _, manifest = self._prepared(home, workdir)
+            self._facets(workdir, manifest)
+            facet_path = next((workdir / "facet-outputs").glob("*.json"))
+            value = json.loads(facet_path.read_text(encoding="utf-8"))
+            value["facets"][0]["aggregate_input_identity"] = {
+                "identity_schema": 1,
+                "aggregate_input_digest": "Bearer SYNTHETIC-FACET-LEAK-1234567890".ljust(64, "x")}
+            facet_path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+            validate = run_cli(["semantic", "validate-batch", "--workdir", str(workdir),
+                                "--batch", manifest["batch_ids"][0]], home)
+            self.assertNotEqual(validate.returncode, 0, "facet identity object was exempted")
+
+    def test_bool_identity_schema_is_refused_and_canonical_still_passes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            write_plain(home, session_rows())
+            workdir = Path(temp) / "work"
+            _, manifest = self._prepared(home, workdir)
+            self._facets(workdir, manifest)
+            self.assertEqual(run_cli(["semantic", "prepare-aggregate", "--workdir", str(workdir)], home).returncode, 0)
+            self._aggregate(workdir, lambda v: v["aggregate_input_identity"].__setitem__("identity_schema", True))
+            validate = run_cli(["semantic", "validate-aggregate", "--workdir", str(workdir)], home)
+            self.assertNotEqual(validate.returncode, 0, "bool identity_schema accepted")
+            # canonical root envelope still completes
+            self._aggregate(workdir)
+            self.assertEqual(run_cli(["semantic", "validate-aggregate", "--workdir", str(workdir)], home).returncode, 0)
+            result = Path(temp) / "good.json"
+            self.assertEqual(run_cli(["semantic", "finalize", "--workdir", str(workdir), "--keep-workdir",
+                                      "--format", "json", "--output", str(result)], home).returncode, 0)
+            self.assertNotIn("SYNTHETIC", result.read_text(encoding="utf-8"))
+

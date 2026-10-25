@@ -15,7 +15,7 @@
 - Python local 模式现在与 Node 运行时一致地去除 URL userinfo（及 query/fragment 凭据）；损坏 URL 折叠为占位符而不是让报告失败。
 - aggregate 模型输入按本次运行的分析隐私重新投影——包括对象键在内的所有自由字符串，local 隐私的基础报告无法再放宽 redacted 分析输入。
 - `injected_source_kinds` 中的扩展 `source.kind` 遵循共享分类词汇表：已文档化的种类保持可读，扩展种类按隐私模式脱敏/伪名化，凭据在任何模式（含 local）都不落盘。
-- 模型输出校验覆盖完整输入脱敏契约（含加号的邮箱、URL userinfo/query、标识符、路径，值与对象键同查）；无效替换保留先前有效字节，未经 submit 路径放置的 aggregate 文件属于不可信输入，finalize 拒绝。
+- 模型输出校验覆盖输入脱敏契约（含加号的邮箱、URL userinfo/query、标识符、路径——值与对象键）；无效替换保留先前有效字节，且未经接受提交路径放置的 aggregate 文件属不可信输入，finalize 拒绝。aggregate 响应必须回显规范的 `aggregate_input_identity`——恰好 `identity_schema: 1`（整数；布尔拒绝）加 prepare-aggregate 签发的 64 位十六进制摘要——同名结构出现在嵌套项、facet 等其它位置时按普通内容对待并完整扫描。
 - 头部可判定范围外的项目损坏日志在有界读取后直接跳过（不解析、不缓存、不阻断健康项目）；范围内损坏仍显式失败关闭，并附带隐私安全的会话定位符与行号。
 - 原生 run 删除必须经宿主 `ctx.approval` 接缝获得人工审批（`allowed-once`，仅作用于当次调用，并以调用方的 agent、call id 与取消信号执行）；模型自填 `confirm=true` 不再能删除任何内容，无审批服务即失败关闭。直接键入 DSH 命令 `/session-insights --cleanup <run> [--confirm]` 是纯人工入口：默认仅预览，`--confirm` 恰好删除一个指定 run，且不运行任何分析。
 

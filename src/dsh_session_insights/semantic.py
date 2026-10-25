@@ -362,6 +362,22 @@ def secret_leak_errors(value: Any, privacy: str) -> list[str]:
     identity than the evidence the model was shown.
     """
     errors: list[str] = []
+    # The root aggregate identity envelope, when canonical, is the only
+    # structure exempt from free-text rules. shape is verified strictly:
+    # exactly two fields, identity_schema must be the INTEGER 1 (bool is not
+    # an int here), aggregate_input_digest a 64-char lowercase hex digest.
+    root_envelope = None
+    if isinstance(value, dict):
+        envelope = value.get("aggregate_input_identity")
+        if (
+            isinstance(envelope, dict)
+            and set(envelope) == {"identity_schema", "aggregate_input_digest"}
+            and type(envelope.get("identity_schema")) is int
+            and envelope["identity_schema"] == 1
+            and isinstance(envelope.get("aggregate_input_digest"), str)
+            and re.fullmatch(r"[0-9a-f]{64}", envelope["aggregate_input_digest"])
+        ):
+            root_envelope = envelope
 
     def check(text: str) -> None:
         for name, pattern in (
@@ -382,23 +398,16 @@ def secret_leak_errors(value: Any, privacy: str) -> list[str]:
             if engine.ABS_UNIX_PATH_RE.search(text) or engine.ABS_WINDOWS_PATH_RE.search(text):
                 errors.append("redacted 输出包含绝对路径")
 
-    def visit(item: Any) -> None:
+    def visit(item: Any, *, at_root: bool = False) -> None:
+        if item is root_envelope:
+            # Structural exemption applies ONLY to this exact object — the
+            # verified root aggregate identity whose two fields were checked
+            # by type and hex shape in aggregate_input_envelope_errors. The
+            # same key at any other position (facet, nested item, array) is
+            # ordinary model content and goes through every content rule.
+            return
         if isinstance(item, dict):
             for key, child in item.items():
-                # Only a canonical aggregate_input_identity envelope (exactly
-                # identity_schema:int==1 + aggregate_input_digest:64-hex) is
-                # structural and exempt from free-text rules — and only its two
-                # verified fields skip the check. Anything else inside or around
-                # the envelope goes through content rules like model text.
-                if (
-                    key == "aggregate_input_identity"
-                    and isinstance(child, dict)
-                    and set(child) == {"identity_schema", "aggregate_input_digest"}
-                    and child.get("identity_schema") == 1
-                    and isinstance(child.get("aggregate_input_digest"), str)
-                    and len(child["aggregate_input_digest"]) == 64
-                ):
-                    continue
                 check(str(key))
                 visit(child)
         elif isinstance(item, str):

@@ -15,22 +15,36 @@ const base=resolve(process.argv[2] || ''), hostRoot=resolve(process.argv[3] || '
 const profile=process.argv[4] || 'web'
 if(!process.argv[2] || !process.argv[3] || !['web','headless'].includes(profile))throw new Error('artifact directory, official CLI runtime root, web|headless required')
 const source=fileURLToPath(new URL('../',import.meta.url))
-const {inspectRuntime}=await import('./acceptance_identity.mjs')
+const {inspectRuntime, HOST_TARGETS}=await import('./acceptance_identity.mjs')
+// Everything that can fail during initialization — annex construction needs
+// the ACTUAL host version, which is only known after resolving the host
+// packages — lives inside the guarded body so a failure writes the canonical
+// failed annex with cleanup evidence instead of crashing before the try.
 const canonical=JSON.parse(await readFile(join(base,'artifact.json'),'utf8'))
 const tgz=join(base,canonical.filename)
-const work=await mkdtemp(join(base,'macos-native-')),home=join(work,'dsh-home'),project=join(work,'中文 项目 目录')
-await mkdir(home,{mode:0o700});await mkdir(project)
-process.env.DSH_HOME=home;process.env.DSH_TELEMETRY_DISABLED='1';process.chdir(project)
-const hostManifest=await realpath(join(hostRoot,'node_modules/@deepseek-ai/dsh/package.json'))
-const req=createRequire(hostManifest),load=async n=>import(pathToFileURL(req.resolve(n)).href)
-const {runProfile}=await load('@deepseek-ai/dsh/profile-boot')
-const {createLaunchEnvironmentSnapshot}=await load('@deepseek-ai/dsh-launch-environment')
-const {sessionFormatCatalog}=await load('@deepseek-ai/dsh-session-format-catalog')
-const tools=['session_insights_prepare','session_insights_get_batch','session_insights_submit_batch','session_insights_get_aggregate','session_insights_submit_aggregate','session_insights_finalize','session_insights_cleanup']
 const output=join(base,`${profile}-native-results`);await mkdir(output,{recursive:true,mode:0o700})
-const annex={schema:'native-acceptance/v2',status:'failed',product:'dsh-session-insights',gate_profile:`actual-${profile}-host`,repository:{url:canonical.repository,commit:canonical.commit},runtime_tree_sha256:null,artifact:{filename:canonical.filename,sha256:canonical.sha256,size_bytes:canonical.size_bytes,file_count:canonical.file_count,git_head:canonical.commit},platform:{os:process.platform==='win32'?'windows':'macos',shell:process.platform==='win32'?'pwsh':'posix',toolchain:{node:process.version,architecture:process.arch,dsh:TARGET}},gates:[],cleanup:{status:'not_run',remaining_ids:[]},run:{started_at:new Date().toISOString(),finished_at:'',run_url:null},unperformed_actions:['commit','push','merge','tag','package_publish','release','public_promotion']}
-let app,owner,currentGate='artifact_digest',failure
-const record=(id,note,subject={kind:'artifact',id:canonical.sha256})=>{annex.gates.push({id,required:true,status:'passed',subject,exit_code:0,note,evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}});console.log(JSON.stringify({gate:id,status:'passed'}))}
+let app,owner,currentGate='artifact_digest',failure,work,annex
+const writeAnnex=async()=>{await writeFile(join(base,`${profile}-native-annex.json`),JSON.stringify(annex,null,2)+'\n')}
+const recordGate=(id,note,subject={kind:'artifact',id:canonical.sha256})=>{if(!annex)return;annex.gates.push({id,required:true,status:'passed',subject,exit_code:0,note,evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}});console.log(JSON.stringify({gate:id,status:'passed'}))}
+try{
+ const work0=await mkdtemp(join(base,'macos-native-'));work=work0
+ const home=join(work,'dsh-home'),project=join(work,'中文 项目 目录')
+ await mkdir(home,{mode:0o700});await mkdir(project)
+ process.env.DSH_HOME=home;process.env.DSH_TELEMETRY_DISABLED='1';process.chdir(project)
+ const hostManifest=await realpath(join(hostRoot,'node_modules/@deepseek-ai/dsh/package.json'))
+ const hostVersion=JSON.parse(await readFile(hostManifest,'utf8')).version
+ // The acceptance target is derived from the ACTUAL host package and must be
+ // one of the mapped acceptance targets; it is never an unverified constant.
+ const allTargets=[HOST_TARGETS.primary,...HOST_TARGETS.compatibility]
+ if(!allTargets.includes(hostVersion))
+  throw new Error(`host ${hostVersion} is not an acceptance target (${allTargets.join(', ')})`)
+ const req=createRequire(hostManifest),load=async n=>import(pathToFileURL(req.resolve(n)).href)
+ const {runProfile}=await load('@deepseek-ai/dsh/profile-boot')
+ const {createLaunchEnvironmentSnapshot}=await load('@deepseek-ai/dsh-launch-environment')
+ const {sessionFormatCatalog}=await load('@deepseek-ai/dsh-session-format-catalog')
+ const tools=['session_insights_prepare','session_insights_get_batch','session_insights_submit_batch','session_insights_get_aggregate','session_insights_submit_aggregate','session_insights_finalize','session_insights_cleanup']
+ annex={schema:'native-acceptance/v2',status:'failed',product:'dsh-session-insights',gate_profile:`actual-${profile}-host`,repository:{url:canonical.repository,commit:canonical.commit},runtime_tree_sha256:null,artifact:{filename:canonical.filename,sha256:canonical.sha256,size_bytes:canonical.size_bytes,file_count:canonical.file_count,git_head:canonical.commit},platform:{os:process.platform==='win32'?'windows':'macos',shell:process.platform==='win32'?'pwsh':'posix',toolchain:{node:process.version,architecture:process.arch,dsh:hostVersion}},gates:[],cleanup:{status:'not_run',remaining_ids:[]},run:{started_at:new Date().toISOString(),finished_at:'',run_url:null},unperformed_actions:['commit','push','merge','tag','package_publish','release','public_promotion']}
+const record=recordGate
 const begin=id=>{currentGate=id}
 const env={...process.env,npm_config_cache:join(work,'npm-cache'),npm_config_store_dir:join(work,'pnpm-store'),XDG_CACHE_HOME:join(work,'cache'),XDG_DATA_HOME:join(work,'data')}
 const cli=async args=>run(process.execPath,[join(dirname(hostManifest),'lib/bin.js'),'plugin','--profile',profile,...args],{env,cwd:project,timeout:180000,maxBuffer:8*1024*1024})
@@ -60,7 +74,7 @@ const checkedReport=async(locale,prefix)=>{
  await cp(join(dir,json),join(output,`${prefix}.json`));await cp(join(dir,html),join(output,`${prefix}.html`))
  return {dir,report}
 }
-try{
+
  begin('artifact_digest');assert.equal(digest(await readFile(tgz)),canonical.sha256);record(currentGate,'canonical producer SHA-256 compared before install')
  begin('runtime_closure');const runtime=await inspectRuntime(dirname(hostManifest));annex.runtime_tree_sha256=runtime.sha256;await writeFile(join(output,'runtime-inventory.json'),JSON.stringify(runtime,null,2)+'\n');record(currentGate,`${runtime.identities.length} actual CLI-resolved DSH/Cordis package inventories`,{kind:'runtime_tree',id:runtime.sha256})
  begin('official_cli_install');await cli(['add',tgz]);record(currentGate,'official CLI installed canonical package under isolated home')
@@ -79,7 +93,30 @@ try{
  begin('rerun_after_cancel');const rerun=await execute('session_insights_prepare',{days:30,project,privacy:'redacted',locale:'en'});assert.equal(rerun.selected,1);assert.ok(rerun.batches.length);const final=await execute('session_insights_finalize',{workdir:rerun.workdir,fallback:true});assert.equal(JSON.parse(await readFile(final.data,'utf8')).totals.sessions,1);record(currentGate,'populated rerun and explicit deterministic fallback succeeded after cancellation')
  begin('cleanup_tool');const preview=await execute('session_insights_cleanup',{workdir:rerun.workdir});assert.ok(preview);await execute('session_insights_cleanup',{workdir:rerun.workdir,confirm:true});await assert.rejects(stat(rerun.workdir),{code:'ENOENT'});record(currentGate,'preview then confirmed cleanup removed only the agreed test run')
  await owner.dispose();owner=undefined;await app.shutdown.shutdown(0);app=undefined;await cli(['remove','dsh-session-insights']);record('uninstall_official_cli','official CLI removed isolated installation after host disposal')
-}catch(e){failure=e;await writeFile(join(output,'private-error.txt'),String(e.stack||e));annex.gates.push({id:currentGate,required:true,status:'failed',subject:{kind:'artifact',id:canonical.sha256},exit_code:1,note:'native gate failed; private diagnostics retained locally',evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}})}finally{
- try{if(owner)await owner.dispose();if(app)await app.shutdown.shutdown(0);await rm(work,{recursive:true,force:true});await assert.rejects(stat(work),{code:'ENOENT'});annex.cleanup.status='passed';record('dispose_cleanup','owned Agent/profile disposed and isolated test tree removal independently confirmed')}catch(e){failure=e;annex.cleanup={status:'failed',remaining_ids:['native-test-tree']}}
- annex.status=failure?'failed':'passed';annex.run.finished_at=new Date().toISOString();await writeFile(join(base,`${profile}-native-annex.json`),JSON.stringify(annex,null,2)+'\n');console.log(JSON.stringify({status:annex.status,gates:annex.gates.length,cleanup:annex.cleanup.status}));if(failure)process.exitCode=1
+ }catch(e){failure=e;await writeFile(join(output,'private-error.txt'),String(e.stack||e));if(annex){annex.gates.push({id:currentGate,required:true,status:'failed',subject:{kind:'artifact',id:canonical.sha256},exit_code:1,note:'initialization or native gate failed; private diagnostics retained locally',evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}})}}finally{
+ let cleanupError=null,workCleaned=false
+ try{
+  if(owner)await owner.dispose()
+  if(app)await app.shutdown.shutdown(0)
+  // Leave the isolated tree before removing it: the process cwd may still be
+  // the synthetic project directory inside `work`.
+  if(work)process.chdir(source)
+  if(work){await rm(work,{recursive:true,force:true});await assert.rejects(stat(work),{code:'ENOENT'});workCleaned=true}
+ }catch(e){cleanupError=e}
+ if(cleanupError)await writeFile(join(output,'cleanup-error.txt'),String(cleanupError.stack||cleanupError))
+ if(annex)annex.cleanup=workCleaned
+   ? {status:'passed',remaining_ids:[]}
+   : {status:'failed',remaining_ids:['native-test-tree']}
+ if(!annex){
+  // Initialization failed before the annex existed: emit the canonical failed
+  // annex so consumers always receive structured evidence and cleanup status.
+  annex={schema:'native-acceptance/v2',status:'failed',product:'dsh-session-insights',gate_profile:`actual-${profile}-host`,repository:{url:canonical.repository,commit:canonical.commit},runtime_tree_sha256:null,artifact:{filename:canonical.filename,sha256:canonical.sha256,size_bytes:canonical.size_bytes,file_count:canonical.file_count,git_head:canonical.commit},platform:{os:process.platform==='win32'?'windows':'macos',shell:process.platform==='win32'?'pwsh':'posix',toolchain:{node:process.version,architecture:process.arch,dsh:null}},gates:[{id:currentGate,required:true,status:'failed',subject:{kind:'artifact',id:canonical.sha256},exit_code:1,note:'initialization failed before host identity resolution; private diagnostics retained locally',evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}}],cleanup:{status:work&&!cleanupError?'passed':(work?'failed':'passed'),remaining_ids:work&&!cleanupError?[]:['native-test-tree']},run:{started_at:new Date().toISOString(),finished_at:new Date().toISOString(),run_url:null},unperformed_actions:['commit','push','merge','tag','package_publish','release','public_promotion']}
+ }
+ if(annex.cleanup.status==='passed'&&workCleaned){recordGate('dispose_cleanup','owned Agent/profile disposed and isolated test tree removal independently confirmed')}
+ if(!annex){
+  // Initialization failed before the annex existed: emit the canonical failed
+  // annex so consumers always receive structured evidence and cleanup status.
+  annex={schema:'native-acceptance/v2',status:'failed',product:'dsh-session-insights',gate_profile:`actual-${profile}-host`,repository:{url:canonical.repository,commit:canonical.commit},runtime_tree_sha256:null,artifact:{filename:canonical.filename,sha256:canonical.sha256,size_bytes:canonical.size_bytes,file_count:canonical.file_count,git_head:canonical.commit},platform:{os:process.platform==='win32'?'windows':'macos',shell:process.platform==='win32'?'pwsh':'posix',toolchain:{node:process.version,architecture:process.arch,dsh:null}},gates:[{id:currentGate,required:true,status:'failed',subject:{kind:'artifact',id:canonical.sha256},exit_code:1,note:'initialization failed before host identity resolution; private diagnostics retained locally',evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}}],cleanup:{status:work?'failed':'passed',remaining_ids:work?['native-test-tree']:[]},run:{started_at:new Date().toISOString(),finished_at:new Date().toISOString(),run_url:null},unperformed_actions:['commit','push','merge','tag','package_publish','release','public_promotion']}
+ }
+ annex.status=failure?'failed':'passed';annex.run.finished_at=new Date().toISOString();await writeAnnex();console.log(JSON.stringify({status:annex.status,gates:annex.gates.length,cleanup:annex.cleanup.status}));if(failure)process.exitCode=1
 }

@@ -187,7 +187,7 @@ dsh-session-insights semantic validate-aggregate --workdir /safe/workdir
 dsh-session-insights semantic finalize --workdir /safe/workdir --output report.html
 ```
 
-Each model-produced JSON file is validated before it can enter the final report. Unknown evidence IDs, prohibited completion claims, malformed enums, and privacy leakage fail closed. If the semantic stage cannot finish, `finalize --fallback` records the degradation and preserves the deterministic report.
+Each model-produced JSON file is validated before it can enter the final report. Unknown evidence IDs, prohibited completion claims, malformed enums, and privacy leakage fail closed; the aggregate response must also echo the canonical `aggregate_input_identity` issued by `get_aggregate`, and identity-shaped objects anywhere else in the response are treated as ordinary content. If the semantic stage cannot finish, `finalize --fallback` records the degradation and preserves the deterministic report.
 
 ## Current scope and limitations
 

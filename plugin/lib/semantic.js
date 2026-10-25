@@ -682,7 +682,7 @@ function isCanonicalEnvelope(envelope) {
     ) &&
     envelope.identity_schema === 1 &&
     is_nonempty_string(envelope.aggregate_input_digest) &&
-    envelope.aggregate_input_digest.length === 64
+    /^[0-9a-f]{64}$/.test(envelope.aggregate_input_digest)
   )
 }
 function envelopeStripped(value) {
@@ -715,7 +715,7 @@ export function submitAggregate(store, run, value) {
     Object.keys(envelope).some((k) => k !== 'identity_schema' && k !== 'aggregate_input_digest') ||
     envelope.identity_schema !== 1 ||
     !is_nonempty_string(envelope.aggregate_input_digest) ||
-    envelope.aggregate_input_digest.length !== 64
+    !/^[0-9a-f]{64}$/.test(envelope.aggregate_input_digest)
   )
     throw new Error(
       'aggregate_input_identity envelope must contain exactly identity_schema and aggregate_input_digest; call session_insights_get_aggregate and echo its input_identity',

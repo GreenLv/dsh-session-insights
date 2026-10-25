@@ -187,7 +187,7 @@ dsh-session-insights semantic validate-aggregate --workdir /safe/workdir
 dsh-session-insights semantic finalize --workdir /safe/workdir --output report.html
 ```
 
-模型生成的每个 JSON 都必须先通过验证，才能进入最终报告。未知证据 ID、禁止的完成声明、错误枚举或隐私泄漏都会 fail closed。若语义阶段不能完成，`finalize --fallback` 会记录降级状态并保留确定性报告。
+模型生成的每个 JSON 都必须先通过验证，才能进入最终报告。未知证据 ID、禁止的完成声明、错误枚举或隐私泄漏都会 fail closed；aggregate 响应还必须回显 `get_aggregate` 签发的规范 `aggregate_input_identity`，响应中其它位置的同类结构按普通内容处理。若语义阶段不能完成，`finalize --fallback` 会记录降级状态并保留确定性报告。
 
 ## 当前范围与限制
 
