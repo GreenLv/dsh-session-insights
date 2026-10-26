@@ -6,6 +6,8 @@
 
 DSH `>=0.2.1-rc.2` is required; rc.3 is the primary tested host. This release retains one explicitly accepted upstream dependency risk in `zod@4.4.3`; it does not fix that dependency or establish its everyday trigger probability. See the [release acceptance and remaining gaps](acceptance/v0.6.1-release.md), [bilingual upgrade notes](releases/v0.6.1.md) and [public receipt](acceptance/v0.6.1-release-receipt.json). Existing community listings were not resubmitted or freshly revalidated; publication does not establish marketplace ingestion or approval.
 
+The [subsequent Bundle and actual Desktop GUI follow-up](acceptance/v0.6.1-bundle-gui.md) records native 0.6.1 adoption, GUI execution, state restoration and preservation limits separately from publication.
+
 ## Published 0.6.0 (2026-10-18)
 
 [npm 0.6.0](https://www.npmjs.com/package/dsh-session-insights/v/0.6.0) and the [GitHub Release](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.6.0) publish the same accepted artifact. Tag `v0.6.0` points to `542c342f2b06fcb980215247e33c07e0ce2dd2a6`; the tarball SHA-256 is `b0985cae3f565e215aaa91e5286c03bd43c8219b51d20520d809489e3298e8f5`. Anonymous downloads from both channels match, and all 22 Release attachments were read back and compared on 2026-10-18.
