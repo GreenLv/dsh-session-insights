@@ -1,6 +1,6 @@
 # dsh-session-insights
 
-[简体中文](README.zh-CN.md) | [Introduction](https://greenlv.github.io/blogs/chat-log-is-not-a-retrospective/) | [Changelog](CHANGELOG.md)
+[简体中文](README.zh-CN.md) | [Русский](README.ru-RU.md) | [Introduction](https://greenlv.github.io/blogs/chat-log-is-not-a-retrospective/) | [Changelog](CHANGELOG.md)
 
 [![CI](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
@@ -121,7 +121,7 @@ Reports are refused inside `$DSH_HOME/sessions`, so generated files cannot be mi
 ```text
 /session-insights [--days N] [--project PATH] [--privacy MODE] [--report-timezone ZONE]
   [--analysis-privacy MODE] [--analysis-depth LEVEL]
-  [--locale zh-CN|en] [--deterministic] [--resume] [--workdir RUN] [--no-open]
+  [--locale zh-CN|en|ru] [--deterministic] [--resume] [--workdir RUN] [--no-open]
 ```
 
 Project filters use absolute host paths. A relative path is refused with an actionable error — the plugin entry cannot reliably know the host's invocation directory and refuses to guess. On Windows, pass a native path such as `/session-insights --project C:/path/to/project`; a POSIX-rooted path such as `/path/to/project` is rejected instead of silently matching no sessions. The optional Python CLI resolves a relative `--project` against the working directory you invoked it from.
@@ -196,7 +196,7 @@ Each model-produced JSON file is validated before it can enter the final report.
 - Native input is the trusted DSH `sessionQuery` service; the CLI reads only `session.v4.jsonl.zstd` or `session.v4.jsonl` under `$DSH_HOME/sessions`. Older raw logs require upstream migration.
 - Output follows [`dsh-session-insights/1`](docs/schema/report-v1.schema.json).
 - Token counts are deduplicated per `(turn, step)` and are usage measurements, not billing or quota figures.
-- The Dashboard and semantic prompt contract support `zh-CN` and `en` from the same report schema.
+- The Dashboard and semantic prompt contract support `zh-CN`, `en`, and `ru` from the same report schema.
 - Reports infer patterns from available evidence; they do not prove intent, quality, task acceptance, or security.
 
 Historical 0.2.0 package, CI, native macOS, and focused native Windows evidence is kept in the [v0.2.0 release acceptance record](docs/acceptance/v0.2.0-candidate.md). Those historical results do not describe the current release. The historical v0.1 CLI/Skill evidence remains in the [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md). Historical released-runtime compatibility evidence and its platform limits are recorded in the [0.1.5-rc.2 acceptance record](docs/acceptance/v0.1.5-rc.2-compatibility.md).

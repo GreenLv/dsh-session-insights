@@ -2,6 +2,7 @@ import { validateV4 } from './v4.js'
 // Native snapshot analysis. No subprocesses, provider calls, or source-log reads.
 import { createHash } from 'node:crypto'
 import rules from './rules.js'
+import { t } from './messages.js'
 export const hash = (value) =>
   createHash('sha256').update(String(value)).digest('hex')
 export const round = (n, digits = 2) => Number(n.toFixed(digits))
@@ -1354,12 +1355,14 @@ function publicSession(s, opts) {
       source === 'omitted'
         ? opts.locale === 'en'
           ? 'Content omitted'
-          : '内容已省略'
+          : opts.locale === 'ru'
+            ? 'Содержимое скрыто'
+            : '内容已省略'
         : sanitize(
             s.provider_title || s.fallback_title || s.first,
             opts.privacy,
             140,
-          ) || (opts.locale === 'en' ? 'No usable title' : '未提供可用标题'),
+          ) || (opts.locale === 'en' ? 'No usable title' : opts.locale === 'ru' ? 'Нет подходящего заголовка' : '未提供可用标题'),
     title_source: source,
     work_area: s.work_area,
     session_type: s.session_type,
@@ -1871,40 +1874,30 @@ export function buildReport(snapshots, input = {}) {
       .map(({ model, sessions }) => ({ model, sessions })),
   }))
   const en = opts.locale === 'en',
+    ru = opts.locale === 'ru',
     warnings = []
+  const locale = ru ? 'ru' : en ? 'en' : 'zh-CN'
   if (sessions.length > 0 && sessions.length < 5)
-    warnings.push(
-      en
-        ? 'Fewer than five sessions are in scope; treat behavioral conclusions as a small-sample snapshot.'
-        : '有效会话少于 5 个；请将行为结论视为小样本快照。',
-    )
+    warnings.push(t(locale, 'native.warning.few_sessions'))
   if (
     coverage.malformed_lines ||
     Object.keys(coverage.unknown_record_types).length
   )
-    warnings.push(
-      en
-        ? 'Malformed or unknown events were observed; inspect coverage before drawing conclusions.'
-        : '存在损坏或未知事件；形成结论前请检查覆盖情况。',
-    )
+    warnings.push(t(locale, 'native.warning.malformed'))
   if (coverage.partial_sessions)
     warnings.push(
-      en
-        ? `${coverage.partial_sessions} rollouts have unfinished turns; this is not proof of family failure.`
-        : `${coverage.partial_sessions} 个会话有未结束轮次，不代表整个任务族失败。`,
+      t(locale, 'native.warning.partial', {
+        count: coverage.partial_sessions,
+      }),
     )
   if (totals.assistant_attempts)
     warnings.push(
-      en
-        ? `${totals.assistant_attempts} attempts committed no reply; their token usage is unavailable and is not estimated.`
-        : `${totals.assistant_attempts} 次模型尝试未产出回复，用量不可得，未做估算。`,
+      t(locale, 'native.warning.attempts', {
+        count: totals.assistant_attempts,
+      }),
     )
   if (totals.semantic_shadowed_messages)
-    warnings.push(
-      en
-        ? 'Compacted conversation text was removed from semantic evidence; event statistics remain historical.'
-        : '压缩遮蔽的对话已从语义证据移除；事件统计仍按历史保留。',
-    )
+    warnings.push(t(locale, 'native.warning.shadowed'))
   const excerpts = [],
     seen = new Set(),
     perProject = new Map(),
@@ -1959,52 +1952,54 @@ export function buildReport(snapshots, input = {}) {
     coverage,
     projects,
     en,
+    ru,
   )
-  const completed = rows.filter((s) => s.status === 'completed'),
-    dominant = projects[0]
+  const completed = rows.filter((s) => s.status === 'completed')
+  const dominant = projects[0]
   const strength = dominant
-    ? en
-      ? `${dominant.project}: ${dominant.sessions} sessions, ${dominant.active_hours} active hours and ${dominant.tool_calls} tool calls.`
-      : `${dominant.project}：${dominant.sessions} 个会话、${dominant.active_hours} 小时和 ${dominant.tool_calls} 次工具调用。`
-    : en
-      ? 'No project data in this range.'
-      : '当前范围没有项目数据。'
+    ? t(locale, 'native.narrative.focus.text', {
+        project: dominant.project,
+        sessions: dominant.sessions,
+        hours: dominant.active_hours,
+        tools: dominant.tool_calls,
+      })
+    : t(locale, 'native.narrative.focus.empty')
   const narrative = {
     glance: [
-      { label: en ? 'Work focus' : '工作重心', text: strength },
       {
-        label: en ? 'Friction' : '主要摩擦',
-        text: en
-          ? `${totals.tool_failures} structured failures, ${totals.unchanged_retries} unchanged retries, ${totals.permission_blocks} permission blocks. Inspect evidence before inferring causes.`
-          : `${totals.tool_failures} 次结构化失败、${totals.unchanged_retries} 次原样重试、${totals.permission_blocks} 次权限阻塞；请结合证据判断原因。`,
+        label: t(locale, 'native.narrative.focus'),
+        text: strength,
       },
       {
-        label: en ? 'Next step' : '下一步',
+        label: t(locale, 'native.narrative.friction'),
+        text: t(locale, 'native.narrative.friction.text', {
+          failures: totals.tool_failures,
+          retries: totals.unchanged_retries,
+          blocks: totals.permission_blocks,
+        }),
+      },
+      {
+        label: t(locale, 'native.narrative.next_step'),
         text:
           recommendations[0]?.title ||
-          (en ? 'Keep recording verification evidence.' : '继续记录验证证据。'),
+          t(locale, 'native.narrative.next_step.default'),
       },
     ],
     wins: [
       {
-        title: en ? 'Completed log states' : '日志完成状态',
-        description: en
-          ? `${completed.length} of ${rows.length} sessions have completed log states.`
-          : `${rows.length} 个会话中有 ${completed.length} 个处于日志完成状态。`,
-        evidence: en
-          ? 'Log completion is not human acceptance or a quality judgment.'
-          : '日志完成不等于人工验收或质量判断。',
+        title: t(locale, 'native.narrative.completed.title'),
+        description: t(locale, 'native.narrative.completed.text', {
+          completed: completed.length,
+          rows: rows.length,
+        }),
+        evidence: t(locale, 'native.narrative.completed.evidence'),
       },
     ],
     horizon: [
       {
-        title: en ? 'Recoverable workflows' : '可恢复的工作流',
-        possible: en
-          ? 'Connect audit, implementation, validation and delivery with checkpoints.'
-          : '用检查点连接审计、实现、验证和交付。',
-        starting_point: en
-          ? 'Define phase inputs, completion criteria and resume points.'
-          : '明确每阶段输入、完成标准与恢复入口。',
+        title: t(locale, 'native.narrative.horizon.title'),
+        possible: t(locale, 'native.narrative.horizon.possible'),
+        starting_point: t(locale, 'native.narrative.horizon.starting_point'),
       },
     ],
   }
@@ -2083,78 +2078,48 @@ export function buildReport(snapshots, input = {}) {
   }
   return { report, sessions, options: opts }
 }
-function buildRecommendations(t, m, c, projects, en) {
+function buildRecommendations(totals, metrics, coverage, projects, en, ru) {
+  const locale = ru ? 'ru' : en ? 'en' : 'zh-CN'
   const rows = []
-  const add = (
-    key,
-    zhTitle,
-    enTitle,
-    zhAction,
-    enAction,
-    evidence,
-    priority = 'medium',
-  ) => {
-    const title = en ? enTitle : zhTitle,
-      action = en ? enAction : zhAction
+  const add = (id, key, priority, params) => {
     rows.push({
-      id: 'rec-' + hash(key).slice(0, 12),
-      feature: key,
-      title,
-      why: action,
-      evidence,
-      action,
-      copy_prompt: action,
+      id: 'rec-' + hash(id).slice(0, 12),
+      feature: t(locale, `rec.${key}.feature`, params),
+      title: t(locale, `rec.${key}.title`, params),
+      why: t(locale, `rec.${key}.action`, params),
+      evidence: t(locale, `rec.${key}.evidence`, params),
+      action: t(locale, `rec.${key}.action`, params),
+      copy_prompt: t(locale, `rec.${key}.action`, params),
       priority,
     })
   }
-  if (t.tool_failures || t.unchanged_retries)
-    add(
-      'verification',
-      '把失败恢复写进任务契约',
-      'Put recovery in the task contract',
-      '重试前诊断原因，记录已完成项和验证结果，从最近检查点继续。',
-      'Diagnose failures, record completed work and validation, and resume from the latest checkpoint.',
-      `${t.tool_failures} failures; ${t.unchanged_retries} unchanged retries`,
-      'high',
-    )
-  if (t.permission_blocks)
-    add(
-      'permissions',
-      '开工时明确授权边界',
-      'State authorization boundaries',
-      '开工前明确可读、可写、可运行和需要确认的操作。',
-      'State readable, writable, runnable and approval-required actions before starting.',
-      `${t.permission_blocks} permission blocks`,
-      'high',
-    )
-  if (m.correction_rate_per_user_message >= 0.12)
-    add(
-      'task-contract',
-      '固定范围、证据与完成标准',
-      'Fix scope, evidence and completion criteria',
-      '将长期偏好放入 AGENTS.md，本次范围和验收标准写入任务。纠正率是启发式信号。',
-      'Keep durable preferences in AGENTS.md and define scope and acceptance for this task. Correction rate is a heuristic.',
-      `${m.correction_like_messages} correction-like messages`,
-      'high',
-    )
-  if (c.partial_sessions || t.aborted_turns || m.long_running_sessions)
-    add(
-      'checkpoints',
-      '为长任务设置阶段交付物',
-      'Give long tasks phase deliverables',
-      '按审计、实现、验证、交付拆分任务，每阶段保留状态与恢复入口。',
-      'Split audit, implementation, validation and delivery; retain state and a resume point after each phase.',
-      `${c.partial_sessions} partial sessions; ${t.aborted_turns} aborted turns`,
-    )
+  if (totals.tool_failures || totals.unchanged_retries)
+    add('verification', 'verification', 'high', {
+      failures: totals.tool_failures,
+      retries: totals.unchanged_retries,
+    })
+  if (totals.permission_blocks)
+    add('permissions', 'permissions', 'high', {
+      blocks: totals.permission_blocks,
+    })
+  if (metrics.correction_rate_per_user_message >= 0.12)
+    add('task-contract', 'task_contract', 'high', {
+      messages: metrics.correction_like_messages,
+    })
+  if (
+    coverage.partial_sessions ||
+    totals.aborted_turns ||
+    metrics.long_running_sessions
+  )
+    add('checkpoints', 'checkpoints', 'medium', {
+      partial_sessions: coverage.partial_sessions,
+      aborted_turns: totals.aborted_turns,
+    })
   if (projects[0]?.sessions >= 5)
-    add(
-      'reusable-skill',
-      '提炼高频项目流程',
-      'Extract a repeatable project workflow',
-      '提炼稳定输入、步骤、禁止项、验证命令和恢复策略，保留人工判断。',
-      'Extract stable inputs, steps, boundaries, validation and recovery; preserve human judgment.',
-      `${projects[0].project}: ${projects[0].sessions} sessions`,
-    )
+    add('reusable-skill', 'reusable_skill', 'medium', {
+      project: projects[0].project,
+      sessions: projects[0].sessions,
+    })
   return rows
 }
 export const analysisInternals = { identifier, canonical, regex, groupBy, truncate }

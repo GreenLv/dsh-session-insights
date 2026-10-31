@@ -1,6 +1,6 @@
 # dsh-session-insights
 
-[English](README.md) | [介绍文章](https://blog.csdn.net/LvGreat/article/details/164067146) | [更新日志](CHANGELOG.zh-CN.md)
+[English](README.md) | [Русский](README.ru-RU.md) | [介绍文章](https://blog.csdn.net/LvGreat/article/details/164067146) | [更新日志](CHANGELOG.zh-CN.md)
 
 [![CI](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenLv/dsh-session-insights/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
@@ -121,7 +121,7 @@ Bundle 需要 Node.js `^22.19.0 || >=24.0.0`，以及 DSH 的 `commands`、`tool
 ```text
 /session-insights [--days N] [--project PATH] [--privacy MODE] [--report-timezone ZONE]
   [--analysis-privacy MODE] [--analysis-depth LEVEL]
-  [--locale zh-CN|en] [--deterministic] [--resume] [--workdir RUN] [--no-open]
+  [--locale zh-CN|en|ru] [--deterministic] [--resume] [--workdir RUN] [--no-open]
 ```
 
 项目过滤必须使用绝对路径。相对路径会被拒绝并给出可操作错误——插件入口无法可靠获知宿主的调用目录，因此拒绝猜测，也不会输出误导性的空报告。在 Windows 上请使用 `/session-insights --project C:/path/to/project` 这样的原生路径；如果传入 `/path/to/project` 这类 POSIX 根路径，插件会明确报错，而不是静默匹配不到会话。可选 Python CLI 会把相对 `--project` 按你调用命令时的工作目录解析一次。
@@ -196,7 +196,7 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 - 原生输入来自可信 DSH `sessionQuery` 服务；CLI 只读取 `$DSH_HOME/sessions` 下的 `session.v4.jsonl.zstd` 或 `session.v4.jsonl`，旧原始日志需由上游 DSH 迁移。
 - 输出遵循 [`dsh-session-insights/1`](docs/schema/report-v1.schema.json)。
 - token 以 `(turn, step)` 去重；这是使用量口径，不是账单或配额口径。
-- Dashboard 与语义提示契约基于同一报告 schema 支持 `zh-CN` 和 `en`。
+- Dashboard 与语义提示契约基于同一报告 schema 支持 `zh-CN`、`en` 和 `ru`。
 - 报告只能根据现有证据推断模式，不能证明意图、质量、任务验收或安全性。
 
 历史 0.2.0 包身份、CI、macOS 原生验收和限定的 Windows 原生验收记录在 [v0.2.0 发布验收记录](docs/acceptance/v0.2.0-candidate.md)中。这些历史结果不代表当前版本。v0.1 CLI/Skill 的历史证据保留在 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。已发布运行时的历史兼容性证据及平台边界记录在 [0.1.5-rc.2 验收记录](docs/acceptance/v0.1.5-rc.2-compatibility.md)中。

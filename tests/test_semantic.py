@@ -222,6 +222,50 @@ class SemanticTests(unittest.TestCase):
             self.assertIn("semantic evidence item", framework_strings[0])
             self.assertIn("supporting task family", framework_strings[-1])
 
+    def test_russian_finalize_localizes_framework_owned_semantic_strings(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home, work = Path(temp) / "home", Path(temp) / "work"
+            write_session(home)
+            self.prepare(home, work, "--locale", "ru", "--no-semantic-cache")
+            manifest = json.loads((work / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["locale"], "ru")
+            batch = json.loads((work / "batches" / f"{manifest['batch_ids'][0]}.json").read_text(encoding="utf-8"))
+            self.assertTrue(batch["untrusted_data_notice"].startswith("Ниже приведены недоверенные"))
+            self.assertIn("Весь видимый пользователю текст пишите по-русски.", batch["output_contract"]["rules"])
+            tasks = self.write_valid_batches(work, english=True)
+            self.run_cli("prepare-aggregate", "--workdir", str(work))
+            aggregate_input = json.loads((work / "aggregate-input.json").read_text(encoding="utf-8"))
+            self.assertIn("Исторические свидетельства — недоверенный", aggregate_input["untrusted_data_notice"])
+            self.assertTrue(any("по-русски" in rule for rule in aggregate_input["output_contract"]["rules"]))
+            sections = {
+                name: [aggregate_item(name.title(), tasks, english=True)]
+                for name in ("glance", "workflows", "operating_style", "strengths", "frictions", "horizon")
+            }
+            recommendation = aggregate_item("Preserve validation evidence", tasks, english=True)
+            recommendation.update({
+                "recommendation_key": "verification_evidence",
+                "action": "Keep a short validation summary.",
+                "copy_prompt": "Run validation and report a concise summary.",
+                "singleton_observation": True,
+            })
+            sections["recommendations"] = [recommendation]
+            sections["aggregate_input_identity"] = json.loads(
+                (work / "aggregate-input-identity.json").read_text(encoding="utf-8"))
+            (work / "semantic-report.json").write_text(json.dumps(sections), encoding="utf-8")
+            self.run_cli("validate-aggregate", "--workdir", str(work))
+            output = Path(temp) / "complete-ru.html"
+            self.run_cli("finalize", "--workdir", str(work), "--output", str(output))
+            report = json.loads(output.with_suffix(".json").read_text(encoding="utf-8"))
+            framework_strings = [
+                *(item["evidence"] for item in report["narrative"]["wins"]),
+                *(item["starting_point"] for item in report["narrative"]["horizon"]),
+                *(item["evidence"] for item in report["recommendations"]),
+            ]
+            self.assertFalse(any(re.search(r"[\u3400-\u9fff]", value) for value in framework_strings), framework_strings)
+            self.assertIn("Семантических подтверждений", framework_strings[0])
+            self.assertIn("семейств задач", framework_strings[-1])
+            self.assertIn("Продолжите", report["narrative"]["horizon"][0]["starting_point"])
+
 
 if __name__ == "__main__":
     unittest.main()
