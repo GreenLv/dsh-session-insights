@@ -6,7 +6,7 @@
 // findings without a currently valid policy report `unauthorized_findings`.
 import {createHash} from 'node:crypto'
 import {spawnSync} from 'node:child_process'
-import {readFileSync,writeFileSync,mkdirSync,existsSync} from 'node:fs'
+import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync,existsSync} from 'node:fs'
 import {dirname,join,resolve} from 'node:path'
 import {fileURLToPath,pathToFileURL} from 'node:url'
 import {satisfies} from 'semver'
@@ -207,31 +207,42 @@ export function captureAudit(scope,output,{root=ROOT,runner=spawnSync}={}){
   requireThat(['prod','full'].includes(scope),'unknown audit scope')
   mkdirSync(output,{recursive:true})
   const args=['audit',...(scope==='prod'?['--omit=dev']:[]),'--audit-level=high','--json']
-  // Bind the audited inputs BEFORE the scan runs: the retained identity must
-  // describe the tree npm actually scanned, not whatever the tree contains
-  // when the scanner happens to return.
+  // Bind the audited inputs BEFORE the scan runs, then materialize exactly
+  // those bytes into a private snapshot and point the scanner at it. npm
+  // therefore provably consumes the bound input even when the source tree is
+  // swapped underneath us (A→B→A): concurrent writers can only reach the
+  // source, and any mutation of the snapshot itself is detected below.
   const before=context(root)
   const binding=inputBinding(before.files)
+  const scanRoot=mkdtempSync(join(output,'scan-root-'))
   let captured
-  try{captured=process.platform==='win32'
-    ?runner(process.env.ComSpec||'cmd.exe',['/d','/s','/c','npm '+args.join(' ')],{cwd:root,encoding:'utf8',timeout:120000,maxBuffer:4*1024*1024})
-    :runner('npm',args,{cwd:root,encoding:'utf8',timeout:120000,maxBuffer:4*1024*1024})}
-  catch(e){captured={status:null,error:{code:e.code??'SPAWN_ERROR'}}}
-  const raw=captured.stdout??'',stderr=captured.stderr??''
-  writeFileSync(join(output,'audit.json'),raw);writeFileSync(join(output,'stderr.log'),stderr)
-  const scan={exit_code:captured.status??null,signal:captured.signal??null,error:captured.error?.code??null,raw_sha256:digest(raw),stderr_sha256:digest(stderr)}
-  const result={schema:'dsi-node-audit-result/v1',scope,command:['npm',...args],scan,status:'failed'}
+  const result={schema:'dsi-node-audit-result/v1',scope,command:['npm',...args],status:'failed'}
   try{
     result.input_binding=binding
-    // The input must be unchanged between the pre-scan binding and the scan's
-    // return; otherwise the retained output cannot be attributed to one input
-    // and the capture fails regardless of what the scan reported.
-    const after=context(root)
-    requireThat(canonical(inputBinding(after.files))===canonical(binding),
+    writeFileSync(join(scanRoot,'package.json'),before.files['package.json'])
+    writeFileSync(join(scanRoot,'package-lock.json'),before.files['package-lock.json'])
+    try{captured=process.platform==='win32'
+      ?runner(process.env.ComSpec||'cmd.exe',['/d','/s','/c','npm '+args.join(' ')],{cwd:scanRoot,encoding:'utf8',timeout:120000,maxBuffer:4*1024*1024})
+      :runner('npm',args,{cwd:scanRoot,encoding:'utf8',timeout:120000,maxBuffer:4*1024*1024})}
+    catch(e){captured={status:null,error:{code:e.code??'SPAWN_ERROR'}}}
+    const raw=captured.stdout??'',stderr=captured.stderr??''
+    writeFileSync(join(output,'audit.json'),raw);writeFileSync(join(output,'stderr.log'),stderr)
+    const scan={exit_code:captured.status??null,signal:captured.signal??null,error:captured.error?.code??null,raw_sha256:digest(raw),stderr_sha256:digest(stderr)}
+    result.scan=scan
+    // The snapshot must still be the bound bytes when the scanner returns.
+    const snapshotUnchanged=digest(readFileSync(join(scanRoot,'package.json')))===binding.manifest_sha256
+      &&digest(readFileSync(join(scanRoot,'package-lock.json')))===binding.lock_sha256
+    requireThat(snapshotUnchanged,
       'audit input changed while the scanner ran; the retained output cannot be attributed to the bound input')
     result.assessment=assessAudit({raw,...scan},before.policy,before.files)
     result.status=result.assessment.status
   }catch(e){result.reason=e.message}
+  finally{
+    // A snapshot that cannot be removed is a failed capture: the resource must
+    // not outlive the receipt silently.
+    try{rmSync(scanRoot,{recursive:true,force:true})}
+    catch(e){result.status='failed';result.reason=(result.reason?result.reason+'; ':'')+'scan snapshot cleanup failed: '+e.message}
+  }
   writeFileSync(join(output,'result.json'),JSON.stringify(result,null,2)+'\n')
   return result
 }

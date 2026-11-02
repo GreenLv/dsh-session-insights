@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync} from 'node:fs'
+import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync,chmodSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {spawnSync} from 'node:child_process'
@@ -409,6 +409,83 @@ test('identical during-runner drift in both scopes fails the summary',()=>output
   rmSync(root,{recursive:true,force:true})
 }))
 test('scanner failure and cancellation still refuse under the pre-scan binding',()=>outputs(dir=>{
+  const root=stageRoot(false)
+  const failing=captureAudit('prod',join(dir,'prod'),{root,runner:()=>({status:2,stdout:'{}',stderr:'synthetic outage'})})
+  assert.equal(failing.status,'failed')
+  const cancelled=captureAudit('full',join(dir,'full'),{root,runner:()=>({status:null,signal:'SIGTERM',stdout:'',stderr:''})})
+  assert.equal(cancelled.status,'failed')
+  rmSync(root,{recursive:true,force:true})
+}))
+
+// R3: the scanner runs against a private snapshot of the bound bytes, so an
+// A→B→A swap of the source tree during the runner can no longer make a scan
+// of B endorse A. A concurrent writer touching only the source tree leaves a
+// legitimate capture of the bound input untouched.
+function cleanTreeBuffers(){
+  return {manifest:cleanFixtureManifest(),lock:cleanFixtureLock()}
+}
+test('an A->B->A source swap during the runner keeps the capture honest',()=>outputs(dir=>{
+  const root=stageRoot(false)
+  const {manifest,lock}=cleanTreeBuffers()
+  writeFileSync(join(root,'package.json'),manifest)
+  writeFileSync(join(root,'package-lock.json'),lock)
+  const realManifest=files['package.json'],realLock=files['package-lock.json']
+  const cleanScan=()=>({status:0,signal:null,stdout:JSON.stringify(cleanReport),stderr:''})
+  const drift=(command,args,options)=>{
+    // Concurrent writer: B into the SOURCE tree, restore A afterwards.
+    writeFileSync(join(root,'package.json'),realManifest)
+    writeFileSync(join(root,'package-lock.json'),realLock)
+    const scan=cleanScan()
+    writeFileSync(join(root,'package.json'),manifest)
+    writeFileSync(join(root,'package-lock.json'),lock)
+    return scan
+  }
+  const prod=captureAudit('prod',join(dir,'prod'),{root,runner:drift})
+  const full=captureAudit('full',join(dir,'full'),{root,runner:drift})
+  // The snapshot provably held the bound clean bytes, so this is a legitimate
+  // clean capture of the restored source input.
+  assert.equal(prod.status,'clean');assert.equal(full.status,'clean')
+  assert.equal(prod.input_binding.lock_sha256,digest(lock))
+  assert.equal(verifyResults(dir,{prod:'success',full:'success',python:'success'},{root}).status,'passed')
+  rmSync(root,{recursive:true,force:true})
+}))
+test('a real finding input is scanned as itself even when the source is swapped to clean',()=>outputs(dir=>{
+  const root=stageRoot(false)
+  const {manifest,lock}=cleanTreeBuffers()
+  writeFileSync(join(root,'package.json'),manifest)
+  writeFileSync(join(root,'package-lock.json'),lock)
+  const knownScan=()=>({status:1,signal:null,stdout:raw,stderr:''})
+  const result=captureAudit('prod',join(dir,'prod'),{root,runner:(command,args,options)=>{
+    // Writer swaps the vulnerable candidate lock in for the scan window...
+    writeFileSync(join(root,'package.json'),files['package.json'])
+    writeFileSync(join(root,'package-lock.json'),files['package-lock.json'])
+    const scan=knownScan()
+    writeFileSync(join(root,'package.json'),manifest)
+    writeFileSync(join(root,'package-lock.json'),lock)
+    return scan
+  }})
+  // ...but npm scanned the bound clean snapshot, so no clean result can be
+  // manufactured from a scan whose bytes never contained the finding.
+  assert.equal(result.status,'unauthorized_findings')
+  rmSync(root,{recursive:true,force:true})
+}))
+test('snapshot cleanup failure fails the capture with a recorded reason',()=>outputs(dir=>{
+  const root=stageRoot(false)
+  const cleanScan=()=>({status:0,signal:null,stdout:JSON.stringify(cleanReport),stderr:''})
+  let scanDir=null
+  const result=captureAudit('prod',join(dir,'prod'),{root,runner:(command,args,options)=>{
+    const scan=cleanScan()
+    // Make the snapshot directory undeletable while the capture finishes.
+    scanDir=options.cwd;chmodSync(scanDir,0o555)
+    return scan
+  }})
+  assert.equal(result.status,'failed')
+  assert.match(String(result.reason),/cleanup failed/)
+  // Restore permissions so the evidence directory can be released.
+  if(scanDir)chmodSync(scanDir,0o755)
+  rmSync(root,{recursive:true,force:true})
+}))
+test('scan failure and cancellation still refuse under the snapshot binding',()=>outputs(dir=>{
   const root=stageRoot(false)
   const failing=captureAudit('prod',join(dir,'prod'),{root,runner:()=>({status:2,stdout:'{}',stderr:'synthetic outage'})})
   assert.equal(failing.status,'failed')
