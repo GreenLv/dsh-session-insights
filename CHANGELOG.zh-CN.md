@@ -33,7 +33,7 @@
 
 ### 安全
 
-- 已知上游缺口：DSH rc.2/rc.3 固定依赖的 `zod@4.4.3` 受 GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404 影响，可导致内存耗尽，修补版为 4.6.6。维护者仅为 0.6.1 和当前宿主依赖集合接受此风险；扫描继续执行，其他 high/critical 仍阻断。发布版本或 DSH 依赖集合变化会使例外失效，下次 DSH 升级必须重新评估。这不表示已修复或已证明日用低概率，详见[安全策略](SECURITY.md#known-upstream-dependency-gap-in-061)。
+- 已知上游缺口：DSH rc.2/rc.3 固定依赖的 `zod@4.4.3` 受 GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404 影响，可导致内存耗尽，修补版为 4.6.6。维护者仅为 0.6.1 和当前宿主依赖集合接受此风险；扫描继续执行，其他 high/critical 仍阻断。发布版本或 DSH 依赖集合变化会使例外失效，下次 DSH 升级必须重新评估。这不表示已修复或已证明日用低概率，详见[v0.6.1 版本记录的安全策略](https://github.com/GreenLv/dsh-session-insights/blob/v0.6.1/SECURITY.md#known-upstream-dependency-gap-in-061)。
 
 - CLI/bridge 的派生输出（主文件、HTML 伴随 JSON、原子替换临时文件）在写入第一个字节前统一做边界检查：位于会话源目录内的目标、已存在的符号链接、硬链接、非普通文件和 NTFS 备用数据流命名都会被拒绝并给出可操作错误；旧报告字节保持不变，主文件与伴随文件路径永不互相覆盖（`report --format html --output audit.json` 会写 `audit.data.json`）。
 - 确定性解析缓存最小化并按范围门控：先做有界头部读取判定时间窗/项目范围，范围外日志不再解析、不再缓存；持久化条目只保留白名单内、已投影的会话投影（不含原始 cwd、job 注册表、team 名册、provider 元数据或主题文本），新 POSIX 缓存目录/文件在任意 umask 下均为 `0700`/`0600`（Windows 使用 ACL，包括私有父目录继承及运行时创建的私有 ACL），缓存 schema 升至版本 9（版本 8 条目被忽略，不会自动导入或自动删除）。新增 `cache` CLI 子命令：默认仅预览各根目录的文件数与大小，显式 `--delete` 才删除确认归属的缓存根。
