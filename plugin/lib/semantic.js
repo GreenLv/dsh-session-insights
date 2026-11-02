@@ -279,6 +279,8 @@ export function prepareSemantic(store, run, built) {
         enum_values: rules.FACET_ENUMS,
         rules: [
           facetNotice(options.locale),
+          t(options.locale, 'semantic.facet.rule.1'),
+          t(options.locale, 'semantic.facet.rule.2'),
           t(options.locale, 'semantic.facet.rule.3'),
         ],
       },
@@ -576,7 +578,8 @@ export function prepareAggregate(store, run) {
       },
       rules: [
         aggregateNotice(m.locale),
-        'Recommendations need two supporting families unless singleton_observation is true.',
+        t(m.locale, 'semantic.aggregate.rule.1'),
+        t(m.locale, 'semantic.aggregate.rule.2'),
         t(m.locale, 'semantic.aggregate.rule.3'),
       ],
       response_envelope: {

@@ -37,6 +37,8 @@ The HTML file contains its own styles and data, so you can keep it locally and o
 
 ## Install the Bundle
 
+Russian (`--locale ru`) is available in the source tree and is not yet published. To use it, follow the source installation steps below with a reviewed commit containing Russian support. The published `0.6.1` bundle and tag support `zh-CN` and `en`.
+
 The `0.6.1` Bundle requires DSH `>=0.2.1-rc.2` and Node.js `^22.19.0 || >=24.0.0`, without Python. The optional file-log CLI still requires Python 3.11+. Start a new analysis run after upgrading from 0.6.0.
 
 **DSH compatibility:** The package requires `>=0.2.1-rc.2` — `0.2.1-rc.3` is the primary host this release is acceptance-tested against, and `0.2.1-rc.2` keeps compatibility coverage. DSH `0.2.0-rc.2` and `0.2.1-rc.1` are below the supported floor and later releases are admitted by the declared range, not by static version tables; a future host version inside the range is admitted but not yet tested. Contract and service tests cover synthetic V4 input. Source and synthetic checks are preserved in the [0.6.0 development record](docs/acceptance/v0.6.0-rc2.1-candidate.md). Native, model and UI results are recorded separately in the acceptance receipts attached to each exact release artifact; range admission does not establish testing of future hosts. See [DSH compatibility](#dsh-compatibility).

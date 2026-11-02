@@ -148,6 +148,30 @@ test('complete native semantic flow preserves structured completion and escapes 
     assert.match(html, /<html lang="en">/)
   }))
 
+test('every locale keeps evidence and inferred-outcome constraints in native prompts', () => {
+  for (const locale of ['zh-CN', 'en', 'ru'])
+    scope(({ store, run }) => {
+      const result = prepare(store, run, { locale })
+      assert.ok(result.batches.length > 0)
+      for (const id of result.batches) {
+        const batch = getBatch(store, run, id)
+        const rules = batch.output_contract.rules.join('\n')
+        assert.match(rules, /evidence id/, locale)
+        assert.match(rules, /accepted/, locale)
+        assert.match(rules, /verified_completed/, locale)
+        assert.match(rules, /inferred/, locale)
+        submitBatch(store, run, id, facets(batch))
+      }
+      const rules = prepareAggregate(store, run).output_contract.rules.join('\n')
+      assert.match(rules, /task_family_id/, locale)
+      assert.match(rules, /evidence id/, locale)
+      assert.match(rules, /singleton_observation/, locale)
+      assert.match(rules, /inferred/, locale)
+      assert.match(rules, /verified/, locale)
+      assert.match(rules, /accepted/, locale)
+    })
+})
+
 test('batch traversal, absolute paths and unlisted IDs never read or mutate artifacts', () =>
   scope(({ home, store, run }) => {
     prepare(store, run)
