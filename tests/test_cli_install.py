@@ -54,6 +54,22 @@ class CliAndInstallerTests(unittest.TestCase):
             cli.install_skill(home)
             self.assertTrue((installed / "scripts" / "run.py").is_file())
 
+    def test_packaged_skill_version_and_migration_match_the_release(self):
+        # The Skill ships inside the npm artifact: its version and upgrade
+        # guidance must agree with the product version and the 0.7.0 resume
+        # contract, and a managed install must copy those bytes verbatim.
+        skill = (Path(__file__).resolve().parents[1] / "src/dsh_session_insights/skill/SKILL.md").read_text(encoding="utf-8")
+        from dsh_session_insights import __version__
+        self.assertIn(f'version: "{__version__}"', skill)
+        self.assertIn(f"Version {__version__} requires DSH >=0.2.1-rc.2", skill)
+        self.assertNotIn("start a new analysis run after upgrading", skill)
+        self.assertIn("stay resumable", skill)
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            self.fake_runtime(home)
+            installed = cli.install_skill(home)
+            self.assertEqual((installed / "SKILL.md").read_text(encoding="utf-8"), skill)
+
     def test_refuses_unmanaged_and_symbolic_link_targets(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)

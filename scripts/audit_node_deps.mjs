@@ -9,6 +9,7 @@ import {spawnSync} from 'node:child_process'
 import {readFileSync,writeFileSync,mkdirSync,existsSync} from 'node:fs'
 import {dirname,join,resolve} from 'node:path'
 import {fileURLToPath,pathToFileURL} from 'node:url'
+import {satisfies} from 'semver'
 import {HOST_TARGETS,PRODUCT_VERSION} from './acceptance_identity.mjs'
 
 const ROOT=fileURLToPath(new URL('../',import.meta.url))
@@ -100,7 +101,14 @@ export function inspectReport(report,lock){
         requireThat(Object.hasOwn(rows,edge),'unresolved advisory-chain reference')
         const dependencies={...installed.dependencies,...installed.peerDependencies,...installed.optionalDependencies}
         const target=rows[edge]
-        requireThat(Array.isArray(target?.nodes)&&target.nodes.length===1&&dependencies[edge]===lock.packages?.[target.nodes[0]]?.version,'advisory edge differs from an exact locked dependency')
+        // The declaring manifest records a range (`^4.4.3`, an exact pin, ...);
+        // the edge is valid when the lock actually resolves that declaration.
+        const declaredRange=dependencies[edge]
+        const lockedVersion=lock.packages?.[target.nodes[0]]?.version
+        requireThat(Array.isArray(target?.nodes)&&target.nodes.length===1
+          &&typeof declaredRange==='string'&&typeof lockedVersion==='string'
+          &&satisfies(lockedVersion,declaredRange),
+          'advisory edge is not satisfied by the locked dependency')
         via.push(edge)
       }else{
         requireThat(name==='zod'&&sameKeys(edge,['source','name','dependency','title','url','severity','cwe','cvss','range'])&&edge.name==='zod'&&edge.dependency==='zod'&&edge.url===ADVISORY_URL&&edge.severity==='high'&&edge.range==='<4.6.6'&&Number.isSafeInteger(edge.source)&&edge.source>0,'unaccepted direct advisory')
@@ -186,6 +194,15 @@ export function assessAudit({raw,exit_code,signal=null,error=null},policy,files)
   }
 }
 function context(root){return {policy:loadPolicy(root),files:Object.fromEntries([...COHORT_PATHS,WORKFLOW].map(p=>[p,readFileSync(join(root,p))]))}}
+// Identity of the inputs a scan actually ran against. verifyResults refuses to
+// summarize captures whose inputs drifted afterwards, so a clean scan of one
+// tree can never endorse a different, still-vulnerable candidate.
+function inputBinding(files){
+  return {schema:'dsi-audit-input-binding/v1',
+    cohort_sha256:digest(canonical(Object.fromEntries([...COHORT_PATHS,WORKFLOW].map(p=>[p,digest(files[p])])))),
+    manifest_sha256:digest(files['package.json']),
+    lock_sha256:digest(files['package-lock.json'])}
+}
 export function captureAudit(scope,output,{root=ROOT,runner=spawnSync}={}){
   requireThat(['prod','full'].includes(scope),'unknown audit scope')
   mkdirSync(output,{recursive:true})
@@ -201,6 +218,7 @@ export function captureAudit(scope,output,{root=ROOT,runner=spawnSync}={}){
   const result={schema:'dsi-node-audit-result/v1',scope,command:['npm',...args],scan,status:'failed'}
   try{
     const {policy,files}=context(root)
+    result.input_binding=inputBinding(files)
     result.assessment=assessAudit({raw,...scan},policy,files)
     result.status=result.assessment.status
   }catch(e){result.reason=e.message}
@@ -211,18 +229,29 @@ const PASSING=['clean','accepted_known_risk']
 export function verifyResults(output,outcomes,{root=ROOT}={}){
   requireThat(sameKeys(outcomes,['prod','full','python'])&&Object.values(outcomes).every(v=>v==='success'),'required audit step missing, failed, skipped or cancelled')
   const {policy,files}=context(root)
-  const assessments=[]
+  const current=inputBinding(files)
+  const assessments=[],bindings=[]
   for(const scope of ['prod','full']){
     const dir=join(output,scope),result=JSON.parse(readFileSync(join(dir,'result.json'),'utf8')),raw=readFileSync(join(dir,'audit.json'),'utf8'),stderr=readFileSync(join(dir,'stderr.log'))
     requireThat(result.schema==='dsi-node-audit-result/v1'&&result.scope===scope&&PASSING.includes(result.status),'required npm assessment missing or failed')
     requireThat(digest(raw)===result.scan.raw_sha256&&digest(stderr)===result.scan.stderr_sha256,'retained scan bytes changed')
+    // The summarized input must be the captured input: reject drift between
+    // capture and summary, and inputs that differ between the two scopes.
+    requireThat(object(result.input_binding)
+      &&result.input_binding.schema==='dsi-audit-input-binding/v1'
+      &&sameKeys(result.input_binding,['schema','cohort_sha256','manifest_sha256','lock_sha256']),
+      'capture predates input binding; recapture against the current inputs')
+    bindings.push(result.input_binding)
     assessments.push(assessAudit({raw,...result.scan},policy,files))
     requireThat(PASSING.includes(assessments[assessments.length-1].status),'re-assessed scan no longer passes')
   }
+  // The two scopes must describe one captured input before either is compared
+  // with the tree being summarized.
+  requireThat(canonical(bindings[0])===canonical(bindings[1]),'audit scopes captured different inputs')
+  requireThat(canonical(bindings[0])===canonical(current),'audit input drifted after capture; the retained scan no longer describes the current candidate')
   requireThat(assessments[0].status===assessments[1].status,'audit scopes disagree on the exception state')
-  if(assessments[0].status==='accepted_known_risk')requireThat(assessments[0].cohort_sha256===assessments[1].cohort_sha256,'audit input cohort changed between scans')
   const accepted=assessments[0].status==='accepted_known_risk'
-  return {schema:'dsi-required-dependency-audits/v1',status:accepted?'passed_with_known_upstream_risk':'passed',exception_fixed:!accepted,scopes:['prod','full','python'],assessments}
+  return {schema:'dsi-required-dependency-audits/v1',status:accepted?'passed_with_known_upstream_risk':'passed',exception_fixed:!accepted,scopes:['prod','full','python'],input_cohort_sha256:current.cohort_sha256,assessments}
 }
 function main(){
   const args=process.argv.slice(2)

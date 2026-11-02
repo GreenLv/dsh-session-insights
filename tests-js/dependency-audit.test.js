@@ -270,6 +270,91 @@ test('spawn exceptions still emit a failed scan receipt',()=>outputs(dir=>{
   assert.equal(JSON.parse(readFileSync(join(dir,'result.json'),'utf8')).status,'failed')
 }))
 
+// RV-05: the reviewer-side rc.5 production/full scans resolve 24 affected
+// entries — @deepseek-ai/dsh-typert-protocol declares `zod: ^4.4.3` and locks
+// 4.4.3, a satisfied range the exact-string check used to reject.
+const rangeReport=JSON.parse(readFileSync(new URL('../tests/fixtures/npm-audit-rc5-typert-range.json',import.meta.url),'utf8'))
+const rangePolicy=syntheticPolicy(rangeReport)
+test('the real 24-entry rc.5 graph with a ranged edge validates and binds to its cohort',()=>{
+  const result=assess(rangeReport,rangePolicy)
+  assert.equal(result.status,'accepted_known_risk')
+  assert.equal(result.affected_packages,24);assert.equal(result.advisories,1)
+  assert.equal(result.graph_sha256,rangePolicy.report_graph_sha256)
+})
+test('an edge whose locked version leaves the declared range is rejected',()=>{
+  const value=clone(rangeReport),changed=clone(lock)
+  // dsh-typert-protocol declares `zod: ^4.4.3` and the lock holds 4.4.3.
+  // Narrow the declaration so the locked version no longer satisfies it: the
+  // graph builder must consult ranges, not compare declaration strings.
+  changed.packages['node_modules/@deepseek-ai/dsh-typert-protocol'].dependencies.zod='~4.3.0'
+  assert.throws(()=>inspectReport(value,changed),/not satisfied by the locked dependency/)
+})
+test('a vulnerability on a nested or unreviewed path stays outside the accepted set',()=>{
+  const value=clone(rangeReport)
+  // typert-protocol has no inbound via reference, so this isolates the node
+  // path constraint from the edge lookup on earlier rows.
+  value.vulnerabilities['@deepseek-ai/dsh-typert-protocol'].nodes=['node_modules/@deepseek-ai/dsh-agent/node_modules/@deepseek-ai/dsh-typert-protocol']
+  rejectedWith(()=>assess(value,rangePolicy),/reviewed root node paths/)
+})
+test('graph drift between the reviewed and reported sets cannot pass under a stale hash',()=>{
+  const value=clone(rangeReport)
+  delete value.vulnerabilities['@deepseek-ai/dsh-typert-protocol']
+  value.vulnerabilities.zod.effects=value.vulnerabilities.zod.effects.filter(n=>n!=='@deepseek-ai/dsh-typert-protocol')
+  value.metadata.vulnerabilities.high=23;value.metadata.vulnerabilities.total=23
+  rejectedWith(()=>assess(value,rangePolicy),/graph drifted/)
+})
+
+// RV-01: the summary must summarize the captured inputs. A clean scan of one
+// tree must never endorse a different, still-vulnerable candidate.
+test('same-input clean captures re-read cleanly and report exception_fixed',()=>outputs(dir=>{
+  const root=stageRoot(false)
+  const cleanScan=()=>({status:0,signal:null,stdout:JSON.stringify(cleanReport),stderr:''})
+  for(const scope of ['prod','full'])captureAudit(scope,join(dir,scope),{root,runner:cleanScan})
+  const summary=verifyResults(dir,{prod:'success',full:'success',python:'success'},{root})
+  assert.equal(summary.status,'passed');assert.equal(summary.exception_fixed,true);assert.ok(summary.input_cohort_sha256)
+  rmSync(root,{recursive:true,force:true})
+}))
+test('swapping the lock or manifest after a clean capture voids the summary',()=>outputs(dir=>{
+  const root=stageRoot(false)
+  const cleanScan=()=>({status:0,signal:null,stdout:JSON.stringify(cleanReport),stderr:''})
+  for(const scope of ['prod','full'])captureAudit(scope,join(dir,scope),{root,runner:cleanScan})
+  // Replace the audited inputs with the real vulnerable candidate tree.
+  const candidateLock=JSON.parse(files['package-lock.json'])
+  writeFileSync(join(root,'package-lock.json'),JSON.stringify(candidateLock))
+  writeFileSync(join(root,'package.json'),files['package.json'])
+  assert.throws(()=>verifyResults(dir,{prod:'success',full:'success',python:'success'},{root}),/drifted after capture/)
+  rmSync(root,{recursive:true,force:true})
+}))
+test('scopes that captured different inputs cannot be summarized together',()=>outputs(dir=>{
+  const root=stageRoot(false)
+  const cleanScan=()=>({status:0,signal:null,stdout:JSON.stringify(cleanReport),stderr:''})
+  captureAudit('prod',join(dir,'prod'),{root,runner:cleanScan})
+  writeFileSync(join(root,'package-lock.json'),Buffer.concat([files['package-lock.json'],Buffer.from('\n')]))
+  captureAudit('full',join(dir,'full'),{root,runner:cleanScan})
+  assert.throws(()=>verifyResults(dir,{prod:'success',full:'success',python:'success'},{root}),/scopes captured different inputs/)
+  rmSync(root,{recursive:true,force:true})
+}))
+test('captures from before input binding existed cannot be summarized',()=>outputs(dir=>{
+  const root=stageRoot(false)
+  const cleanScan=()=>({status:0,signal:null,stdout:JSON.stringify(cleanReport),stderr:''})
+  for(const scope of ['prod','full'])captureAudit(scope,join(dir,scope),{root,runner:cleanScan})
+  for(const scope of ['prod','full']){
+    const p=join(dir,scope,'result.json'),r=JSON.parse(readFileSync(p,'utf8'));delete r.input_binding
+    writeFileSync(p,JSON.stringify(r,null,2)+'\n')
+  }
+  assert.throws(()=>verifyResults(dir,{prod:'success',full:'success',python:'success'},{root}),/predates input binding/)
+  rmSync(root,{recursive:true,force:true})
+}))
+test('an exception capture cannot be summarized after cohort drift',()=>outputs(dir=>{
+  const root=stageRoot(true)
+  for(const scope of ['prod','full'])captureAudit(scope,join(dir,scope),{root,runner:knownScan})
+  writeFileSync(join(root,'package-lock.json'),Buffer.concat([files['package-lock.json'],Buffer.from('\n')]))
+  // With a policy present the drifted cohort fails the per-scope
+  // re-assessment before the binding comparison runs; either way it fails.
+  assert.throws(()=>verifyResults(dir,{prod:'success',full:'success',python:'success'},{root}),/re-assessed scan no longer passes|drifted after capture/)
+  rmSync(root,{recursive:true,force:true})
+}))
+
 test('CI always collects all audits, checks outcome, and propagates Python pipeline failures',()=>{
   const source=String(files[workflow]),job=source.split('\n  dependency-security:\n')[1].split('\n  dsh-contract:\n')[0]
   for(const id of ['audit_prod','audit_full','audit_python']){
