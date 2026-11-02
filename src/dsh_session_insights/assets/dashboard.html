@@ -661,92 +661,113 @@
     "use strict";
 
     const report = JSON.parse(document.getElementById("report-data").textContent);
-    const isEnglish = report.scope?.locale === "en";
-    const staticEnglishText = new Map([
-      ["DSH 会话洞察", "DSH Session Insights"],
-      ["任务族、角色与 rollout 使用概览", "Task families, roles, and rollout usage"],
-      ["本文件完全在本地运行，不发起网络请求。", "This self-contained file runs locally and makes no network requests."],
-      ["报告目录", "Report contents"], ["一眼看懂", "At a glance"], ["语义样本", "Semantic sample"],
-      ["时段对比", "Period comparison"], ["任务族", "Task families"], ["你的工作", "Your work"],
-      ["使用方式", "Usage patterns"], ["亮点", "Strengths"], ["摩擦", "Friction"], ["建议", "Recommendations"],
-      ["未来工作流", "Future workflows"], ["语义分析范围", "Semantic analysis scope"],
-      ["开始日期", "Start date"], ["结束日期", "End date"], ["项目", "Project"], ["全部项目", "All projects"],
-      ["状态", "Status"], ["全部会话", "All sessions"], ["角色", "Role"], ["全部角色", "All roles"],
-      ["平台", "Platform"], ["全部平台", "All platforms"], ["工作分类", "Work area"], ["全部分类", "All areas"],
-      ["重置筛选", "Reset filters"], ["导出 JSON", "Export JSON"], ["导出 Markdown", "Export Markdown"],
-      ["活跃时间", "Active time"], ["Token 用量", "Tokens"], ["轮次数", "Turns"], ["工具调用", "Tool calls"],
-      ["任务族、角色与完成证据", "Task families, roles, and completion evidence"],
-      ["你的工作内容", "What you work on"], ["会话明细", "Session details"], ["如何使用 DSH", "How you use DSH"],
-      ["可验证亮点", "Evidence-backed strengths"], ["摩擦信号", "Friction signals"],
-      ["建议尝试的 DSH 工作方式", "Recommended DSH workflows"], ["代表性工作流", "Representative workflows"],
-      ["值得推进的新工作流", "Promising next workflows"], ["证据", "Evidence"], ["脱敏证据", "Redacted evidence"], ["本地内容证据", "Local-content evidence"],
-      ["覆盖说明", "Coverage notes"], ["已完成", "Completed"], ["已中止", "Aborted"], ["未完成", "Incomplete"],
-      ["把统计信号转成可行动的结论。以下叙事基于当前报告的完整分析范围；下方筛选器只影响定量图表、工作流和证据片段。", "Turn statistical signals into actionable conclusions. Narrative sections use the full report scope; filters affect only quantitative charts, workflows, and evidence excerpts."],
-      ["当前报告未请求语义增强；以下统计仍覆盖完整日志范围。", "Semantic analysis was not requested; the deterministic statistics still cover the full log scope."],
-      ["任务族按根 session_id 归并。Token 是日志原始累计最大值；缓存输入不等于免费或普通输入，不用于推导账单或配额。时间中的 active/tool/wait/reviewer 值除明确标为 measured 外均为 proxy。", "Task families are grouped by root session_id. Tokens are the maximum cumulative values recorded in logs; cached input is not treated as free or ordinary input and is not used to infer billing or quotas. Active, tool, wait, and reviewer time values are proxies unless explicitly marked measured."],
-      ["将当前筛选日期范围等分为前后两个时段，比较使用强度与完成信号；样本稀疏时只作描述。", "Split the selected date range into two periods and compare usage intensity and completion signals; sparse samples are descriptive only."],
-      ["根据提示词语义、工具活动和项目分布归纳工作领域；分类是启发式结果，不是人工标签。", "Work areas are inferred from prompt semantics, tool activity, and project distribution; classifications are heuristic, not human labels."],
-      ["显示当前筛选范围内的会话摘要；点击上方工作分类卡片可快速聚焦。", "Show session summaries in the current filter scope; select a work-area card above to focus quickly."],
-      ["指标", "Metric"], ["会话数", "Sessions"], ["项目领域", "Project areas"], ["交互模式", "Interaction patterns"],
-      ["会话类型", "Session types"], ["常用工具", "Top tools"], ["Skill 使用", "Skill usage"], ["插件/MCP 使用", "Plugin / MCP usage"],
-      ["常见文件类型", "Common file types"], ["本地活跃时段", "Local active hours"],
-      ["区分 log_completed、verified_completed 与 accepted；缺少证据时保持 unknown，不从正面措辞推断接受。", "Distinguish log_completed, verified_completed, and accepted. Keep unknown when evidence is absent; do not infer acceptance from positive wording."],
-      ["这些信号用于定位值得调查的环节，并不自动代表质量问题。", "These signals identify areas worth investigating; they do not automatically indicate quality problems."],
-      ["每条建议都绑定测量证据，并提供可直接复制的提示词。状态只保存在当前浏览器，不自动修改配置、权限、AGENTS.md 或 Skill。", "Each recommendation is tied to measured evidence and includes a copyable prompt. Tracking stays in this browser and never changes configuration, permissions, AGENTS.md, or Skills."],
-      ["这些方向来自当前使用模式与摩擦信号的组合推断，用于规划下一阶段，而不是预测结果。", "These directions combine current usage patterns and friction signals to plan next steps, not predict outcomes."],
-      ["当前筛选范围内没有任务族。", "No task families match the current filters."], ["当前筛选条件下没有数据。", "No data matches the current filters."],
-      ["没有符合当前筛选条件的会话。", "No sessions match the current filters."], ["没有符合当前筛选条件的工作流。", "No workflows match the current filters."],
-      ["查看支持任务族", "View supporting task families"], ["复制提示词", "Copy prompt"], ["已复制", "Copied"],
-      ["采用状态", "Adoption status"]
+    const locale = ["zh-CN", "en", "ru"].includes(report.scope?.locale) ? report.scope.locale : "zh-CN";
+    const isEnglish = locale === "en";
+    const isRussian = locale === "ru";
+    const staticText = new Map([
+      ["DSH 会话洞察", ["DSH Session Insights", "DSH Session Insights"]],
+      ["任务族、角色与 rollout 使用概览", ["Task families, roles, and rollout usage", "Семейства задач, роли и использование rollout"]],
+      ["本文件完全在本地运行，不发起网络请求。", ["This self-contained file runs locally and makes no network requests.", "Этот автономный файл работает локально и не делает сетевых запросов."]],
+      ["报告目录", ["Report contents", "Содержание отчёта"]], ["一眼看懂", ["At a glance", "Кратко"]], ["语义样本", ["Semantic sample", "Семантическая выборка"]],
+      ["时段对比", ["Period comparison", "Сравнение периодов"]], ["任务族", ["Task families", "Семейства задач"]], ["你的工作", ["Your work", "Ваша работа"]],
+      ["使用方式", ["Usage patterns", "Как вы используете DSH"]], ["亮点", ["Strengths", "Сильные стороны"]], ["摩擦", ["Friction", "Затруднения"]], ["建议", ["Recommendations", "Рекомендации"]],
+      ["未来工作流", ["Future workflows", "Будущие процессы"]], ["语义分析范围", ["Semantic analysis scope", "Область семантического анализа"]],
+      ["开始日期", ["Start date", "Дата начала"]], ["结束日期", ["End date", "Дата окончания"]], ["项目", ["Project", "Проект"]], ["全部项目", ["All projects", "Все проекты"]],
+      ["状态", ["Status", "Статус"]], ["全部会话", ["All sessions", "Все сессии"]], ["角色", ["Role", "Роль"]], ["全部角色", ["All roles", "Все роли"]],
+      ["平台", ["Platform", "Платформа"]], ["全部平台", ["All platforms", "Все платформы"]], ["工作分类", ["Work area", "Область работы"]], ["全部分类", ["All areas", "Все области"]],
+      ["重置筛选", ["Reset filters", "Сбросить фильтры"]], ["导出 JSON", ["Export JSON", "Экспорт JSON"]], ["导出 Markdown", ["Export Markdown", "Экспорт Markdown"]],
+      ["活跃时间", ["Active time", "Активное время"]], ["Token 用量", ["Tokens", "Токены"]], ["轮次数", ["Turns", "Ходы"]], ["工具调用", ["Tool calls", "Вызовы инструментов"]],
+      ["任务族、角色与完成证据", ["Task families, roles, and completion evidence", "Семейства задач, роли и свидетельства завершения"]],
+      ["你的工作内容", ["What you work on", "Над чем вы работаете"]], ["会话明细", ["Session details", "Детали сессий"]], ["如何使用 DSH", ["How you use DSH", "Как вы используете DSH"]],
+      ["可验证亮点", ["Evidence-backed strengths", "Подтверждённые сильные стороны"]], ["摩擦信号", ["Friction signals", "Сигналы затруднений"]],
+      ["建议尝试的 DSH 工作方式", ["Recommended DSH workflows", "Рекомендуемые подходы к работе в DSH"]], ["代表性工作流", ["Representative workflows", "Показательные процессы"]],
+      ["值得推进的新工作流", ["Promising next workflows", "Перспективные следующие процессы"]], ["证据", ["Evidence", "Свидетельства"]], ["脱敏证据", ["Redacted evidence", "Обезличенные свидетельства"]], ["本地内容证据", ["Local-content evidence", "Свидетельства локального содержимого"]],
+      ["覆盖说明", ["Coverage notes", "Примечания к покрытию"]], ["已完成", ["Completed", "Завершено"]], ["已中止", ["Aborted", "Прервано"]], ["未完成", ["Incomplete", "Не завершено"]],
+      ["把统计信号转成可行动的结论。以下叙事基于当前报告的完整分析范围；下方筛选器只影响定量图表、工作流和证据片段。", ["Turn statistical signals into actionable conclusions. Narrative sections use the full report scope; filters affect only quantitative charts, workflows, and evidence excerpts.", "Превратите статистические сигналы в практические выводы. Разделы с выводами используют полную область отчёта; фильтры влияют только на количественные графики, процессы и фрагменты свидетельств."]],
+      ["当前报告未请求语义增强；以下统计仍覆盖完整日志范围。", ["Semantic analysis was not requested; the deterministic statistics still cover the full log scope.", "Семантический анализ не запрашивался; детерминированная статистика по-прежнему покрывает полный диапазон логов."]],
+      ["任务族按根 session_id 归并。Token 是日志原始累计最大值；缓存输入不等于免费或普通输入，不用于推导账单或配额。时间中的 active/tool/wait/reviewer 值除明确标为 measured 外均为 proxy。", ["Task families are grouped by root session_id. Tokens are the maximum cumulative values recorded in logs; cached input is not treated as free or ordinary input and is not used to infer billing or quotas. Active, tool, wait, and reviewer time values are proxies unless explicitly marked measured.", "Семейства задач группируются по корневому session_id. Токены — максимальные накопленные значения из логов; кэшированный ввод не считается бесплатным или обычным и не используется для вывода о счетах или квотах. Значения активного времени, времени инструментов, ожидания и проверки являются прокси-значениями, если явно не помечены как measured."]],
+      ["将当前筛选日期范围等分为前后两个时段，比较使用强度与完成信号；样本稀疏时只作描述。", ["Split the selected date range into two periods and compare usage intensity and completion signals; sparse samples are descriptive only.", "Разделите выбранный диапазон дат на два периода и сравните интенсивность использования и сигналы завершения; при разреженных выборках сравнение носит описательный характер."]],
+      ["根据提示词语义、工具活动和项目分布归纳工作领域；分类是启发式结果，不是人工标签。", ["Work areas are inferred from prompt semantics, tool activity, and project distribution; classifications are heuristic, not human labels.", "Области работы выводятся из семантики промптов, активности инструментов и распределения по проектам; классификация эвристическая, а не ручная разметка."]],
+      ["显示当前筛选范围内的会话摘要；点击上方工作分类卡片可快速聚焦。", ["Show session summaries in the current filter scope; select a work-area card above to focus quickly.", "Показаны сводки сессий в текущей области фильтров; выберите карточку области работы выше, чтобы быстро сфокусироваться."]],
+      ["指标", ["Metric", "Метрика"]], ["会话数", ["Sessions", "Сессии"]], ["项目领域", ["Project areas", "Области проектов"]], ["交互模式", ["Interaction patterns", "Модели взаимодействия"]],
+      ["会话类型", ["Session types", "Типы сессий"]], ["常用工具", ["Top tools", "Частые инструменты"]], ["Skill 使用", ["Skill usage", "Использование Skills"]], ["插件/MCP 使用", ["Plugin / MCP usage", "Использование плагинов/MCP"]],
+      ["常见文件类型", ["Common file types", "Частые типы файлов"]], ["本地活跃时段", ["Local active hours", "Активные часы по местному времени"]],
+      ["区分 log_completed、verified_completed 与 accepted；缺少证据时保持 unknown，不从正面措辞推断接受。", ["Distinguish log_completed, verified_completed, and accepted. Keep unknown when evidence is absent; do not infer acceptance from positive wording.", "Различайте log_completed, verified_completed и accepted. Если свидетельств нет, оставляйте unknown; не делайте вывод о приёмке из положительных формулировок."]],
+      ["这些信号用于定位值得调查的环节，并不自动代表质量问题。", ["These signals identify areas worth investigating; they do not automatically indicate quality problems.", "Эти сигналы указывают на области, достойные изучения; они не означают автоматически проблемы качества."]],
+      ["每条建议都绑定测量证据，并提供可直接复制的提示词。状态只保存在当前浏览器，不自动修改配置、权限、AGENTS.md 或 Skill。", ["Each recommendation is tied to measured evidence and includes a copyable prompt. Tracking stays in this browser and never changes configuration, permissions, AGENTS.md, or Skills.", "Каждая рекомендация привязана к измеренным свидетельствам и содержит готовый к копированию промпт. Отметки хранятся только в этом браузере и никогда не меняют конфигурацию, права, AGENTS.md или Skills."]],
+      ["这些方向来自当前使用模式与摩擦信号的组合推断，用于规划下一阶段，而不是预测结果。", ["These directions combine current usage patterns and friction signals to plan next steps, not predict outcomes.", "Эти направления сочетают текущие модели использования и сигналы затруднений, чтобы планировать следующие шаги, а не предсказывать результат."]],
+      ["当前筛选范围内没有任务族。", ["No task families match the current filters.", "В текущих фильтрах нет семейств задач."]], ["当前筛选条件下没有数据。", ["No data matches the current filters.", "Текущим фильтрам не соответствуют данные."]],
+      ["没有符合当前筛选条件的会话。", ["No sessions match the current filters.", "Текущим фильтрам не соответствуют сессии."]], ["没有符合当前筛选条件的工作流。", ["No workflows match the current filters.", "Текущим фильтрам не соответствуют процессы."]],
+      ["查看支持任务族", ["View supporting task families", "Показать поддерживающие семейства задач"]], ["复制提示词", ["Copy prompt", "Копировать промпт"]], ["已复制", ["Copied", "Скопировано"]],
+      ["采用状态", ["Adoption status", "Статус внедрения"]]
     ]);
-    function ui(zh, en) {
-      return isEnglish ? en : zh;
+    function ui(zh, en, ru) {
+      return isEnglish ? en : isRussian ? ru : zh;
+    }
+    function ruCount(value, one, few, many) {
+      const numeric = Math.abs(Number(value));
+      const numberValue = Math.trunc(numeric) || 0;
+      const mod10 = numberValue % 10, mod100 = numberValue % 100;
+      const form = !Number.isInteger(numeric) ? few
+        : mod10 === 1 && mod100 !== 11 ? one
+        : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? few : many;
+      return `${number.format(value)} ${form}`;
+    }
+    function ruMeasure(value, measure) {
+      if (measure === "active_minutes") return ruCount(value, "час", "часа", "часов");
+      if (measure === "sessions") return ruCount(value, "сессия", "сессии", "сессий");
+      return ruCount(value, "вызов", "вызова", "вызовов");
     }
     function unit(value, singular, plural = `${singular}s`) {
       return `${value} ${Number(value) === 1 ? singular : plural}`;
     }
-    function translateStaticEnglish(text) {
-      if (!isEnglish || !text) return text;
+    function translateStatic(text) {
+      if (locale === "zh-CN" || !text) return text;
       const leading = text.match(/^\s*/)?.[0] || "";
       const trailing = text.match(/\s*$/)?.[0] || "";
       const core = text.slice(leading.length, text.length - trailing.length || undefined);
-      const translated = staticEnglishText.get(core);
+      const translations = staticText.get(core);
+      const translated = translations ? translations[isEnglish ? 0 : 1] : undefined;
       return translated === undefined ? text : `${leading}${translated}${trailing}`;
     }
     function localizeDocument() {
-      if (!isEnglish) return;
-      document.documentElement.lang = "en";
+      if (locale === "zh-CN") return;
+      document.documentElement.lang = locale;
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       const nodes = [];
       while (walker.nextNode()) nodes.push(walker.currentNode);
       for (const node of nodes) {
         if (node.parentElement?.closest('#report-data')) continue;
-        node.nodeValue = translateStaticEnglish(node.nodeValue);
+        node.nodeValue = translateStatic(node.nodeValue);
       }
       for (const element of document.querySelectorAll('[aria-label], [title], [placeholder]')) {
         for (const attribute of ['aria-label', 'title', 'placeholder']) {
-          if (element.hasAttribute(attribute)) element.setAttribute(attribute, translateStaticEnglish(element.getAttribute(attribute)));
+          if (element.hasAttribute(attribute)) element.setAttribute(attribute, translateStatic(element.getAttribute(attribute)));
         }
       }
-      document.title = staticEnglishText.get("DSH 会话洞察");
+      document.title = staticText.get("DSH 会话洞察")[isEnglish ? 0 : 1];
     }
     const sessions = Array.isArray(report.rollout_summaries) ? report.rollout_summaries : (Array.isArray(report.session_summaries) ? report.session_summaries : []);
     const taskFamilies = Array.isArray(report.task_families) ? report.task_families : [];
     const excerpts = Array.isArray(report.excerpts) ? report.excerpts : [];
     const byId = (id) => document.getElementById(id);
-    const numberLocale = isEnglish ? "en" : "zh-CN";
+    const numberLocale = locale === "ru" ? "ru-RU" : isEnglish ? "en" : "zh-CN";
     const number = new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 });
     const integer = new Intl.NumberFormat(numberLocale);
     const compact = new Intl.NumberFormat(numberLocale, { notation: "compact", maximumFractionDigits: 1 });
     const svgNS = "http://www.w3.org/2000/svg";
-    const statusLabels = isEnglish ? { completed: "Completed", aborted: "Aborted", partial: "Incomplete" } : { completed: "已完成", aborted: "已中止", partial: "未完成" };
-    const roleLabels = isEnglish ? { root_task: "Root task", task_subagent: "Task subagent", action_reviewer: "Action reviewer", unknown_system_rollout: "Unknown system rollout" } : { root_task: "根任务", task_subagent: "业务子代理", action_reviewer: "动作审查", unknown_system_rollout: "未知系统 rollout" };
-    const completionLabels = isEnglish ? { yes: "Yes", no: "No", unknown: "Unknown" } : { yes: "是", no: "否", unknown: "未知" };
-    const kindLabels = isEnglish ? { prompt: "Prompt", follow_up: "Follow-up", correction: "Correction" } : { prompt: "提示词", follow_up: "后续要求", correction: "纠正" };
+    const statusLabels = isEnglish ? { completed: "Completed", aborted: "Aborted", partial: "Incomplete" } : isRussian ? { completed: "Завершено", aborted: "Прервано", partial: "Не завершено" } : { completed: "已完成", aborted: "已中止", partial: "未完成" };
+    const roleLabels = isEnglish ? { root_task: "Root task", task_subagent: "Task subagent", action_reviewer: "Action reviewer", unknown_system_rollout: "Unknown system rollout" } : isRussian ? { root_task: "Корневая задача", task_subagent: "Субагент задачи", action_reviewer: "Проверка действий", unknown_system_rollout: "Неизвестный системный rollout" } : { root_task: "根任务", task_subagent: "业务子代理", action_reviewer: "动作审查", unknown_system_rollout: "未知系统 rollout" };
+    const completionLabels = isEnglish ? { yes: "Yes", no: "No", unknown: "Unknown" } : isRussian ? { yes: "Да", no: "Нет", unknown: "Неизвестно" } : { yes: "是", no: "否", unknown: "未知" };
+    const kindLabels = isEnglish ? { prompt: "Prompt", follow_up: "Follow-up", correction: "Correction" } : isRussian ? { prompt: "Промпт", follow_up: "Уточнение", correction: "Исправление" } : { prompt: "提示词", follow_up: "后续要求", correction: "纠正" };
     const areaLabels = isEnglish ? {
       research_writing: "Research and paper writing", experiments_data: "Experiments and data analysis",
       skills_configuration: "Skills, plugins, and configuration", documents_presentations: "Documents, reports, and presentations",
       software_engineering: "Software engineering", web_sites: "Web and frontend", general: "Other work"
+    } : isRussian ? {
+      research_writing: "Исследования и научные статьи", experiments_data: "Эксперименты и анализ данных",
+      skills_configuration: "Skills, плагины и конфигурация", documents_presentations: "Документы, отчёты и презентации",
+      software_engineering: "Разработка ПО", web_sites: "Веб и фронтенд", general: "Другая работа"
     } : {
       research_writing: "研究与论文写作", experiments_data: "实验与数据分析",
       skills_configuration: "Skill、插件与配置", documents_presentations: "文档、报告与演示",
@@ -755,13 +776,18 @@
     const typeLabels = isEnglish ? {
       quick_check: "Quick check", multi_agent: "Multi-agent", implementation: "Implementation",
       research: "Research", tool_driven: "Tool-driven", conversation: "Discussion and planning"
+    } : isRussian ? {
+      quick_check: "Быстрая проверка", multi_agent: "Мультиагентная работа", implementation: "Реализация и правки",
+      research: "Исследование и поиск", tool_driven: "Работа через инструменты", conversation: "Обсуждение и планирование"
     } : {
       quick_check: "快速检查", multi_agent: "多代理协作", implementation: "实现与修改",
       research: "研究与检索", tool_driven: "工具驱动任务", conversation: "讨论与规划"
     };
     const trackingLabels = isEnglish
       ? { not_started: "Not started", trying: "Trying", adopted: "Adopted", paused: "Paused" }
-      : { not_started: "未开始", trying: "试行中", adopted: "已采纳", paused: "暂缓" };
+      : isRussian
+        ? { not_started: "Не начато", trying: "Пробую", adopted: "Внедрено", paused: "Пауза" }
+        : { not_started: "未开始", trying: "试行中", adopted: "已采纳", paused: "暂缓" };
     const trackingStorageKey = "dsh-session-insights:recommendation-tracking:v1";
     let recommendationTracking = {};
 
@@ -869,7 +895,9 @@
         facts.className = "meta";
         facts.textContent = isEnglish
           ? `${unit(integer.format(role.rollouts), "rollout")} · ${unit(integer.format(role.task_families), "task family", "task families")} · ${(Number(role.total_token_share || 0) * 100).toFixed(1)}% logged tokens`
-          : `${integer.format(role.rollouts)} 会话 · ${integer.format(role.task_families)} 任务族 · ${(Number(role.total_token_share || 0) * 100).toFixed(1)}% 日志 Token`;
+          : isRussian
+            ? `${integer.format(role.rollouts)} rollout · ${ruCount(role.task_families, "семейство задач", "семейства задач", "семейств задач")} · ${(Number(role.total_token_share || 0) * 100).toFixed(1)}% токенов в логах`
+            : `${integer.format(role.rollouts)} 会话 · ${integer.format(role.task_families)} 任务族 · ${(Number(role.total_token_share || 0) * 100).toFixed(1)}% 日志 Token`;
         card.append(title, facts);
         roleContainer.append(card);
       }
@@ -877,18 +905,20 @@
         const card = document.createElement("article");
         card.className = "work-area-card";
         const title = document.createElement("h3");
-        title.textContent = ui(`平台：${platform.platform}`, `Platform: ${platform.platform}`);
+        title.textContent = ui(`平台：${platform.platform}`, `Platform: ${platform.platform}`, `Платформа: ${platform.platform}`);
         const facts = document.createElement("p");
         facts.className = "meta";
         facts.textContent = isEnglish
           ? `${unit(integer.format(platform.rollouts), "rollout")} · ${unit(integer.format(platform.task_families), "task family", "task families")} · ${(Number(platform.total_token_share || 0) * 100).toFixed(1)}% logged tokens`
-          : `${integer.format(platform.rollouts)} 会话 · ${integer.format(platform.task_families)} 任务族 · ${(Number(platform.total_token_share || 0) * 100).toFixed(1)}% 日志 Token`;
+          : isRussian
+            ? `${integer.format(platform.rollouts)} rollout · ${ruCount(platform.task_families, "семейство задач", "семейства задач", "семейств задач")} · ${(Number(platform.total_token_share || 0) * 100).toFixed(1)}% токенов в логах`
+            : `${integer.format(platform.rollouts)} 会话 · ${integer.format(platform.task_families)} 任务族 · ${(Number(platform.total_token_share || 0) * 100).toFixed(1)}% 日志 Token`;
         card.append(title, facts);
         roleContainer.append(card);
       }
       const list = byId("task-family-list");
       list.replaceChildren();
-      if (!families.length) return appendEmpty(list, ui("当前筛选范围内没有任务族。", "No task families match the current filters."));
+      if (!families.length) return appendEmpty(list, ui("当前筛选范围内没有任务族。", "No task families match the current filters.", "В текущих фильтрах нет семейств задач."));
       // 语义支持的任务族必须全部展示（钻取锚点依赖）；其余任务族补充到 12 个基准。
       // 支持族数量受语义采样上限（24）约束，因此列表总体有界。
       const supportedFamilies = families.filter((family) => semanticSupport.has(family.task_family_id));
@@ -904,12 +934,16 @@
         meta.className = "meta";
         meta.textContent = isEnglish
           ? `${family.date} · ${family.platform} · ${unit(family.rollout_count, "rollout")} · ${compact.format(family.tokens?.total_tokens || 0)} logged tokens`
-          : `${family.date} · ${family.platform} · ${family.rollout_count} 会话 · ${compact.format(family.tokens?.total_tokens || 0)} 日志 Token`;
+          : isRussian
+            ? `${family.date} · ${family.platform} · ${ruCount(family.rollout_count, "сессия", "сессии", "сессий")} · ${compact.format(family.tokens?.total_tokens || 0)} токенов в логах`
+            : `${family.date} · ${family.platform} · ${family.rollout_count} 会话 · ${compact.format(family.tokens?.total_tokens || 0)} 日志 Token`;
         const evidence = document.createElement("p");
         evidence.className = "workflow-evidence";
         evidence.textContent = isEnglish
           ? `Log complete: ${completionLabels[family.completion?.log_completed] || "Unknown"}; verified complete: ${completionLabels[family.completion?.verified_completed] || "Unknown"}; user accepted: ${completionLabels[family.completion?.accepted] || "Unknown"}. Structured failures ${family.structured_failures || 0}, text signals ${family.text_error_signals || 0}, diagnostic nonzero exits ${family.diagnostic_nonzero || 0}.`
-          : `日志完成：${completionLabels[family.completion?.log_completed] || "未知"}；验证完成：${completionLabels[family.completion?.verified_completed] || "未知"}；用户接受：${completionLabels[family.completion?.accepted] || "未知"}。结构化失败 ${family.structured_failures || 0}，文本信号 ${family.text_error_signals || 0}，诊断性非零 ${family.diagnostic_nonzero || 0}。`;
+          : isRussian
+            ? `Лог завершён: ${completionLabels[family.completion?.log_completed] || "Неизвестно"}; проверено: ${completionLabels[family.completion?.verified_completed] || "Неизвестно"}; принято пользователем: ${completionLabels[family.completion?.accepted] || "Неизвестно"}. Структурных сбоев — ${family.structured_failures || 0}, текстовых сигналов — ${family.text_error_signals || 0}, диагностических ненулевых кодов — ${family.diagnostic_nonzero || 0}.`
+            : `日志完成：${completionLabels[family.completion?.log_completed] || "未知"}；验证完成：${completionLabels[family.completion?.verified_completed] || "未知"}；用户接受：${completionLabels[family.completion?.accepted] || "未知"}。结构化失败 ${family.structured_failures || 0}，文本信号 ${family.text_error_signals || 0}，诊断性非零 ${family.diagnostic_nonzero || 0}。`;
         item.append(title, meta, evidence);
         list.append(item);
       }
@@ -919,7 +953,7 @@
       byId(id).textContent = value;
     }
 
-    function appendEmpty(container, text = ui("当前范围内没有足够数据。", "Not enough data in the current scope.")) {
+    function appendEmpty(container, text = ui("当前范围内没有足够数据。", "Not enough data in the current scope.", "В текущей области недостаточно данных.")) {
       const empty = document.createElement("p");
       empty.className = "empty";
       empty.textContent = text;
@@ -948,7 +982,7 @@
     function appendFamilyDrilldown(parent, familyIds, familyById) {
       const details = document.createElement("details");
       const summary = document.createElement("summary");
-      summary.textContent = ui("查看支持任务族", "View supporting task families");
+      summary.textContent = ui("查看支持任务族", "View supporting task families", "Показать поддерживающие семейства задач");
       const list = document.createElement("ul");
       list.className = "example-list";
       for (const familyId of familyIds || []) {
@@ -990,31 +1024,41 @@
       const deterministicCache = analysis.deterministic_cache || report.coverage?.deterministic_cache || {};
       const semanticStatusLabels = isEnglish
         ? { complete: "Semantic analysis complete", fallback: "Deterministic fallback", not_applicable: "Semantic analysis unavailable in this privacy mode", not_requested: "Semantic analysis not requested" }
-        : { complete: "语义增强已完成", fallback: "已降级为确定性报告", not_applicable: "当前隐私模式不适用语义分析", not_requested: "未请求语义增强" };
+        : isRussian
+          ? { complete: "Семантический анализ завершён", fallback: "Детерминированный резервный отчёт", not_applicable: "Семантический анализ недоступен в этом режиме приватности", not_requested: "Семантический анализ не запрашивался" }
+          : { complete: "语义增强已完成", fallback: "已降级为确定性报告", not_applicable: "当前隐私模式不适用语义分析", not_requested: "未请求语义增强" };
       const parts = [semanticStatusLabels[analysis.status] || analysis.status || semanticStatusLabels.not_requested];
       if (Number.isFinite(selection.selected)) parts.push(isEnglish
         ? `analyzed ${selection.selected} of ${unit(selection.eligible || 0, "substantive task family", "substantive task families")} (limit ${selection.limit || 0})`
-        : `从 ${selection.eligible || 0} 个实质任务族中分析 ${selection.selected} 个（上限 ${selection.limit || 0}）`);
-      if (Number.isFinite(cache.hits)) parts.push(ui(`facet 缓存命中 ${cache.hits}、缺失 ${cache.misses || 0}`, `facet cache: ${cache.hits} hits, ${cache.misses || 0} misses`));
+        : isRussian
+          ? `существенных семейств задач: ${selection.selected} из ${selection.eligible || 0} (лимит ${selection.limit || 0})`
+          : `从 ${selection.eligible || 0} 个实质任务族中分析 ${selection.selected} 个（上限 ${selection.limit || 0}）`);
+      if (Number.isFinite(cache.hits)) parts.push(ui(`facet 缓存命中 ${cache.hits}、缺失 ${cache.misses || 0}`, `facet cache: ${cache.hits} hits, ${cache.misses || 0} misses`, `кэш facet: попаданий — ${cache.hits}, промахов — ${cache.misses || 0}`));
       if (Number.isFinite(deterministicCache.hits)) parts.push(isEnglish
         ? `parser cache: ${deterministicCache.hits} hits, ${deterministicCache.misses || 0} misses, ${deterministicCache.invalidations || 0} invalidations`
-        : `解析缓存命中 ${deterministicCache.hits}、缺失 ${deterministicCache.misses || 0}、失效 ${deterministicCache.invalidations || 0}`);
-      if (deterministicCache.write_errors) parts.push(ui(`解析缓存写入失败 ${deterministicCache.write_errors}`, `parser cache write failures: ${deterministicCache.write_errors}`));
+        : isRussian
+          ? `кэш разбора: попаданий — ${deterministicCache.hits}, промахов — ${deterministicCache.misses || 0}, инвалидаций — ${deterministicCache.invalidations || 0}`
+          : `解析缓存命中 ${deterministicCache.hits}、缺失 ${deterministicCache.misses || 0}、失效 ${deterministicCache.invalidations || 0}`);
+      if (deterministicCache.write_errors) parts.push(ui(`解析缓存写入失败 ${deterministicCache.write_errors}`, `parser cache write failures: ${deterministicCache.write_errors}`, `ошибок записи кэша разбора — ${deterministicCache.write_errors}`));
       if (analysis.analysis_depth) parts.push(isEnglish
         ? `analysis input: ${analysis.analysis_depth === "evidence" ? "conversation + safe tool evidence" : "conversation only"}`
-        : `分析输入 ${analysis.analysis_depth === "evidence" ? "对话 + 安全工具证据" : "仅对话"}`);
+        : isRussian
+          ? `вход анализа: ${analysis.analysis_depth === "evidence" ? "диалог + безопасные свидетельства инструментов" : "только диалог"}`
+          : `分析输入 ${analysis.analysis_depth === "evidence" ? "对话 + 安全工具证据" : "仅对话"}`);
       if (analysis.analysis_privacy_mode && analysis.analysis_privacy_mode !== analysis.privacy_mode) parts.push(isEnglish
         ? `analysis privacy ${analysis.analysis_privacy_mode}, report privacy ${analysis.privacy_mode}`
-        : `分析输入隐私 ${analysis.analysis_privacy_mode}，报告隐私 ${analysis.privacy_mode}`);
-      if (selection.truncated_families) parts.push(ui(`${selection.truncated_families} 个任务族使用了有界截断`, `${selection.truncated_families} task families used bounded truncation`));
-      if (analysis.fallback_reason) parts.push(ui(`原因：${analysis.fallback_reason}`, `reason: ${analysis.fallback_reason}`));
-      setText("semantic-status", parts.join(isEnglish ? "; " : "；") + ui("。语义结论是 inferred，不会升级日志中的 verified 或 accepted 证据。", ". Semantic conclusions are inferred and never upgrade logged verified or accepted evidence."));
+        : isRussian
+          ? `приватность входа анализа ${analysis.analysis_privacy_mode}, приватность отчёта ${analysis.privacy_mode}`
+          : `分析输入隐私 ${analysis.analysis_privacy_mode}，报告隐私 ${analysis.privacy_mode}`);
+      if (selection.truncated_families) parts.push(ui(`${selection.truncated_families} 个任务族使用了有界截断`, `${selection.truncated_families} task families used bounded truncation`, `семейств задач с ограниченным усечением — ${selection.truncated_families}`));
+      if (analysis.fallback_reason) parts.push(ui(`原因：${analysis.fallback_reason}`, `reason: ${analysis.fallback_reason}`, `причина: ${analysis.fallback_reason}`));
+      setText("semantic-status", parts.join(locale === "zh-CN" ? "；" : "; ") + ui("。语义结论是 inferred，不会升级日志中的 verified 或 accepted 证据。", ". Semantic conclusions are inferred and never upgrade logged verified or accepted evidence.", ". Семантические выводы являются inferred и никогда не повышают статус verified или accepted в логах."));
       const container = byId("semantic-workflow-grid");
       container.replaceChildren();
       const workflows = report.semantic_workflows || [];
       if (!workflows.length) return appendEmpty(container, analysis.status === "fallback"
-        ? ui("语义阶段未完成，已保留完整确定性统计。", "Semantic analysis did not complete; full deterministic statistics were preserved.")
-        : ui("当前没有语义工作流卡片。", "No semantic workflow cards are available."));
+        ? ui("语义阶段未完成，已保留完整确定性统计。", "Semantic analysis did not complete; full deterministic statistics were preserved.", "Семантический этап не завершился; полная детерминированная статистика сохранена.")
+        : ui("当前没有语义工作流卡片。", "No semantic workflow cards are available.", "Семантические карточки процессов отсутствуют."));
       const familyById = new Map(taskFamilies.map((family) => [family.task_family_id, family]));
       for (const workflow of workflows) {
         const card = document.createElement("article");
@@ -1027,7 +1071,9 @@
         evidence.className = "evidence-note";
         evidence.textContent = isEnglish
           ? `${unit(workflow.supporting_task_family_ids?.length || 0, "supporting task family", "supporting task families")} · ${unit(workflow.evidence_refs?.length || 0, "evidence reference")} · ${workflow.confidence} confidence · ${workflow.measurement}`
-          : `${workflow.supporting_task_family_ids?.length || 0} 个支持任务族 · ${workflow.evidence_refs?.length || 0} 条证据 · ${workflow.confidence} confidence · ${workflow.measurement}`;
+          : isRussian
+            ? `поддерживающих семейств задач — ${workflow.supporting_task_family_ids?.length || 0} · ссылок на свидетельства — ${workflow.evidence_refs?.length || 0} · уверенность: ${workflow.confidence} · измерение: ${workflow.measurement}`
+            : `${workflow.supporting_task_family_ids?.length || 0} 个支持任务族 · ${workflow.evidence_refs?.length || 0} 条证据 · ${workflow.confidence} confidence · ${workflow.measurement}`;
         card.append(title, text, evidence);
         appendFamilyDrilldown(card, workflow.supporting_task_family_ids, familyById);
         container.append(card);
@@ -1048,7 +1094,9 @@
         facts.className = "fact-row";
         const areaFacts = isEnglish
           ? [unit(area.sessions, "session"), unit(area.turns, "turn"), unit(number.format(area.active_hours), "hour"), unit(area.tool_calls, "tool call")]
-          : [`${area.sessions} 个会话`, `${area.turns} 轮`, `${number.format(area.active_hours)} 小时`, `${area.tool_calls} 次工具调用`];
+          : isRussian
+            ? [ruCount(area.sessions, "сессия", "сессии", "сессий"), ruCount(area.turns, "ход", "хода", "ходов"), `${number.format(area.active_hours)} ч`, ruCount(area.tool_calls, "вызов инструмента", "вызова инструментов", "вызовов инструментов")]
+            : [`${area.sessions} 个会话`, `${area.turns} 轮`, `${number.format(area.active_hours)} 小时`, `${area.tool_calls} 次工具调用`];
         for (const value of areaFacts) {
           const span = document.createElement("span");
           span.textContent = value;
@@ -1068,7 +1116,7 @@
         const drill = document.createElement("button");
         drill.type = "button";
         drill.className = "drill-action";
-        drill.textContent = ui("查看此类会话", "View sessions in this area");
+        drill.textContent = ui("查看此类会话", "View sessions in this area", "Показать сессии этой области");
         drill.addEventListener("click", () => {
           byId("work-area-filter").value = area.area;
           applyFilters();
@@ -1090,12 +1138,12 @@
       container.replaceChildren();
       const from = byId("from-date").value;
       const to = byId("to-date").value;
-      if (!from || !to || from > to) return appendEmpty(container, ui("请选择有效的开始和结束日期。", "Choose a valid start and end date."));
+      if (!from || !to || from > to) return appendEmpty(container, ui("请选择有效的开始和结束日期。", "Choose a valid start and end date.", "Выберите корректные даты начала и окончания."));
       const start = new Date(`${from}T00:00:00Z`);
       const end = new Date(`${to}T00:00:00Z`);
       const dayMs = 86400000;
       const totalDays = Math.floor((end - start) / dayMs) + 1;
-      if (totalDays < 2) return appendEmpty(container, ui("至少选择两天才能进行前后时段对比。", "Select at least two days to compare periods."));
+      if (totalDays < 2) return appendEmpty(container, ui("至少选择两天才能进行前后时段对比。", "Select at least two days to compare periods.", "Для сравнения периодов нужно выбрать хотя бы два дня."));
       const firstDays = Math.ceil(totalDays / 2);
       const split = new Date(start.getTime() + (firstDays - 1) * dayMs).toISOString().slice(0, 10);
       const first = rows.filter((row) => row.date <= split);
@@ -1104,21 +1152,23 @@
       const b = summarize(second);
       const completion = (stats) => stats.sessions ? stats.completed / stats.sessions : 0;
       const metrics = [
-        { label: ui("会话数", "Sessions"), prior: a.sessions, current: b.sessions, format: (value) => integer.format(value) },
-        { label: ui("活跃小时", "Active hours"), prior: a.activeMinutes / 60, current: b.activeMinutes / 60, format: (value) => number.format(value) },
-        { label: ui("工具调用", "Tool calls"), prior: a.toolCalls, current: b.toolCalls, format: (value) => integer.format(value) },
-        { label: ui("完成信号比例", "Completion-signal rate"), prior: completion(a), current: completion(b), format: (value) => `${number.format(value * 100)}%`, deltaFormat: (value) => isEnglish ? `${number.format(value * 100)} percentage points` : `${number.format(value * 100)} 个百分点` }
+        { label: ui("会话数", "Sessions", "Сессии"), prior: a.sessions, current: b.sessions, format: (value) => integer.format(value) },
+        { label: ui("活跃小时", "Active hours", "Активные часы"), prior: a.activeMinutes / 60, current: b.activeMinutes / 60, format: (value) => number.format(value) },
+        { label: ui("工具调用", "Tool calls", "Вызовы инструментов"), prior: a.toolCalls, current: b.toolCalls, format: (value) => integer.format(value) },
+        { label: ui("完成信号比例", "Completion-signal rate", "Доля сигналов завершения"), prior: completion(a), current: completion(b), format: (value) => `${number.format(value * 100)}%`, deltaFormat: (value) => isEnglish ? `${number.format(value * 100)} percentage points` : isRussian ? `${number.format(value * 100)} п.п.` : `${number.format(value * 100)} 个百分点` }
       ];
       const sparse = [];
-      if (a.sessions < 5) sparse.push(ui(`前段样本稀疏（${a.sessions} 个会话）`, `first-period sample is sparse (${unit(a.sessions, "session")})`));
-      if (b.sessions < 5) sparse.push(ui(`后段样本稀疏（${b.sessions} 个会话）`, `second-period sample is sparse (${unit(b.sessions, "session")})`));
+      if (a.sessions < 5) sparse.push(ui(`前段样本稀疏（${a.sessions} 个会话）`, `first-period sample is sparse (${unit(a.sessions, "session")})`, `выборка первого периода разрежена (${ruCount(a.sessions, "сессия", "сессии", "сессий")})`));
+      if (b.sessions < 5) sparse.push(ui(`后段样本稀疏（${b.sessions} 个会话）`, `second-period sample is sparse (${unit(b.sessions, "session")})`, `выборка второго периода разрежена (${ruCount(b.sessions, "сессия", "сессии", "сессий")})`));
       const sparseNote = sparse.length
-        ? (isEnglish ? ` ${sparse.join("; ")}; comparison is descriptive only.` : ` ${sparse.join("；")}；对比仅作描述。`)
+        ? (isEnglish ? ` ${sparse.join("; ")}; comparison is descriptive only.` : isRussian ? ` ${sparse.join("; ")}; сравнение носит описательный характер.` : ` ${sparse.join("；")}；对比仅作描述。`)
         : "";
       const secondStart = new Date(start.getTime() + firstDays * dayMs).toISOString().slice(0, 10);
       byId("comparison-note").textContent = isEnglish
         ? `First period ${from} to ${split} (${unit(a.sessions, "session")}); second period ${secondStart} to ${to} (${unit(b.sessions, "session")}).${sparseNote}`
-        : `前段 ${from} 至 ${split}（${a.sessions} 个会话）；后段 ${secondStart} 至 ${to}（${b.sessions} 个会话）。${sparseNote}`;
+        : isRussian
+          ? `Первый период ${from}–${split} (${ruCount(a.sessions, "сессия", "сессии", "сессий")}); второй период ${secondStart}–${to} (${ruCount(b.sessions, "сессия", "сессии", "сессий")}).${sparseNote}`
+          : `前段 ${from} 至 ${split}（${a.sessions} 个会话）；后段 ${secondStart} 至 ${to}（${b.sessions} 个会话）。${sparseNote}`;
       for (const metric of metrics) {
         const card = document.createElement("article");
         card.className = "comparison-card";
@@ -1131,13 +1181,14 @@
         current.textContent = metric.format(metric.current);
         const prior = document.createElement("span");
         prior.className = "comparison-prior";
-        prior.textContent = ui(`前段 ${metric.format(metric.prior)}`, `First period ${metric.format(metric.prior)}`);
+        prior.textContent = ui(`前段 ${metric.format(metric.prior)}`, `First period ${metric.format(metric.prior)}`, `Первый период ${metric.format(metric.prior)}`);
         values.append(current, prior);
         const delta = document.createElement("div");
         delta.className = `delta${metric.current < metric.prior ? " negative" : ""}`;
         delta.textContent = ui(
           `后段相对前段 ${signedDelta(metric.current, metric.prior, metric.deltaFormat || metric.format)}`,
           `Second versus first ${signedDelta(metric.current, metric.prior, metric.deltaFormat || metric.format)}`,
+          `Второй период относительно первого ${signedDelta(metric.current, metric.prior, metric.deltaFormat || metric.format)}`,
         );
         card.append(label, values, delta);
         container.append(card);
@@ -1148,7 +1199,7 @@
       const container = byId("drilldown-list");
       container.replaceChildren();
       const ordered = [...rows].sort((a, b) => b.date.localeCompare(a.date) || b.complexity_score - a.complexity_score);
-      if (!ordered.length) return appendEmpty(container, ui("没有符合当前筛选条件的会话。", "No sessions match the current filters."));
+      if (!ordered.length) return appendEmpty(container, ui("没有符合当前筛选条件的会话。", "No sessions match the current filters.", "Текущим фильтрам не соответствуют сессии."));
       for (const row of ordered.slice(0, 30)) {
         const item = document.createElement("article");
         item.className = "drilldown-item";
@@ -1164,7 +1215,9 @@
         facts.className = "drilldown-meta";
         facts.textContent = isEnglish
           ? `${statusLabels[row.status] || row.status} · ${unit(row.turns, "turn")} · ${unit(number.format(row.active_minutes), "minute")} · ${unit(row.tool_calls, "tool call")}`
-          : `${statusLabels[row.status] || row.status} · ${row.turns} 轮 · ${number.format(row.active_minutes)} 分钟 · ${row.tool_calls} 次工具调用`;
+          : isRussian
+            ? `${statusLabels[row.status] || row.status} · ${ruCount(row.turns, "ход", "хода", "ходов")} · ${number.format(row.active_minutes)} мин · ${ruCount(row.tool_calls, "вызов инструмента", "вызова инструментов", "вызовов инструментов")}`
+            : `${statusLabels[row.status] || row.status} · ${row.turns} 轮 · ${number.format(row.active_minutes)} 分钟 · ${row.tool_calls} 次工具调用`;
         item.append(body, facts);
         container.append(item);
       }
@@ -1174,6 +1227,7 @@
         note.textContent = ui(
           `为保持可读性，仅显示前 30 个会话；导出包含全部 ${ordered.length} 个。`,
           `Only the first 30 sessions are shown for readability; exports include all ${ordered.length}.`,
+          `Для читаемости показаны только первые 30 сессий; экспорт содержит все сессии: ${ordered.length}.`,
         );
         container.append(note);
       }
@@ -1193,7 +1247,7 @@
         description.textContent = win.description;
         const evidence = document.createElement("p");
         evidence.className = "evidence-note";
-        evidence.textContent = ui(`证据边界：${win.evidence}`, `Evidence boundary: ${win.evidence}`);
+        evidence.textContent = ui(`证据边界：${win.evidence}`, `Evidence boundary: ${win.evidence}`, `Граница свидетельств: ${win.evidence}`);
         card.append(title, description, evidence);
         container.append(card);
       }
@@ -1201,8 +1255,8 @@
 
     function copyPrompt(button, text) {
       const done = () => {
-        button.textContent = ui("已复制", "Copied");
-        window.setTimeout(() => { button.textContent = ui("复制提示词", "Copy prompt"); }, 1200);
+        button.textContent = ui("已复制", "Copied", "Скопировано");
+        window.setTimeout(() => { button.textContent = ui("复制提示词", "Copy prompt", "Копировать промпт"); }, 1200);
       };
       const fallback = () => {
         const textarea = document.createElement("textarea");
@@ -1223,36 +1277,36 @@
       const container = byId("recommendation-grid");
       container.replaceChildren();
       const items = report.recommendations || [];
-      if (!items.length) return appendEmpty(container, ui("当前范围内没有达到阈值的针对性建议。", "No targeted recommendations reached the threshold in this scope."));
+      if (!items.length) return appendEmpty(container, ui("当前范围内没有达到阈值的针对性建议。", "No targeted recommendations reached the threshold in this scope.", "В текущем диапазоне нет рекомендаций, достигших порога."));
       const familyById = new Map(taskFamilies.map((family) => [family.task_family_id, family]));
       for (const item of items) {
         const card = document.createElement("article");
         card.className = "recommendation-card";
         const priority = document.createElement("span");
         priority.className = "priority";
-        priority.textContent = `${item.priority === "high" ? ui("优先", "Priority") : ui("建议", "Suggested")} · ${item.feature}`;
+        priority.textContent = `${item.priority === "high" ? ui("优先", "Priority", "Приоритет") : ui("建议", "Suggested", "Рекомендация")} · ${item.feature}`;
         const title = document.createElement("h3");
         title.textContent = item.title;
         const why = document.createElement("p");
         why.textContent = item.why;
         const evidence = document.createElement("p");
         evidence.className = "evidence-note";
-        evidence.textContent = ui(`证据：${item.evidence}`, `Evidence: ${item.evidence}`);
+        evidence.textContent = ui(`证据：${item.evidence}`, `Evidence: ${item.evidence}`, `Свидетельства: ${item.evidence}`);
         const action = document.createElement("p");
-        action.textContent = ui(`行动：${item.action}`, `Action: ${item.action}`);
+        action.textContent = ui(`行动：${item.action}`, `Action: ${item.action}`, `Действие: ${item.action}`);
         const code = document.createElement("code");
         code.textContent = item.copy_prompt;
         const button = document.createElement("button");
         button.type = "button";
         button.className = "copy-prompt";
-        button.textContent = ui("复制提示词", "Copy prompt");
+        button.textContent = ui("复制提示词", "Copy prompt", "Копировать промпт");
         button.addEventListener("click", () => copyPrompt(button, item.copy_prompt));
         const controls = document.createElement("div");
         controls.className = "recommendation-actions";
         const trackingLabel = document.createElement("label");
-        trackingLabel.textContent = ui("采用状态", "Adoption status");
+        trackingLabel.textContent = ui("采用状态", "Adoption status", "Статус внедрения");
         const select = document.createElement("select");
-        select.setAttribute("aria-label", ui(`${item.title}的采用状态`, `Adoption status for ${item.title}`));
+        select.setAttribute("aria-label", ui(`${item.title}的采用状态`, `Adoption status for ${item.title}`, `Статус внедрения: ${item.title}`));
         for (const [value, label] of Object.entries(trackingLabels)) {
           const option = document.createElement("option");
           option.value = value;
@@ -1291,7 +1345,7 @@
         possible.textContent = item.possible;
         const start = document.createElement("p");
         start.className = "evidence-note";
-        start.textContent = ui(`起步方式：${item.starting_point}`, `Starting point: ${item.starting_point}`);
+        start.textContent = ui(`起步方式：${item.starting_point}`, `Starting point: ${item.starting_point}`, `Начало: ${item.starting_point}`);
         card.append(title, possible, start);
         container.append(card);
       }
@@ -1299,7 +1353,7 @@
 
     function renderUsageProfile() {
       const profile = report.usage_profile || {};
-      const sessionTypes = (profile.session_types || []).map((item) => ({ label: typeLabels[item.type] || item.type, count: item.count, display: ui(`${item.count} 个会话`, unit(item.count, "session")) }));
+      const sessionTypes = (profile.session_types || []).map((item) => ({ label: typeLabels[item.type] || item.type, count: item.count, display: ui(`${item.count} 个会话`, unit(item.count, "session"), ruCount(item.count, "сессия", "сессии", "сессий")) }));
       renderBars("session-type-bars", sessionTypes, "count");
       const tools = (profile.top_tools || []).slice(0, 8).map((item) => ({ label: item.tool, count: item.count, display: integer.format(item.count) }));
       renderBars("tool-bars", tools, "count");
@@ -1312,11 +1366,13 @@
       const hourCounts = new Map((profile.hours_local || []).map((item) => [item.hour, item.count]));
       const ranges = isEnglish
         ? [[0, 5, "Late night 00–05"], [6, 11, "Morning 06–11"], [12, 17, "Afternoon 12–17"], [18, 23, "Evening 18–23"]]
-        : [[0, 5, "深夜 00–05"], [6, 11, "上午 06–11"], [12, 17, "下午 12–17"], [18, 23, "晚上 18–23"]];
+        : isRussian
+          ? [[0, 5, "Ночь 00–05"], [6, 11, "Утро 06–11"], [12, 17, "День 12–17"], [18, 23, "Вечер 18–23"]]
+          : [[0, 5, "深夜 00–05"], [6, 11, "上午 06–11"], [12, 17, "下午 12–17"], [18, 23, "晚上 18–23"]];
       const hours = ranges.map(([start, end, label]) => {
         let count = 0;
         for (let hour = start; hour <= end; hour += 1) count += hourCounts.get(hour) || 0;
-        return { label, count, display: ui(`${count} 个会话`, unit(count, "session")) };
+        return { label, count, display: ui(`${count} 个会话`, unit(count, "session"), ruCount(count, "сессия", "сессии", "сессий")) };
       });
       renderBars("hour-bars", hours, "count");
     }
@@ -1326,28 +1382,36 @@
       setText("kpi-sessions", integer.format(stats.sessions));
       setText("kpi-session-context", isEnglish
         ? `Completed ${stats.completed} · Aborted ${stats.aborted} · Incomplete ${stats.partial}`
-        : `已完成 ${stats.completed} · 已中止 ${stats.aborted} · 未完成 ${stats.partial}`);
+        : isRussian
+          ? `Завершено ${stats.completed} · Прервано ${stats.aborted} · Не завершено ${stats.partial}`
+          : `已完成 ${stats.completed} · 已中止 ${stats.aborted} · 未完成 ${stats.partial}`);
       setText("kpi-hours", isEnglish
         ? `${number.format(stats.activeMinutes / 60)}h`
-        : `${number.format(stats.activeMinutes / 60)} 小时`);
+        : isRussian
+          ? `${number.format(stats.activeMinutes / 60)} ч`
+          : `${number.format(stats.activeMinutes / 60)} 小时`);
       setText("kpi-time-context", ui(
         `平均每会话 ${number.format(stats.activeMinutes / Math.max(1, stats.sessions))} 分钟`,
         `${unit(number.format(stats.activeMinutes / Math.max(1, stats.sessions)), "minute")} per session on average`,
+        `${ruCount(stats.activeMinutes / Math.max(1, stats.sessions), "минута", "минуты", "минут")} в среднем на сессию`,
       ));
       setText("kpi-tokens", compact.format(stats.totalTokens));
       setText("kpi-token-context", ui(
         `日志原始计量 · 缓存输入 ${compact.format(stats.cachedTokens)}`,
         `raw log measure · cached input ${compact.format(stats.cachedTokens)}`,
+        `исходная мера из лога · кэшированный ввод ${compact.format(stats.cachedTokens)}`,
       ));
       setText("kpi-turns", integer.format(stats.turns));
       setText("kpi-turn-context", ui(
         `平均每会话 ${number.format(stats.turns / Math.max(1, stats.sessions))} 轮`,
         `${unit(number.format(stats.turns / Math.max(1, stats.sessions)), "turn")} per session on average`,
+        `${ruCount(stats.turns / Math.max(1, stats.sessions), "ход", "хода", "ходов")} в среднем на сессию`,
       ));
       setText("kpi-tools", integer.format(stats.toolCalls));
       setText("kpi-tool-context", ui(
         `平均每轮 ${number.format(stats.toolCalls / Math.max(1, stats.turns))} 次 · 失败 ${stats.toolFailures} 次`,
         `${unit(number.format(stats.toolCalls / Math.max(1, stats.turns)), "call")} per turn on average · ${unit(stats.toolFailures, "failure")}`,
+        `${ruCount(stats.toolCalls / Math.max(1, stats.turns), "вызов", "вызова", "вызовов")} на ход в среднем · ${ruCount(stats.toolFailures, "сбой", "сбоя", "сбоев")}`,
       ));
     }
 
@@ -1371,7 +1435,7 @@
       if (!rows.length) {
         const empty = document.createElement("p");
         empty.className = "empty";
-        empty.textContent = ui("没有符合当前筛选条件的会话。", "No sessions match the current filters.");
+        empty.textContent = ui("没有符合当前筛选条件的会话。", "No sessions match the current filters.", "Текущим фильтрам не соответствуют сессии.");
         container.append(empty);
         return;
       }
@@ -1379,7 +1443,9 @@
       const measure = byId("trend-measure").value;
       const labels = isEnglish
         ? { active_minutes: ["Active time", "hours"], sessions: ["Sessions", "sessions"], tool_calls: ["Tool calls", "calls"] }
-        : { active_minutes: ["活跃时间", "小时"], sessions: ["会话数", "个会话"], tool_calls: ["工具调用", "次"] };
+        : isRussian
+          ? { active_minutes: ["Активное время", "часы"], sessions: ["Сессии", "сессии"], tool_calls: ["Вызовы инструментов", "вызовы"] }
+          : { active_minutes: ["活跃时间", "小时"], sessions: ["会话数", "个会话"], tool_calls: ["工具调用", "次"] };
       const grouped = new Map();
       for (const row of rows) {
         const current = grouped.get(row.date) || { active_minutes: 0, sessions: 0, tool_calls: 0 };
@@ -1398,7 +1464,7 @@
       const top = 18;
       const maxValue = Math.max(1, ...points.map((point) => point.value));
       // The top tick carries the unit, so fit the axis margin to the widest y-axis label.
-      const left = Math.max(56, Math.ceil(textWidthApprox(`${number.format(maxValue)} ${labels[measure][1]}`)) + 20);
+      const left = Math.max(56, Math.ceil(textWidthApprox(isRussian ? ruMeasure(maxValue, measure) : `${number.format(maxValue)} ${labels[measure][1]}`)) + 20);
       const bottom = 42;
       const plotWidth = width - left - right;
       const plotHeight = height - top - bottom;
@@ -1407,11 +1473,12 @@
 
       const svg = createSvgElement("svg", { class: "trend-chart", viewBox: `0 0 ${width} ${height}`, role: "img", "aria-labelledby": "trend-svg-title trend-svg-desc" });
       const title = createSvgElement("title", { id: "trend-svg-title" });
-      title.textContent = ui(`每日${labels[measure][0]}`, `Daily ${labels[measure][0].toLowerCase()}`);
+      title.textContent = ui(`每日${labels[measure][0]}`, `Daily ${labels[measure][0].toLowerCase()}`, `Ежедневно: ${labels[measure][0].toLowerCase()}`);
       const desc = createSvgElement("desc", { id: "trend-svg-desc" });
       desc.textContent = ui(
         `${points[0].date} 至 ${points[points.length - 1].date} 的 ${points.length} 个每日数据点。`,
         `${unit(points.length, "daily data point")} from ${points[0].date} to ${points[points.length - 1].date}.`,
+        `Точек по дням: ${points.length}; с ${points[0].date} по ${points[points.length - 1].date}.`,
       );
       svg.append(title, desc);
 
@@ -1420,7 +1487,7 @@
         const lineY = y(value);
         svg.append(createSvgElement("line", { class: "grid", x1: left, y1: lineY, x2: width - right, y2: lineY }));
         const label = createSvgElement("text", { class: "axis-label", x: left - 8, y: lineY + 4, "text-anchor": "end" });
-        label.textContent = step === 4 ? `${number.format(value)} ${labels[measure][1]}` : number.format(value);
+        label.textContent = step === 4 ? (isRussian ? ruMeasure(value, measure) : `${number.format(value)} ${labels[measure][1]}`) : number.format(value);
         svg.append(label);
       }
 
@@ -1429,7 +1496,7 @@
       points.forEach((point, index) => {
         const circle = createSvgElement("circle", { class: "point", cx: x(index), cy: y(point.value), r: 4 });
         const pointTitle = createSvgElement("title");
-        pointTitle.textContent = `${point.date}: ${number.format(point.value)} ${labels[measure][1]}`;
+        pointTitle.textContent = `${point.date}: ${isRussian ? ruMeasure(point.value, measure) : `${number.format(point.value)} ${labels[measure][1]}`}`;
         circle.append(pointTitle);
         svg.append(circle);
       });
@@ -1458,7 +1525,7 @@
       if (!items.length) {
         const empty = document.createElement("p");
         empty.className = "empty";
-        empty.textContent = ui("当前筛选条件下没有数据。", "No data matches the current filters.");
+        empty.textContent = ui("当前筛选条件下没有数据。", "No data matches the current filters.", "Текущим фильтрам не соответствуют данные.");
         container.append(empty);
         return;
       }
@@ -1497,6 +1564,7 @@
       for (const item of items) item.display = ui(
         `${item.sessions} 个会话 · ${number.format(item.minutes / 60)} 小时`,
         `${unit(item.sessions, "session")} · ${unit(number.format(item.minutes / 60), "hour")}`,
+        `${ruCount(item.sessions, "сессия", "сессии", "сессий")} · ${number.format(item.minutes / 60)} ч`,
       );
       renderBars("project-bars", items, "sessions");
     }
@@ -1508,14 +1576,14 @@
       const promptValues = rows.map((row) => Number(row.median_prompt_chars) || 0).filter((value) => value > 0).sort((a, b) => a - b);
       const medianPrompt = promptValues.length ? promptValues[Math.floor(promptValues.length / 2)] : 0;
       const items = [
-        [number.format(stats.turns / Math.max(1, stats.sessions)), ui("平均每会话轮次", "Average turns per session")],
-        [integer.format(medianPrompt), ui("提示词字符中位数", "Median prompt characters")],
-        [number.format(stats.correctionMessages / Math.max(1, stats.userMessages) * 100) + "%", ui("纠正倾向消息比例", "Correction-oriented message rate")],
-        [integer.format(stats.clarificationRequests), ui("澄清请求", "Clarification requests")],
-        [integer.format(stats.subagentSessions), ui("多代理会话", "Multi-agent sessions")],
-        [integer.format(stats.webSearches), ui("Web 搜索", "Web searches")],
-        [ui(`${number.format(report.interaction_metrics?.median_assistant_latency_seconds || 0)} 秒`, `${number.format(report.interaction_metrics?.median_assistant_latency_seconds || 0)} seconds`), ui("首次助手响应中位数", "Median first-assistant response")],
-        [integer.format(report.interaction_metrics?.max_concurrent || 0), ui("同时活跃会话峰值", "Peak concurrent sessions")]
+        [number.format(stats.turns / Math.max(1, stats.sessions)), ui("平均每会话轮次", "Average turns per session", "Среднее число ходов на сессию")],
+        [integer.format(medianPrompt), ui("提示词字符中位数", "Median prompt characters", "Медиана символов промпта")],
+        [number.format(stats.correctionMessages / Math.max(1, stats.userMessages) * 100) + "%", ui("纠正倾向消息比例", "Correction-oriented message rate", "Доля сообщений с признаками исправлений")],
+        [integer.format(stats.clarificationRequests), ui("澄清请求", "Clarification requests", "Запросы уточнения")],
+        [integer.format(stats.subagentSessions), ui("多代理会话", "Multi-agent sessions", "Мультиагентные сессии")],
+        [integer.format(stats.webSearches), ui("Web 搜索", "Web searches", "Веб-поиски")],
+        [ui(`${number.format(report.interaction_metrics?.median_assistant_latency_seconds || 0)} 秒`, `${number.format(report.interaction_metrics?.median_assistant_latency_seconds || 0)} seconds`, `${number.format(report.interaction_metrics?.median_assistant_latency_seconds || 0)} с`), ui("首次助手响应中位数", "Median first-assistant response", "Медиана первого ответа ассистента")],
+        [integer.format(report.interaction_metrics?.max_concurrent || 0), ui("同时活跃会话峰值", "Peak concurrent sessions", "Пик одновременных сессий")]
       ];
       for (const [value, label] of items) {
         const item = document.createElement("div");
@@ -1534,13 +1602,13 @@
     function renderFriction(rows) {
       const stats = summarize(rows);
       const items = [
-        { label: ui("工具调用失败", "Tool-call failures"), count: stats.toolFailures },
-        { label: ui("失败后重复重试", "Repeated retries after failure"), count: stats.retries },
-        { label: ui("状态变化后合理重试", "Reasonable retries after state change"), count: stats.stateChangeRetries },
-        { label: ui("明确轮询/等待", "Explicit polling or waiting"), count: stats.pollingRetries },
-        { label: ui("中止轮次", "Aborted turns"), count: stats.abortedTurns },
-        { label: ui("权限阻塞", "Permission blocks"), count: stats.permissionBlocks },
-        { label: ui("补丁失败", "Patch failures"), count: stats.failedPatches }
+        { label: ui("工具调用失败", "Tool-call failures", "Сбои вызовов инструментов"), count: stats.toolFailures },
+        { label: ui("失败后重复重试", "Repeated retries after failure", "Повторные попытки после сбоя"), count: stats.retries },
+        { label: ui("状态变化后合理重试", "Reasonable retries after state change", "Обоснованные повторы после изменения состояния"), count: stats.stateChangeRetries },
+        { label: ui("明确轮询/等待", "Explicit polling or waiting", "Явный polling или ожидание"), count: stats.pollingRetries },
+        { label: ui("中止轮次", "Aborted turns", "Прерванные ходы"), count: stats.abortedTurns },
+        { label: ui("权限阻塞", "Permission blocks", "Блокировки доступа"), count: stats.permissionBlocks },
+        { label: ui("补丁失败", "Patch failures", "Сбои патчей"), count: stats.failedPatches }
       ].filter((item) => item.count > 0);
       for (const item of items) item.display = integer.format(item.count);
       renderBars("friction-bars", items, "count", true);
@@ -1553,7 +1621,7 @@
       if (!candidates.length) {
         const empty = document.createElement("p");
         empty.className = "empty";
-        empty.textContent = ui("没有符合当前筛选条件的工作流。", "No workflows match the current filters.");
+        empty.textContent = ui("没有符合当前筛选条件的工作流。", "No workflows match the current filters.", "Текущим фильтрам не соответствуют процессы.");
         container.append(empty);
         return;
       }
@@ -1577,12 +1645,16 @@
         facts.className = "workflow-facts";
         const values = isEnglish
           ? [unit(row.turns, "turn"), unit(number.format(row.active_minutes), "minute"), unit(row.tool_calls, "tool call"), unit(row.patches, "patch", "patches"), unit(row.subagents, "subagent")]
-          : [`${row.turns} 轮`, `${number.format(row.active_minutes)} 分钟`, `${row.tool_calls} 次工具调用`, `${row.patches} 个补丁`, `${row.subagents} 个子代理`];
+          : isRussian
+            ? [ruCount(row.turns, "ход", "хода", "ходов"), `${number.format(row.active_minutes)} мин`, ruCount(row.tool_calls, "вызов инструмента", "вызова инструментов", "вызовов инструментов"), ruCount(row.patches, "патч", "патча", "патчей"), ruCount(row.subagents, "субагент", "субагента", "субагентов")]
+            : [`${row.turns} 轮`, `${number.format(row.active_minutes)} 分钟`, `${row.tool_calls} 次工具调用`, `${row.patches} 个补丁`, `${row.subagents} 个子代理`];
         if (row.tool_execution) {
           const execution = row.tool_execution;
           values.push(isEnglish
             ? `Outer ${execution.outer_calls}; PTC inner ${execution.inner_calls}; pending ${execution.inner_incomplete}`
-            : `外层 ${execution.outer_calls}；PTC 内层 ${execution.inner_calls}；未结束 ${execution.inner_incomplete}`);
+            : isRussian
+              ? `Внешних ${execution.outer_calls}; внутренних PTC ${execution.inner_calls}; незавершённых ${execution.inner_incomplete}`
+              : `外层 ${execution.outer_calls}；PTC 内层 ${execution.inner_calls}；未结束 ${execution.inner_incomplete}`);
         }
         for (const value of values) {
           const span = document.createElement("span");
@@ -1615,8 +1687,8 @@
       );
       byId("evidence-section").hidden = visible.length === 0;
       setText("evidence-title", report.scope.privacy_mode === "local_content"
-        ? ui("本地内容证据", "Local-content evidence")
-        : ui("脱敏证据", "Redacted evidence"));
+        ? ui("本地内容证据", "Local-content evidence", "Свидетельства локального содержимого")
+        : ui("脱敏证据", "Redacted evidence", "Обезличенные свидетельства"));
       for (const item of visible) {
         const details = document.createElement("details");
         const summary = document.createElement("summary");
@@ -1771,6 +1843,55 @@
           ""
         ].join("\n");
       }
+      if (isRussian) {
+        return [
+          "# DSH Session Insights",
+          "",
+          `Сгенерировано: ${report.generated_at}`,
+          `Диапазон анализа: ${exported.filters.since || "всё"} — ${exported.filters.until || "всё"}`,
+          "",
+          "## Обзор",
+          "",
+          `- Сессий: ${stats.sessions}`,
+          `- Активных часов: ${number.format(stats.activeMinutes / 60)}`,
+          `- Ходов: ${stats.turns}`,
+          `- Вызовов инструментов: ${stats.toolCalls}`,
+          `- Всего токенов: ${stats.totalTokens}`,
+          "",
+          "## Области проектов",
+          "",
+          ...[...projects.entries()].sort((a, b) => b[1] - a[1]).map(([project, count]) => `- ${projectName(project)}: сессий — ${count}`),
+          "",
+          "## Области работы",
+          "",
+          ...exported.work_areas.map((item) => `- ${areaLabels[item.name] || item.name}: сессий — ${item.count}`),
+          "",
+          "## Типы сессий",
+          "",
+          ...exported.session_types.map((item) => `- ${typeLabels[item.name] || item.name}: сессий — ${item.count}`),
+          "",
+          "## Сигналы затруднений",
+          "",
+          `- Сбои вызовов инструментов: ${stats.toolFailures}`,
+          `- Неизменные повторы: ${stats.retries}`,
+          `- Обоснованные повторы после изменения состояния: ${stats.stateChangeRetries}`,
+          `- Явный polling или ожидание: ${stats.pollingRetries}`,
+          `- Прерванные ходы: ${stats.abortedTurns}`,
+          `- Блокировки доступа: ${stats.permissionBlocks}`,
+          `- Сбои патчей: ${stats.failedPatches}`,
+          "",
+          "## Показательные процессы",
+          "",
+          ...exported.representative_workflows.map((row) => `- ${row.title || row.project}: ${row.project}, ${row.date}, сложность ${row.complexity_score}`),
+          "",
+          "## Рекомендации по полному диапазону",
+          "",
+          "Эти рекомендации используют полную область отчёта и не пересчитываются текущими фильтрами.",
+          "",
+          ...exported.full_scope_recommendations.map((item) => `- **${item.title}** (${trackingLabels[item.tracking.status] || item.tracking.status}): ${item.evidence} Действие: ${item.action}`),
+          ""
+        ].join("\n");
+      }
       const lines = [
         "# DSH 会话洞察",
         "",
@@ -1888,33 +2009,47 @@
       }
       const privacyLabels = isEnglish
         ? { local_content: "Local rich content · automatic secret removal", redacted_sample: "Redacted sample", metrics_only: "Metrics only" }
-        : { local_content: "本地丰富内容 · 自动去密钥", redacted_sample: "脱敏抽样", metrics_only: "仅结构指标" };
+        : isRussian
+          ? { local_content: "Локальное содержимое · автоматическое удаление секретов", redacted_sample: "Обезличенная выборка", metrics_only: "Только метрики" }
+          : { local_content: "本地丰富内容 · 自动去密钥", redacted_sample: "脱敏抽样", metrics_only: "仅结构指标" };
       const privacyMode = privacyLabels[report.scope.privacy_mode] || report.scope.privacy_mode;
       setText("report-window", isEnglish
         ? `${report.coverage.since.slice(0, 10)} to ${report.coverage.until.slice(0, 10)} · ${privacyMode}`
-        : `${report.coverage.since.slice(0, 10)} 至 ${report.coverage.until.slice(0, 10)} · ${privacyMode}`);
+        : isRussian
+          ? `${report.coverage.since.slice(0, 10)} — ${report.coverage.until.slice(0, 10)} · ${privacyMode}`
+          : `${report.coverage.since.slice(0, 10)} 至 ${report.coverage.until.slice(0, 10)} · ${privacyMode}`);
       const deterministicCache = report.coverage?.deterministic_cache || {};
       const cacheSuffix = Number.isFinite(deterministicCache.hits)
         ? (isEnglish
           ? `; parser cache: ${deterministicCache.hits} hits, ${deterministicCache.misses || 0} misses, ${deterministicCache.invalidations || 0} invalidations`
-          : `；解析缓存命中 ${deterministicCache.hits}、缺失 ${deterministicCache.misses || 0}、失效 ${deterministicCache.invalidations || 0}`)
+          : isRussian
+            ? `; кэш разбора: попаданий — ${deterministicCache.hits}, промахов — ${deterministicCache.misses || 0}, инвалидаций — ${deterministicCache.invalidations || 0}`
+            : `；解析缓存命中 ${deterministicCache.hits}、缺失 ${deterministicCache.misses || 0}、失效 ${deterministicCache.invalidations || 0}`)
         : "";
       setText("coverage-line", isEnglish
         ? `Analyzed ${unit(report.coverage.sessions_analyzed, "rollout")} from ${unit(report.coverage.files_scanned, "file")} and grouped them into ${unit(report.task_family_totals?.task_families || 0, "task family", "task families")}${cacheSuffix}`
-        : `从 ${report.coverage.files_scanned} 个文件中分析了 ${report.coverage.sessions_analyzed} 个会话，归并为 ${report.task_family_totals?.task_families || 0} 个任务族${cacheSuffix}`);
+        : isRussian
+          ? `Проанализировано ${ruCount(report.coverage.sessions_analyzed, "сессия", "сессии", "сессий")} из ${ruCount(report.coverage.files_scanned, "файл", "файла", "файлов")} и сгруппировано в ${ruCount(report.task_family_totals?.task_families || 0, "семейство задач", "семейства задач", "семейств задач")}${cacheSuffix}`
+          : `从 ${report.coverage.files_scanned} 个文件中分析了 ${report.coverage.sessions_analyzed} 个会话，归并为 ${report.task_family_totals?.task_families || 0} 个任务族${cacheSuffix}`);
       const privacyNotes = isEnglish ? {
         local_content: "This report retains local task context to improve insight quality while always removing credentials, tokens, URL query parameters, and system environment blocks. It makes no network requests.",
         redacted_sample: "This report contains only aggregates and bounded redacted excerpts. It makes no network requests.",
         metrics_only: "This report contains structural metrics only, with no message excerpts or network requests."
+      } : isRussian ? {
+        local_content: "Отчёт сохраняет локальный контекст задач для качества выводов, но всегда удаляет учётные данные, токены, параметры URL и блоки системного окружения. Сетевых запросов нет.",
+        redacted_sample: "Отчёт содержит только агрегаты и ограниченные обезличенные фрагменты. Сетевых запросов нет.",
+        metrics_only: "Отчёт содержит только структурные метрики, без фрагментов сообщений и сетевых запросов."
       } : {
         local_content: "本报告保留本地任务语境以提高洞察质量，但始终移除凭据、令牌、URL 查询参数和系统环境块；不发起网络请求。",
         redacted_sample: "本报告只包含汇总与限量脱敏片段，不发起网络请求。",
         metrics_only: "本报告只包含结构指标，不包含消息片段，也不发起网络请求。"
       };
-      setText("privacy-note", privacyNotes[report.scope.privacy_mode] || ui("本地自包含报告，不发起网络请求。", "Local self-contained report with no network requests."));
+      setText("privacy-note", privacyNotes[report.scope.privacy_mode] || ui("本地自包含报告，不发起网络请求。", "Local self-contained report with no network requests.", "Локальный автономный отчёт без сетевых запросов."));
       setText("footer-note", isEnglish
         ? `Generated ${report.generated_at} · Analyzer ${report.analyzer_version || "legacy"} · Schema v${report.schema_version} · Local self-contained report`
-        : `生成于 ${report.generated_at} · Analyzer ${report.analyzer_version || "legacy"} · Schema v${report.schema_version} · 本地自包含报告`);
+        : isRussian
+          ? `Сгенерировано ${report.generated_at} · Анализатор ${report.analyzer_version || "legacy"} · Схема v${report.schema_version} · Локальный автономный отчёт`
+          : `生成于 ${report.generated_at} · Analyzer ${report.analyzer_version || "legacy"} · Schema v${report.schema_version} · 本地自包含报告`);
       renderGlance();
       renderSemanticOverview();
       loadRecommendationTracking();

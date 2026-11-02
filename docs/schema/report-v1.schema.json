@@ -73,7 +73,8 @@
         "locale": {
           "enum": [
             "zh-CN",
-            "en"
+            "en",
+            "ru"
           ]
         },
         "report_timezone": {

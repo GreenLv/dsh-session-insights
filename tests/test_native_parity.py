@@ -113,3 +113,13 @@ class NativeParityTests(unittest.TestCase):
                 for locale in ('en', 'zh-CN'):
                     with self.subTest(case=case, privacy=privacy, locale=locale):
                         self.compare([snapshot], privacy, locale)
+
+    def test_russian_locale_parity(self):
+        rows = records()
+        snapshots = [{'session': rows[0], 'events': rows[1:]}]
+        for privacy in ('local', 'redacted', 'metrics'):
+            with self.subTest(privacy=privacy):
+                native = self.compare(snapshots, privacy, 'ru')
+                self.assertEqual(native['scope']['locale'], 'ru')
+                if privacy == 'metrics':
+                    self.assertEqual(native['session_summaries'][0]['title'], 'Содержимое скрыто')

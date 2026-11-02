@@ -13,6 +13,7 @@
     "src/dsh_session_insights/__init__.py",
     "src/dsh_session_insights/__main__.py",
     "src/dsh_session_insights/analyzer.py",
+    "src/dsh_session_insights/messages.py",
     "src/dsh_session_insights/cli.py",
     "src/dsh_session_insights/plugin_bridge.py",
     "src/dsh_session_insights/output_safety.py",

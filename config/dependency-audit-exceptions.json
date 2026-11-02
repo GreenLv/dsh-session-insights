@@ -20,7 +20,7 @@
   "prerequisite": "The advisory describes oversized invalid array inputs without a maximum-length bound accumulating validation issues and exhausting memory. Reachability through a specific DSH entry and real-world likelihood are not established.",
   "cohort": {
     "files": {
-      "package.json": "1279c5ef0c58dd5673340a2b6beec9e89625b9de72638bfef8b9317273ef3a09",
+      "package.json": "99abe83e4b026bac301f8556a2e749dd9ef1ba4bd07928835cd3822528c7c804",
       "package-lock.json": "59a7565e6e82966118a0b02dee69976946e5229dd34eed0591f683718f10d34a",
       "pyproject.toml": "91a2cb39105810747f03444a5f75528acea5d9dc4a38d93f7b3fa9dfaaa10e92",
       "src/dsh_session_insights/__init__.py": "99b711287340d0fc61ce5138c1fdd070f5bcced11cc774a1f01556944cea9a77",

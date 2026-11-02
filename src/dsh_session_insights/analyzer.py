@@ -20,7 +20,17 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
+
 from urllib.parse import urlsplit, urlunsplit
+
+from .messages import (
+    LOCALES,
+    MARKDOWN_LABELS,
+    english_count,
+    russian_count,
+    russian_number,
+    t,
+)
 from .v4 import IDENTITY, validate_records
 
 
@@ -38,6 +48,7 @@ ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_r
 # Reference: @deepseek-ai/dsh-session SESSION_FORMAT_VERSION = 3
 # (dsh 0.1.5-rc.2).
 DSH_SESSION_FORMAT_VERSION = 4
+SUPPORTED_LOCALES = LOCALES
 # Canonical basename grammar shared by every generation-addressed artifact:
 # `session.jsonl` is generation 0, `session.vN.jsonl` is generation N >= 1.
 # Uppercase, leading-zero, `.v0`, and temporary names are not canonical and
@@ -487,11 +498,6 @@ def percentile(values: list[float], fraction: float) -> float:
 
 def safe_round(value: float, digits: int = 2) -> float:
     return round(value, digits)
-
-
-def english_count(value: int | float, singular: str, plural: str | None = None) -> str:
-    return f"{value} {singular if value == 1 else (plural or singular + 's')}"
-
 
 def strip_url_queries(text: str) -> str:
     """Remove URL userinfo in every mode, plus query/fragment credentials.
@@ -3392,7 +3398,7 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
     calendar = session["timestamp"].astimezone(zone)
     title_source = "prompt"
     if config.metrics_only or config.privacy_mode == "metrics":
-        title = "Content omitted" if config.locale == "en" else "内容已省略"
+        title = t(config.locale, "excerpt.content_omitted")
         title_source = "omitted"
     else:
         if session.get("provider_title"):
@@ -3403,7 +3409,9 @@ def session_public_view(session: dict[str, Any], config: AnalysisConfig) -> dict
             title_source = "fallback"
         else:
             raw_title = session.get("first_prompt", "")
-        title = excerpt_text(raw_title, config, 140) if raw_title else ("No usable title" if config.locale == "en" else "未提供可用标题")
+        title = excerpt_text(raw_title, config, 140) if raw_title else t(
+            config.locale, "excerpt.no_title"
+        )
     provider, model = (None, None)
     if session.get("provider_models"):
         provider, model = session["provider_models"].most_common(1)[0][0]  # already projected at capture
@@ -3739,14 +3747,12 @@ def build_recommendations(
     projects: list[dict[str, Any]],
     locale: str = "zh-CN",
 ) -> list[dict[str, Any]]:
-    if locale == "en":
-        return build_recommendations_en(totals, interaction_metrics, coverage, projects)
     recommendations: list[dict[str, Any]] = []
 
-    def add(feature: str, title: str, why: str, evidence: str, action: str, prompt: str, priority: str) -> None:
-        recommendation_id = "rec-" + hashlib.sha256(
-            f"{feature}\0{title}".encode("utf-8")
-        ).hexdigest()[:12]
+    def add(
+        key: str, feature: str, title: str, why: str, evidence: str, action: str, prompt: str, priority: str
+    ) -> None:
+        recommendation_id = "rec-" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
         recommendations.append(
             {
                 "id": recommendation_id,
@@ -3760,135 +3766,74 @@ def build_recommendations(
             }
         )
 
-    if totals["tool_failures"] or totals["unchanged_retries"]:
-        add(
-            "验证检查点",
-            "把失败恢复写进任务契约",
-            "工具失败本身未必严重，但失败后重复执行会放大时间成本，并使长任务难以恢复。",
-            f"检测到 {totals['tool_failures']} 次结构化工具失败，其中无相关状态变化的原样重试 {totals['unchanged_retries']} 次；状态变化后重试和轮询分别计量。",
-            "要求代理在重试前先诊断原因、记录已完成状态，并从最近检查点继续。",
-            "执行这个任务时，请在每个阶段结束后记录已完成项、产物和验证结果。工具失败时先诊断原因，不要原样重复调用；从最近的已验证检查点恢复。",
+    specs = (
+        (
+            "verification",
             "high",
-        )
-    if totals["permission_blocks"]:
-        add(
-            "权限规划",
-            "在开工时声明授权边界",
-            "长任务中途才遇到权限阻塞，会打断连续执行并增加人工往返。",
-            f"{totals['permission_blocks']} 次权限阻塞分布在分析范围内。",
-            "在提示词开头明确可读、可写、可运行和必须确认的操作，并让代理先汇总可能需要的授权。",
-            "开始前先列出本任务需要读取、写入、运行和可能升级权限的操作。对同类安全命令集中请求最小范围授权；未经授权不要扩大范围。",
+            lambda t, m, c, p: bool(t["tool_failures"] or t["unchanged_retries"]),
+            lambda t, m, c, p: {"failures": t["tool_failures"], "retries": t["unchanged_retries"]},
+        ),
+        (
+            "permissions",
             "high",
-        )
-    if interaction_metrics["correction_rate_per_user_message"] >= 0.12:
-        add(
-            "AGENTS.md / 任务契约",
-            "固定范围、证据和完成标准",
-            "高频纠正类消息通常说明代理需要反复校准范围、表达或验证标准；该指标是启发式信号，不等同于错误率。",
-            f"检测到 {interaction_metrics['correction_like_messages']} 条纠正倾向消息，占用户消息约 {interaction_metrics['correction_rate_per_user_message']:.0%}。",
-            "把长期偏好放入项目级 AGENTS.md，把本次范围、禁止项和完成标准写进首条提示。",
-            "先复述任务契约：目标、可编辑范围、禁止修改项、证据要求、验证方式和完成标准。确认无冲突后再执行；发现范围歧义时保持原状态并说明假设。",
+            lambda t, m, c, p: bool(t["permission_blocks"]),
+            lambda t, m, c, p: {"blocks": t["permission_blocks"]},
+        ),
+        (
+            "correction",
             "high",
-        )
-    unfinished = coverage["partial_sessions"] + totals["aborted_turns"]
-    if unfinished or interaction_metrics["long_running_sessions"]:
-        add(
-            "长任务编排",
-            "为长任务设置阶段性可交付物",
-            "长任务若只在最后产出结果，中止或上下文切换会让已完成工作难以复用。",
-            f"有 {interaction_metrics['long_running_sessions']} 个长时会话；未完成会话 {coverage['partial_sessions']} 个，中止轮次 {totals['aborted_turns']} 个。",
-            "按审计、实现、验证、交付拆成可恢复阶段，并在每阶段保存小型状态摘要。",
-            "把任务拆成四个可恢复阶段：审计、实现、验证、交付。每阶段结束时输出状态摘要和下一步入口；即使会话中止，也能在新任务中从摘要继续。",
+            lambda t, m, c, p: m["correction_rate_per_user_message"] >= 0.12,
+            lambda t, m, c, p: {
+                "messages": m["correction_like_messages"],
+                "rate": m["correction_rate_per_user_message"],
+            },
+        ),
+        (
+            "long_tasks",
             "medium",
-        )
-    if totals["patches"] >= 20 and interaction_metrics["multi_agent_sessions"] <= max(2, totals["sessions"] // 20):
-        add(
-            "多代理验证",
-            "把独立验证留给并行代理",
-            "高密度修改由同一执行链自检时，容易沿用相同假设；独立验证适合复杂、可并行且风险较高的任务。",
-            f"共应用 {totals['patches']} 次补丁，但只有 {interaction_metrics['multi_agent_sessions']} 个会话使用多代理。",
-            "在大型跨文件修改后，并行安排结构检查、测试验证和范围审计；小任务无需强行委派。",
-            "完成主要修改后，请用相互独立的验证任务检查：1）测试与运行结果；2）跨文件引用和一致性；3）是否超出用户授权范围。只汇总有证据的问题。",
+            lambda t, m, c, p: bool(
+                (c["partial_sessions"] + t["aborted_turns"]) or m["long_running_sessions"]
+            ),
+            lambda t, m, c, p: {
+                "long_sessions": m["long_running_sessions"],
+                "partial_sessions": c["partial_sessions"],
+                "aborted_turns": t["aborted_turns"],
+            },
+        ),
+        (
+            "parallel",
             "medium",
-        )
-    if projects and projects[0]["sessions"] >= 5:
-        dominant = projects[0]
-        add(
-            "可复用 Skill",
-            "把高频项目流程封装成可重复入口",
-            "重复项目最适合沉淀固定的输入、步骤、边界和验证协议，减少每次重新解释。",
-            f"项目 {dominant['project']} 有 {dominant['sessions']} 个会话、{dominant['tool_calls']} 次工具调用。",
-            "选择一个高频、稳定且可验证的工作流，提炼为 skill 或项目脚本；保留人工判断环节。",
-            f"请分析项目 {dominant['project']} 中重复出现的工作流，提取稳定输入、执行步骤、禁止项、验证命令和失败恢复策略，并判断哪些部分适合做成可复用 skill。",
+            lambda t, m, c, p: t["patches"] >= 20
+            and m["multi_agent_sessions"] <= max(2, t["sessions"] // 20),
+            lambda t, m, c, p: {
+                "patches": t["patches"],
+                "multi_agent": m["multi_agent_sessions"],
+            },
+        ),
+        (
+            "skill",
             "medium",
-        )
-    return recommendations[:6]
-
-
-def build_recommendations_en(
-    totals: dict[str, Any],
-    interaction_metrics: dict[str, Any],
-    coverage: dict[str, Any],
-    projects: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    recommendations: list[dict[str, Any]] = []
-
-    def add(feature: str, title: str, why: str, evidence: str, action: str, prompt: str, priority: str) -> None:
-        recommendation_id = "rec-" + hashlib.sha256(f"{feature}\0{title}".encode()).hexdigest()[:12]
-        recommendations.append({
-            "id": recommendation_id, "feature": feature, "title": title, "why": why,
-            "evidence": evidence, "action": action, "copy_prompt": prompt, "priority": priority,
-        })
-
-    if totals["tool_failures"] or totals["unchanged_retries"]:
+            lambda t, m, c, p: bool(p and p[0]["sessions"] >= 5),
+            lambda t, m, c, p: {
+                "project": p[0]["project"],
+                "sessions": p[0]["sessions"],
+                "tool_calls": p[0]["tool_calls"],
+            },
+        ),
+    )
+    for key, priority, condition, params in specs:
+        if not condition(totals, interaction_metrics, coverage, projects):
+            continue
+        values = params(totals, interaction_metrics, coverage, projects)
         add(
-            "Verification checkpoints", "Put failure recovery in the task contract",
-            "Tool failures are recoverable, but unchanged retries amplify time cost and make long tasks harder to resume.",
-            f"Observed {totals['tool_failures']} structured tool failures and {totals['unchanged_retries']} unchanged retries; retries after state changes and explicit polling are counted separately.",
-            "Require diagnosis and a saved checkpoint before retrying.",
-            "At the end of each phase, record completed work, artifacts, and validation. Diagnose a tool failure before retrying and resume from the latest verified checkpoint.", "high",
-        )
-    if totals["permission_blocks"]:
-        add(
-            "Permission planning", "State authorization boundaries at the start",
-            "Late permission blocks interrupt execution and add avoidable user round trips.",
-            f"Observed {totals['permission_blocks']} permission blocks in the analysis window.",
-            "State readable, writable, runnable, and approval-required actions in the initial task contract.",
-            "Before starting, list the reads, writes, commands, and possible permission escalations. Batch only closely related safe approvals and do not broaden scope without authorization.", "high",
-        )
-    if interaction_metrics["correction_rate_per_user_message"] >= 0.12:
-        add(
-            "AGENTS.md / task contract", "Fix scope, evidence, and completion criteria",
-            "Frequent correction-like messages suggest repeated recalibration; this is a heuristic signal, not an error rate.",
-            f"Observed {interaction_metrics['correction_like_messages']} correction-like messages, about {interaction_metrics['correction_rate_per_user_message']:.0%} of user messages.",
-            "Keep durable preferences in AGENTS.md and state this task's scope, prohibitions, and completion criteria in the first prompt.",
-            "Restate the task contract first: objective, editable scope, prohibited changes, required evidence, validation, and completion criteria. Preserve state and explain assumptions when scope is ambiguous.", "high",
-        )
-    unfinished = coverage["partial_sessions"] + totals["aborted_turns"]
-    if unfinished or interaction_metrics["long_running_sessions"]:
-        add(
-            "Long-task orchestration", "Give long tasks recoverable phase deliverables",
-            "When a long task produces only a final result, interruption or context switching makes completed work hard to reuse.",
-            f"Observed {interaction_metrics['long_running_sessions']} long sessions, {coverage['partial_sessions']} partial sessions, and {totals['aborted_turns']} aborted turns.",
-            "Split work into audit, implementation, validation, and delivery phases with a small state handoff after each.",
-            "Split this task into four recoverable phases: audit, implementation, validation, and delivery. End each phase with a state summary and exact resume point.", "medium",
-        )
-    if totals["patches"] >= 20 and interaction_metrics["multi_agent_sessions"] <= max(2, totals["sessions"] // 20):
-        add(
-            "Independent validation", "Reserve parallel reviewers for complex changes",
-            "A single execution chain may reuse the same assumptions when checking a high-density change.",
-            f"Observed {totals['patches']} patches and {interaction_metrics['multi_agent_sessions']} multi-agent sessions.",
-            "For large cross-file changes, independently check tests, references, and authorization scope; do not delegate small tasks by default.",
-            "After the main change, independently verify: tests and runtime evidence; cross-file consistency; and whether the result stayed inside the authorized scope. Report only evidence-backed findings.", "medium",
-        )
-    if projects and projects[0]["sessions"] >= 5:
-        dominant = projects[0]
-        add(
-            "Reusable Skill", "Turn a frequent project workflow into a repeatable entry point",
-            "Repeated project work is a good candidate for stable inputs, steps, boundaries, and verification rules.",
-            f"Project {dominant['project']} has {dominant['sessions']} sessions and {dominant['tool_calls']} tool calls.",
-            "Choose one frequent, stable, verifiable workflow and extract it into a Skill or project script while preserving human judgment.",
-            f"Analyze recurring workflows in project {dominant['project']}. Extract stable inputs, steps, prohibitions, validation commands, and recovery behavior, then identify what belongs in a reusable Skill.", "medium",
+            key,
+            t(locale, f"rec.{key}.feature", **values),
+            t(locale, f"rec.{key}.title", **values),
+            t(locale, f"rec.{key}.why", **values),
+            t(locale, f"rec.{key}.evidence", **values),
+            t(locale, f"rec.{key}.action", **values),
+            t(locale, f"rec.{key}.copy_prompt", **values),
+            priority,
         )
     return recommendations[:6]
 
@@ -3903,139 +3848,107 @@ def build_insight_narrative(
     recommendations: list[dict[str, Any]],
     locale: str = "zh-CN",
 ) -> dict[str, Any]:
-    if locale == "en":
-        return build_insight_narrative_en(
-            sessions, session_summaries, totals, coverage, projects, interaction_metrics, recommendations
-        )
     completed = [row for row in session_summaries if row["status"] == "completed"]
     completed_complex = [row for row in completed if row["complexity_score"] >= 40]
     dominant = projects[0] if projects else None
     completion_rate = len(completed) / max(1, len(session_summaries))
-    top_failure = totals["tool_failures"]
-    quick_win = recommendations[0]["title"] if recommendations else "继续保持当前验证节奏"
+    quick_win = (
+        recommendations[0]["title"]
+        if recommendations
+        else t(locale, "narrative.quick_win.default")
+    )
 
     if dominant:
-        strength = (
-            f"工作明显集中在 {dominant['project']}：{dominant['sessions']} 个会话、"
-            f"{dominant['active_hours']} 小时和 {dominant['tool_calls']} 次工具调用。"
+        strength = t(
+            locale,
+            "narrative.strength.focus",
+            project=dominant["project"],
+            sessions=dominant["sessions"],
+            hours=dominant["active_hours"],
+            tools=dominant["tool_calls"],
         )
     else:
-        strength = "当前范围内没有足够的项目数据来识别稳定工作重心。"
-    blocker = (
-        f"主要可量化摩擦是 {top_failure} 次结构化工具失败、{totals['unchanged_retries']} 次无状态变化的原样重试、"
-        f"{totals['permission_blocks']} 次权限阻塞；这些信号需要结合具体会话判断。"
+        strength = t(locale, "narrative.strength.empty")
+    blocker = t(
+        locale,
+        "narrative.blocker",
+        failures=totals["tool_failures"],
+        retries=totals["unchanged_retries"],
+        blocks=totals["permission_blocks"],
     )
-    ambition = (
-        f"已有 {len(completed_complex)} 个高复杂度会话完成，{interaction_metrics['long_running_sessions']} 个会话持续超过 30 分钟。"
-        "下一步适合把高频长流程升级为带检查点、独立验证和失败恢复的端到端工作流。"
+    ambition = t(
+        locale,
+        "narrative.ambition",
+        completed_complex=len(completed_complex),
+        long_sessions=interaction_metrics["long_running_sessions"],
     )
 
     wins: list[dict[str, str]] = []
     if dominant:
         wins.append(
             {
-                "title": "形成稳定的核心工作域",
+                "title": t(locale, "narrative.win.focus.title"),
                 "description": strength,
-                "evidence": f"该项目占全部会话的 {dominant['sessions'] / max(1, totals['sessions']):.0%}。",
+                "evidence": t(
+                    locale,
+                    "narrative.win.focus.evidence",
+                    share=dominant["sessions"] / max(1, totals["sessions"]),
+                ),
             }
         )
     wins.append(
         {
-            "title": "复杂任务具备持续执行能力",
-            "description": f"{len(completed_complex)} 个复杂度不低于 40 的会话达到完成状态；总体完成状态占比约 {completion_rate:.0%}。",
-            "evidence": "完成状态表示日志中未检测到未结束或中止标记，不代表产物质量已经人工验收。",
+            "title": t(locale, "narrative.win.complexity.title"),
+            "description": t(
+                locale,
+                "narrative.win.complexity.description",
+                completed_complex=len(completed_complex),
+                rate=completion_rate,
+            ),
+            "evidence": t(locale, "narrative.win.complexity.evidence"),
         }
     )
     if totals["patches"]:
         wins.append(
             {
-                "title": "从讨论进入了实质修改",
-                "description": f"分析范围内记录到 {totals['patches']} 次补丁和 {totals['git_commits']} 次提交。",
-                "evidence": f"补丁失败信号为 {totals['failed_patches']} 次；仍应以测试和产物检查判断修改质量。",
+                "title": t(locale, "narrative.win.patches.title"),
+                "description": t(
+                    locale,
+                    "narrative.win.patches.description",
+                    patches=totals["patches"],
+                    commits=totals["git_commits"],
+                ),
+                "evidence": t(
+                    locale,
+                    "narrative.win.patches.evidence",
+                    failed_patches=totals["failed_patches"],
+                ),
             }
         )
 
     horizon = [
         {
-            "title": "可恢复的端到端工作流",
-            "possible": "把审计、实现、验证和交付连接成一个带状态摘要与检查点的流程，减少长会话中断后的重复劳动。",
-            "starting_point": "先为最常见项目流程定义每一阶段的输入、完成条件和恢复入口。",
+            "title": t(locale, "narrative.horizon.recoverable.title"),
+            "possible": t(locale, "narrative.horizon.recoverable.possible"),
+            "starting_point": t(locale, "narrative.horizon.recoverable.starting_point"),
         },
         {
-            "title": "证据驱动的主动质量检查",
-            "possible": "在完成前自动核对测试、跨文件引用、产物结构和授权范围，把问题从运行后返工提前到交付前。",
-            "starting_point": "给高风险任务增加独立验证清单，并要求每个结论链接到日志、测试或产物证据。",
+            "title": t(locale, "narrative.horizon.quality.title"),
+            "possible": t(locale, "narrative.horizon.quality.possible"),
+            "starting_point": t(locale, "narrative.horizon.quality.starting_point"),
         },
         {
-            "title": "从高频会话提炼自更新 Skill",
-            "possible": "将重复提示和人工纠正沉淀为稳定的工作流契约，同时保留会随项目变化的参数。",
-            "starting_point": "每月复查高频纠正和失败恢复模式，只更新确有重复证据的 skill 规则。",
+            "title": t(locale, "narrative.horizon.skill.title"),
+            "possible": t(locale, "narrative.horizon.skill.possible"),
+            "starting_point": t(locale, "narrative.horizon.skill.starting_point"),
         },
     ]
     return {
         "glance": [
-            {"label": "做得好的地方", "text": strength},
-            {"label": "主要阻碍", "text": blocker},
-            {"label": "快速见效", "text": quick_win},
-            {"label": "值得推进的工作流", "text": ambition},
-        ],
-        "wins": wins,
-        "horizon": horizon,
-    }
-
-
-def build_insight_narrative_en(
-    sessions: list[dict[str, Any]],
-    session_summaries: list[dict[str, Any]],
-    totals: dict[str, Any],
-    coverage: dict[str, Any],
-    projects: list[dict[str, Any]],
-    interaction_metrics: dict[str, Any],
-    recommendations: list[dict[str, Any]],
-) -> dict[str, Any]:
-    completed = [row for row in session_summaries if row["status"] == "completed"]
-    completed_complex = [row for row in completed if row["complexity_score"] >= 40]
-    dominant = projects[0] if projects else None
-    completion_rate = len(completed) / max(1, len(session_summaries))
-    quick_win = recommendations[0]["title"] if recommendations else "Keep the current verification rhythm"
-    strength = (
-        f"Work is concentrated in {dominant['project']}: {english_count(dominant['sessions'], 'session')}, "
-        f"{english_count(dominant['active_hours'], 'active hour')}, and {english_count(dominant['tool_calls'], 'tool call')}."
-        if dominant else "There is not enough project data in this range to identify a stable center of work."
-    )
-    blocker = (
-        f"The main measurable friction is {english_count(totals['tool_failures'], 'structured tool failure')}, "
-        f"{english_count(totals['unchanged_retries'], 'unchanged retry', 'unchanged retries')}, and "
-        f"{english_count(totals['permission_blocks'], 'permission block')}; inspect individual sessions before drawing causal conclusions."
-    )
-    ambition = (
-        f"{english_count(len(completed_complex), 'high-complexity session')} reached a completed log state, and "
-        f"{english_count(interaction_metrics['long_running_sessions'], 'session')} lasted more than 30 minutes. "
-        "The next step is to make frequent long workflows checkpointed, independently verified, and recoverable."
-    )
-    wins = []
-    if dominant:
-        wins.append({"title": "A stable core work area is emerging", "description": strength, "evidence": f"This project accounts for {dominant['sessions'] / max(1, totals['sessions']):.0%} of sessions."})
-    wins.append({
-        "title": "Complex tasks sustain execution",
-        "description": f"{english_count(len(completed_complex), 'session')} with complexity at least 40 reached completed log state; the overall completed-log share is about {completion_rate:.0%}.",
-        "evidence": "Completed log state means no unfinished or aborted marker was detected; it is not human acceptance or a quality judgment.",
-    })
-    if totals["patches"]:
-        wins.append({
-            "title": "Work moved from discussion into concrete changes",
-            "description": f"The range contains {english_count(totals['patches'], 'patch', 'patches')} and {english_count(totals['git_commits'], 'commit')}.",
-            "evidence": f"There were {english_count(totals['failed_patches'], 'patch-failure signal')}; tests and artifact inspection still determine change quality.",
-        })
-    horizon = [
-        {"title": "Recoverable end-to-end workflows", "possible": "Connect audit, implementation, validation, and delivery with checkpoints and small state summaries.", "starting_point": "Define inputs, completion criteria, and resume points for each phase of the most common workflow."},
-        {"title": "Evidence-driven proactive quality checks", "possible": "Check tests, references, artifact structure, and authorization scope before delivery.", "starting_point": "Add an independent validation checklist to high-risk tasks and require each conclusion to cite logs, tests, or artifacts."},
-        {"title": "Self-updating Skills from frequent sessions", "possible": "Turn repeated prompts and corrections into stable workflow contracts while leaving project-specific details parameterized.", "starting_point": "Review frequent corrections and recovery patterns monthly, and update Skill rules only when evidence repeats."},
-    ]
-    return {
-        "glance": [
-            {"label": "What is working", "text": strength}, {"label": "Main blocker", "text": blocker},
-            {"label": "Quick win", "text": quick_win}, {"label": "Workflow worth advancing", "text": ambition},
+            {"label": t(locale, "narrative.glance.strength"), "text": strength},
+            {"label": t(locale, "narrative.glance.friction"), "text": blocker},
+            {"label": t(locale, "narrative.glance.quick_win"), "text": quick_win},
+            {"label": t(locale, "narrative.glance.ambition"), "text": ambition},
         ],
         "wins": wins,
         "horizon": horizon,
@@ -4759,57 +4672,43 @@ def build_report(
         config.locale,
     )
     warnings = []
-    def warning(zh: str, en: str) -> None:
-        warnings.append(en if config.locale == "en" else zh)
+    def warning(key: str, **params: Any) -> None:
+        warnings.append(t(config.locale, f"warning.{key}", **params))
     if not paths and snapshots is None:
-        warning("在解析后的 DSH_HOME 下未找到 DSH 会话文件（session.v4.jsonl 或 session.v4.jsonl.zstd）。", "No DSH session files (session.v4.jsonl or session.v4.jsonl.zstd) were found under the resolved DSH_HOME.")
+        warning("empty_home")
     generation = coverage.get("generation_diagnostics") or {}
     if generation.get("migration_required"):
-        warning("旧原始日志需通过上游 DSH 迁移到 V4。", "Older raw logs require upstream DSH migration to V4.")
+        warning("migration_required")
     if generation.get("newer_generation"):
         warning(
-            f"有 {generation['newer_generation']} 个会话的最新日志代际高于本分析器支持的 V{DSH_SESSION_FORMAT_VERSION}；这些会话已跳过，未按旧代际降级统计。",
-            f"{generation['newer_generation']} sessions store a log generation newer than the supported V{DSH_SESSION_FORMAT_VERSION}; they were skipped rather than silently reported from an older generation.",
+            "newer_generation",
+            count=generation["newer_generation"],
+            version=DSH_SESSION_FORMAT_VERSION,
         )
     if generation.get("encoding_mismatch"):
-        warning(
-            f"有 {generation['encoding_mismatch']} 个会话目录使用了与分析器配置不一致的压缩编码；这些会话未读取。",
-            f"{generation['encoding_mismatch']} session directories use a compression encoding that does not match the analyzer configuration; they were not read.",
-        )
+        warning("encoding_mismatch", count=generation["encoding_mismatch"])
     if generation.get("legacy_flat_artifacts"):
-        warning(
-            f"发现 {generation['legacy_flat_artifacts']} 个旧式扁平会话文件（不在会话子目录内）；它们不会被读取。",
-            f"{generation['legacy_flat_artifacts']} legacy flat session artifacts (outside a session directory) were found; they are not read.",
-        )
+        warning("legacy_flat", count=generation["legacy_flat_artifacts"])
     if 0 < len(sessions) < 5:
-        warning("有效会话少于 5 个；请将行为结论视为小样本快照。", "Fewer than five sessions are in scope; treat behavioral conclusions as a small-sample snapshot.")
+        warning("few_sessions")
     if coverage["malformed_lines"] or coverage["unknown_record_types"] or coverage["unreadable_files"]:
-        warning("存在损坏行、未知记录类型或不可读文件；形成明确结论前请先检查覆盖情况。", "Malformed lines, unknown record types, or unreadable files were observed; inspect coverage before drawing firm conclusions.")
+        warning("malformed")
     if coverage.get("resource_limited_files"):
-        warning(
-            f"有 {coverage['resource_limited_files']} 个会话文件超出读取资源上限，已被拒绝读取（未截断、未回退旧文件）；请缩小范围或分批分析。",
-            f"{coverage['resource_limited_files']} session logs exceeded a read budget and were refused (not truncated, no older-generation fallback); narrow the scope or analyze in batches.",
-        )
+        warning("resource_limited", count=coverage["resource_limited_files"])
     if coverage["partial_sessions"]:
-        warning(f"有 {coverage['partial_sessions']} 个 rollout 含未结束任务标记；这不自动等于整个任务族失败。", f"{coverage['partial_sessions']} rollouts contain unfinished-task markers; this does not automatically mean their task families failed.")
+        warning("partial_sessions", count=coverage["partial_sessions"])
     shadowed = sum(session.get("semantic_shadowed_messages", 0) for session in sessions)
     if shadowed:
-        warning(
-            f"有 {shadowed} 条会话文本被后续表面替换（压缩）遮蔽，已从语义摘要移除；工具与 Token 事件统计仍按历史保留。",
-            f"{shadowed} conversation texts were shadowed by a later surface replacement (compaction) and were removed from the semantic summary; tool and token event statistics remain historical.",
-        )
+        warning("shadowed", count=shadowed)
     attempts = totals.get("assistant_attempts", 0)
     if attempts:
         covered = sum(session.get("assistant_attempts_with_usage", 0) for session in sessions)
         if covered < attempts:
-            warning(
-                f"有 {attempts} 次未生成可见回复的模型尝试被计数，其中 {covered} 次带有可证明的用量；其余尝试的 Token 用量不可得，未做估算。",
-                f"{attempts} model attempts committed no visible reply; {covered} carry provable usage. Token usage for the remaining attempts is unavailable and was not estimated.",
-            )
+            warning("attempts", attempts=attempts, covered=covered)
     if coverage["heuristic_role_rollouts"] or coverage["unknown_system_rollouts"]:
-        warning("部分 rollout 使用启发式角色分类或未映射到已知角色；已保守降级并记录 classification_basis。", "Some rollouts use heuristic role classification or do not map to a known role; they were conservatively downgraded with classification_basis recorded.")
+        warning("heuristic_roles")
     if coverage["deterministic_cache"].get("write_errors"):
-        warning("确定性解析缓存不可写；本次分析已完成，但后续运行可能无法复用这些解析结果。", "The deterministic parse cache was not writable; this run completed, but later runs may not reuse its parsed results.")
+        warning("cache_write")
 
     report = {
         "schema": SCHEMA_ID,
@@ -4889,132 +4788,168 @@ def build_report(
 
 
 def render_markdown(report: dict[str, Any]) -> str:
+    locale = str(report.get("scope", {}).get("locale", "zh-CN"))
+    if locale not in SUPPORTED_LOCALES:
+        locale = "zh-CN"
+    labels = MARKDOWN_LABELS[locale]
+    number = russian_number if locale == "ru" else lambda value: value
     coverage = report["coverage"]
     totals = report["totals"]
     metrics = report["interaction_metrics"]
-    privacy_labels = {"local_content": "本地丰富内容（自动去密钥）", "redacted_sample": "脱敏抽样", "metrics_only": "仅结构指标"}
-    area_labels = {
-        "research_writing": "研究与论文写作", "experiments_data": "实验与数据分析",
-        "skills_configuration": "Skill、插件与配置", "documents_presentations": "文档、报告与演示",
-        "software_engineering": "软件工程", "web_sites": "网站与前端", "general": "其他工作",
-    }
-    type_labels = {
-        "quick_check": "快速检查", "multi_agent": "多代理协作", "implementation": "实现与修改",
-        "research": "研究与检索", "tool_driven": "工具驱动任务", "conversation": "讨论与规划",
-    }
-    runtime_name = "DSH"
-    token_note = (
-        "Token 口径：按 (turn,step) 去重后与 DSH 原生 token-meter 投影一致；"
-        "inputTokens 计入非缓存输入，cacheRead/cacheWrite 逐 step 求和，"
-        "outputTokens 已含 reasoningTokens 细分，total 不再重复累加 reasoning。"
-        "缓存输入不等于免费或普通输入，且不得据此推导账单或配额。"
-    )
     lines = [
-        f"# {runtime_name} 使用洞察", "", f"分析时段：{coverage['since']} 至 {coverage['until']}",
-        f"内容模式：{privacy_labels.get(report['scope']['privacy_mode'], report['scope']['privacy_mode'])}",
-        f"分析器：{report['analyzer_version']}；Schema：v{report['schema_version']}",
-        token_note,
-        "", "## 一眼看懂", "",
+        f"# {labels['title']}", "",
+        labels["range"].format(since=coverage["since"], until=coverage["until"]),
+        labels["mode"].format(mode=labels["privacy"].get(report["scope"]["privacy_mode"], report["scope"]["privacy_mode"])),
+        labels["analyzer"].format(version=report["analyzer_version"], schema=report["schema_version"]),
+        labels["token_note"],
+        "", f"## {labels['glance']}", "",
     ]
-    lines.extend(f"- **{item['label']}**：{item['text']}" for item in report.get("narrative", {}).get("glance", []))
+    lines.extend(
+        labels["glance_item"].format(label=item["label"], text=item["text"])
+        for item in report.get("narrative", {}).get("glance", [])
+    )
     lines.extend([
-        "", "## 覆盖情况", "", f"- 扫描文件：{coverage['files_scanned']}",
-        f"- 纳入 rollout：{coverage['sessions_analyzed']}",
-        f"- 归并任务族：{report['task_family_totals']['task_families']}",
-        f"- 因时间范围跳过：{coverage['skipped_outside_window']}",
-        f"- 因项目筛选跳过：{coverage['skipped_project']}", f"- 损坏行：{coverage['malformed_lines']}",
-        f"- 未完成会话：{coverage['partial_sessions']}", "", "## 概览", "",
-        f"- rollout：{totals['sessions']}", f"- 轮次数：{totals['turns']}", f"- 活跃小时（proxy）：{totals['active_hours']}",
-        f"- 工具调用：{totals['tool_calls']}（结构化失败 {totals['structured_failures']}；文本错误信号 {totals['text_error_signals']}；诊断性非零 {totals['diagnostic_nonzero']}）",
-        f"- 日志原始 Token：输入 {totals['tokens']['input_tokens']}；缓存输入 {totals['tokens']['cached_input_tokens']}；非缓存输入 {totals['tokens']['uncached_input_tokens']}；输出 {totals['tokens']['output_tokens']}；总计 {totals['tokens']['total_tokens']}",
-        f"- 已验证完成任务族：{report['task_family_totals']['verified_completed']}；明确接受任务族：{report['task_family_totals']['accepted']}",
-        f"- 补丁：{totals['patches']}（失败 {totals['failed_patches']}）",
-        f"- 子代理：{totals['subagents']}", "", "## 你的工作内容", "",
+        "", f"## {labels['coverage']}", "",
+        labels["files"].format(n=coverage["files_scanned"]),
+        labels["rollouts"].format(n=coverage["sessions_analyzed"]),
+        labels["families"].format(n=report["task_family_totals"]["task_families"]),
+        labels["skipped_window"].format(n=coverage["skipped_outside_window"]),
+        labels["skipped_project"].format(n=coverage["skipped_project"]),
+        labels["malformed"].format(n=coverage["malformed_lines"]),
+        labels["partial"].format(n=coverage["partial_sessions"]),
+        "", f"## {labels['overview']}", "",
+        labels["rollout"].format(n=totals["sessions"]),
+        labels["turns"].format(n=totals["turns"]),
+        labels["active_hours"].format(n=number(totals["active_hours"])),
+        labels["tool_calls"].format(
+            n=totals["tool_calls"], failures=totals["structured_failures"],
+            text=totals["text_error_signals"], nonzero=totals["diagnostic_nonzero"],
+        ),
+        labels["tokens"].format(
+            input=totals["tokens"]["input_tokens"], cached=totals["tokens"]["cached_input_tokens"],
+            uncached=totals["tokens"]["uncached_input_tokens"], output=totals["tokens"]["output_tokens"],
+            total=totals["tokens"]["total_tokens"],
+        ),
+        labels["verified"].format(
+            verified=report["task_family_totals"]["verified_completed"],
+            accepted=report["task_family_totals"]["accepted"],
+        ),
+        labels["patches"].format(patches=totals["patches"], failed=totals["failed_patches"]),
+        labels["subagents"].format(n=totals["subagents"]),
+        "", f"## {labels['work_areas']}", "",
     ])
     if report.get("work_areas"):
         for area in report["work_areas"]:
             lines.append(
-                f"- **{area_labels.get(area['area'], area['area'])}**：{area['sessions']} 个会话，{area['turns']} 轮，"
-                f"活跃 {area['active_hours']} 小时，{area['tool_calls']} 次工具调用"
+                labels["area_line"].format(
+                    area=labels["areas"].get(area["area"], area["area"]),
+                    sessions=area["sessions"], turns=area["turns"],
+                    hours=number(area["active_hours"]), tools=area["tool_calls"],
+                )
             )
             if area.get("examples"):
-                lines.append(f"  - 代表任务：{'；'.join(area['examples'][:3])}")
+                lines.append(
+                    labels["examples"].format(examples=labels["examples_sep"].join(area["examples"][:3]))
+                )
     else:
-        lines.append("- 没有足够内容用于归纳工作领域。")
+        lines.append(labels["no_areas"])
     lines.extend([
-        "", f"## 如何使用 {runtime_name}", "", f"- 平均每会话轮次：{metrics['average_turns_per_session']}",
-        f"- 提示词字符中位数：{metrics['median_prompt_chars']}", f"- 纠正倾向消息：{metrics['correction_like_messages']}",
-        f"- 澄清请求：{metrics['clarification_requests']}", f"- 多代理会话：{metrics['multi_agent_sessions']}",
-        f"- 快速检查会话：{metrics['quick_check_sessions']}",
-        f"- 首次助手响应中位数：{metrics['median_assistant_latency_seconds']} 秒",
-        f"- 同时活跃会话峰值：{metrics['max_concurrent']}", "", "### 会话类型", "",
+        "", f"## {labels['usage']}", "",
+        labels["avg_turns"].format(n=number(metrics["average_turns_per_session"])),
+        labels["median_prompt"].format(n=metrics["median_prompt_chars"]),
+        labels["corrections"].format(n=metrics["correction_like_messages"]),
+        labels["clarifications"].format(n=metrics["clarification_requests"]),
+        labels["multi_agent"].format(n=metrics["multi_agent_sessions"]),
+        labels["quick_check"].format(n=metrics["quick_check_sessions"]),
+        labels["median_latency"].format(n=number(metrics["median_assistant_latency_seconds"])),
+        labels["max_concurrent"].format(n=metrics["max_concurrent"]),
+        "", f"### {labels['session_types']}", "",
     ])
     lines.extend(
-        f"- {type_labels.get(item['type'], item['type'])}：{item['count']} 个会话"
+        labels["session_type_line"].format(
+            type=labels["types"].get(item["type"], item["type"]), n=item["count"]
+        )
         for item in report.get("usage_profile", {}).get("session_types", [])
     )
-    lines.extend(["", "## 任务族与角色", ""])
+    lines.extend(["", f"## {labels['roles']}", ""])
     for role in report.get("role_metrics", []):
         lines.append(
-            f"- {role['role']}：{role['rollouts']} 个 rollout，{role['task_families']} 个任务族，"
-            f"日志 Token 占比 {role['total_token_share']:.1%}"
+            labels["role_line"].format(
+                role=labels["roles_map"].get(role["role"], role["role"]),
+                rollouts=role["rollouts"], families=role["task_families"],
+                share=f"{number(round(role['total_token_share'] * 100, 1))}%",
+            )
         )
-    lines.extend(["", "## 可验证亮点", ""])
+    lines.extend(["", f"## {labels['strengths']}", ""])
     wins = report.get("narrative", {}).get("wins", [])
-    lines.extend(f"- **{win['title']}**：{win['description']}（{win['evidence']}）" for win in wins)
+    lines.extend(
+        labels["win_line"].format(title=win["title"], description=win["description"], evidence=win["evidence"])
+        for win in wins
+    )
     if not wins:
-        lines.append("- 暂无足够证据形成亮点归纳。")
-    lines.extend(["", "## 哪里受阻", ""])
-    signal_names = {
-        "tool_failures": "工具调用失败", "aborted_turns": "中止轮次",
-        "repeated_retries_after_failure": "无状态变化的原样重试", "retries_after_state_change": "状态变化后合理重试",
-        "polling_retries": "明确轮询/等待", "permission_blocks": "权限阻塞", "failed_patches": "补丁失败",
-        "llm_retries": "LLM 请求重试", "denied_approvals": "用户拒绝的权限提升",
-    }
+        lines.append(labels["no_wins"])
+    lines.extend(["", f"## {labels['friction']}", ""])
     if report["friction_signals"]:
         for signal in report["friction_signals"]:
             lines.append(
-                f"- {signal_names.get(signal['signal'], signal['signal'])}：{signal['count']} 次，"
-                f"涉及 {signal['affected_sessions']} 个会话"
+                labels["signal_line"].format(
+                    signal=labels["signals"].get(signal["signal"], signal["signal"]),
+                    count=signal["count"], sessions=signal["affected_sessions"],
+                )
             )
     else:
-        lines.append("- 未检测到受支持的摩擦信号。")
-    lines.extend(["", f"## 建议尝试的 {runtime_name} 工作方式", ""])
+        lines.append(labels["no_friction"])
+    lines.extend(["", f"## {labels['recommendations']}", ""])
     if report.get("recommendations"):
         for item in report["recommendations"]:
             lines.extend([
-                f"### {item['title']}", "", f"- 对应能力：{item['feature']}", f"- 原因：{item['why']}",
-                f"- 证据：{item['evidence']}", f"- 建议：{item['action']}", f"- 可复制提示词：`{item['copy_prompt']}`", "",
+                f"### {item['title']}", "",
+                labels["rec_feature"].format(feature=item["feature"]),
+                labels["rec_why"].format(why=item["why"]),
+                labels["rec_evidence"].format(evidence=item["evidence"]),
+                labels["rec_action"].format(action=item["action"]),
+                labels["rec_prompt"].format(prompt=item["copy_prompt"]),
             ])
     else:
-        lines.append("- 当前范围内没有达到阈值的针对性建议。")
-    lines.extend(["", "## 值得推进的新工作流", ""])
-    for item in report.get("narrative", {}).get("horizon", []):
-        lines.append(f"- **{item['title']}**：{item['possible']} 起步方式：{item['starting_point']}")
-    lines.extend(["", "## 代表性工作流", ""])
+        lines.append(labels["no_recs"])
+    lines.extend(["", f"## {labels['horizon']}", ""])
+    lines.extend(
+        labels["horizon_line"].format(
+            title=item["title"], possible=item["possible"], starting_point=item["starting_point"]
+        )
+        for item in report.get("narrative", {}).get("horizon", [])
+    )
+    lines.extend(["", f"## {labels['workflows']}", ""])
     if report["workflow_candidates"]:
         for workflow in report["workflow_candidates"]:
             lines.append(
-                f"- **{workflow['title']}** — {workflow['project']}（{workflow['date']}）：复杂度 {workflow['complexity_score']}，"
-                f"{workflow['turns']} 轮，{workflow['tool_calls']} 次工具调用"
+                labels["workflow_line"].format(
+                    title=workflow["title"], project=workflow["project"], date=workflow["date"],
+                    complexity=workflow["complexity_score"], turns=workflow["turns"], tools=workflow["tool_calls"],
+                )
             )
     else:
-        lines.append("- 没有符合条件的工作流。")
+        lines.append(labels["no_workflows"])
     if report["excerpts"]:
-        evidence_title = "本地内容证据" if report["scope"]["privacy_mode"] == "local_content" else "脱敏证据片段"
-        lines.extend(["", f"## {evidence_title}", ""])
+        evidence_key = "evidence_local" if report["scope"]["privacy_mode"] == "local_content" else "evidence_redacted"
+        lines.extend(["", f"## {labels[evidence_key]}", ""])
         for excerpt in report["excerpts"]:
-            kind = {"prompt": "提示词", "follow_up": "后续要求", "correction": "纠正"}.get(excerpt["kind"], excerpt["kind"])
-            lines.append(f"- [{kind}] {excerpt['project']} {excerpt['date']}：{excerpt['text']}")
+            lines.append(
+                labels["excerpt_line"].format(
+                    kind=labels["kinds"].get(excerpt["kind"], excerpt["kind"]),
+                    project=excerpt["project"], date=excerpt["date"], text=excerpt["text"],
+                )
+            )
     if report["warnings"]:
-        lines.extend(["", "## 注意事项", ""])
+        lines.extend(["", f"## {labels['notes']}", ""])
         lines.extend(f"- {warning}" for warning in report["warnings"])
     return "\n".join(lines) + "\n"
-
 
 def render_html(report: dict[str, Any]) -> str:
     template = importlib.resources.files("dsh_session_insights.assets").joinpath("dashboard.html").read_text(encoding="utf-8")
     locale = str(report.get("scope", {}).get("locale", "zh-CN"))
+    if locale not in SUPPORTED_LOCALES:
+        locale = "zh-CN"
     template = template.replace('<html lang="zh-CN">', f'<html lang="{locale}">')
     safe_json = json.dumps(report, ensure_ascii=False, separators=(",", ":"))
     safe_json = safe_json.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
@@ -5090,7 +5025,7 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--refresh-deterministic-cache", action="store_true", help="reparse every source file and replace deterministic cache entries")
     parser.add_argument("--no-deterministic-cache", action="store_true", help="disable deterministic per-source-file parse cache")
     parser.add_argument("--max-excerpts", type=int, default=80, help="maximum local or redacted excerpts (default: 80)")
-    parser.add_argument("--locale", choices=("zh-CN", "en"), default="zh-CN", help="report language")
+    parser.add_argument("--locale", choices=SUPPORTED_LOCALES, default="zh-CN", help="report language")
     parser.add_argument("--report-timezone", help="IANA zone (Asia/Shanghai) or fixed offset (UTC+08:00) for date/hour/weekday projections; defaults to the host local zone captured at startup")
     parser.add_argument("--format", choices=("json", "markdown", "html"), default="json")
     parser.add_argument("--output", type=Path, help="write output to a file instead of stdout")

@@ -32,11 +32,15 @@ test('npm artifact includes every native runtime module and the shared dashboard
       'storage',
       'analyzer',
       'semantic',
+      'messages',
       'rules',
       'v4',
     ])
       assert.ok(paths.has(`plugin/lib/${file}.js`), file)
     assert.ok(paths.has('src/dsh_session_insights/assets/dashboard.html'))
+    assert.ok(paths.has('src/dsh_session_insights/messages.py'))
+    for (const file of ['README.md', 'README.zh-CN.md', 'README.ru-RU.md'])
+      assert.ok(paths.has(file), file)
     assert.ok(paths.has('SECURITY.md'))
     assert.ok(
       ![...paths].some(

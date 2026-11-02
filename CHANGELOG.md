@@ -4,6 +4,12 @@
 
 Public releases are listed newest first.
 
+## Unreleased
+
+### Added
+
+- Russian (`ru`) locale for the deterministic report, HTML dashboard, semantic prompts, native runtime and Python CLI, with a full `README.ru-RU.md`.
+
 ## 0.6.1 - 2026-10-26
 
 Security and correctness patch for 0.6.0: closes the output-boundary, cache-minimization, privacy-projection, project-identity, timezone and aggregate-freshness defects listed below, adds trusted human approval for run deletion, and adds dependency auditing to CI. DSH `0.2.1-rc.3` is the primary acceptance target for this release; `0.2.1-rc.2` stays the minimum supported floor and keeps compatibility coverage. Source-level claims below were verified by synthetic regression on both runtimes; native hosts, models and UI acceptance remain separate gates. Session format stays V4 with DSH `>=0.2.1-rc.2`; start a new analysis run after upgrading; old caches are ignored automatically and deleting them is an optional, deliberate cleanup (see Migration).
