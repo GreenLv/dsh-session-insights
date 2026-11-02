@@ -6,7 +6,9 @@ import vm from 'node:vm'
 
 const mode=process.argv[2]
 if(!['dispose-failure','timeout'].includes(mode))throw Error('unsupported synthetic fault')
-const source=await readFile(resolve('scripts/verify_host_acceptance.mjs'),'utf8')
+// Git on Windows may check out source with CRLF. JavaScript parses these line
+// endings equivalently; normalize only the probe's in-memory source string.
+const source=(await readFile(resolve('scripts/verify_host_acceptance.mjs'),'utf8')).replace(/\r\n/g,'\n')
 const anchor=source.indexOf('  } finally {\n    let contextDisposed = !ctx')
 const start=anchor+'  } finally {'.length
 const end=source.indexOf('\n  }\n  return annex.status',start)

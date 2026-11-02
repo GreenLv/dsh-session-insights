@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
 
 permissions:
@@ -127,14 +127,25 @@ jobs:
         env:
           DSH_RUNTIME: ${{ matrix.runtime }}
           DSH_EXPECTED_VERSION: ${{ matrix.dsh }}
+      # CI above exercises GitHub's PR merge checkout. The one candidate
+      # producer separately packs the exact PR head, without relabelling the
+      # merge checkout as the source commit.
+      - name: Check out exact PR head for packing
+        if: matrix.primary == true && matrix.os == 'ubuntu-latest' && matrix.node == '22.19.0' && github.event_name == 'pull_request'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate-head
+          persist-credentials: false
       - name: Freeze the candidate artifact
-        # Exactly one producer: the rc.3 primary ubuntu/22.19.0 cell. The rc.2
-        # compatibility cell runs the same tests but never freezes or uploads
-        # the candidate; it consumes the same reviewed source only.
-        if: matrix.primary == true && matrix.os == 'ubuntu-latest' && matrix.node == '22.19.0' && github.event_name == 'push' && github.ref != 'refs/heads/main'
-        run: node scripts/pack_candidate.mjs "$GITHUB_SHA" "$RUNNER_TEMP/candidate"
+        if: matrix.primary == true && matrix.os == 'ubuntu-latest' && matrix.node == '22.19.0' && github.event_name == 'pull_request'
+        working-directory: candidate-head
+        env:
+          CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/pack_candidate.mjs "$CANDIDATE_COMMIT" "$RUNNER_TEMP/candidate"
       - name: Retain candidate bytes and inventory
-        if: matrix.primary == true && matrix.os == 'ubuntu-latest' && matrix.node == '22.19.0' && github.event_name == 'push' && github.ref != 'refs/heads/main'
+        if: matrix.primary == true && matrix.os == 'ubuntu-latest' && matrix.node == '22.19.0' && github.event_name == 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: candidate-tgz

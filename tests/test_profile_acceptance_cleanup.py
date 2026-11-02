@@ -13,13 +13,20 @@ from validate_host_annex import validate  # noqa: E402
 
 class ProfileAcceptanceRoundTrip(unittest.TestCase):
     def test_real_portable_finally_faults_remain_valid_failed_receipts(self):
-        for mode in ('dispose-failure', 'timeout'):
-            with self.subTest(mode=mode):
-                proc = subprocess.run(['node', str(ROOT / 'tests-js/fixtures/portable-finally-probe.mjs'), mode], cwd=ROOT, text=True, encoding='utf-8', capture_output=True, check=True)
-                result = json.loads(proc.stdout)
-                self.assertEqual(result['calls'], [])
-                self.assertEqual(validate(result['annex'])['acceptance_status'], 'failed')
-                self.assertIn('scratch-work', result['annex']['cleanup']['remaining_ids'])
+        source = (ROOT / 'scripts/verify_host_acceptance.mjs').read_bytes().replace(b'\r\n', b'\n')
+        for line_ending in ('lf', 'crlf'):
+            with tempfile.TemporaryDirectory(prefix='dsi-portable-lines-') as raw:
+                root = Path(raw)
+                script = root / 'scripts/verify_host_acceptance.mjs'
+                script.parent.mkdir()
+                script.write_bytes(source if line_ending == 'lf' else source.replace(b'\n', b'\r\n'))
+                for mode in ('dispose-failure', 'timeout'):
+                    with self.subTest(line_ending=line_ending, mode=mode):
+                        proc = subprocess.run(['node', str(ROOT / 'tests-js/fixtures/portable-finally-probe.mjs'), mode], cwd=root, text=True, encoding='utf-8', capture_output=True, check=True)
+                        result = json.loads(proc.stdout)
+                        self.assertEqual(result['calls'], [])
+                        self.assertEqual(validate(result['annex'])['acceptance_status'], 'failed')
+                        self.assertIn('scratch-work', result['annex']['cleanup']['remaining_ids'])
 
     def test_real_entrypoint_setup_failure_has_valid_failed_receipt(self):
         with tempfile.TemporaryDirectory(prefix='dsi-profile-setup-') as raw:
