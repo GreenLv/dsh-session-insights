@@ -1,0 +1,191 @@
+{
+  "schema": "repository-reader-review/v1",
+  "status": "passed",
+  "audience": {
+    "role": "Plugin users, 0.6.1 upgraders, and maintainers evaluating dependency risk and acceptance scope",
+    "prior_knowledge": "careful_upgrader"
+  },
+  "documents": [
+    {
+      "path": "README.md",
+      "role": "readme",
+      "language": "en",
+      "sha256": "95b9f39606aba24b7ce728ca9f21ab6fd5b4be9b971db4daa5aa4ee38feb74fe"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "role": "readme",
+      "language": "zh-CN",
+      "sha256": "5e6c985f5f83a9c9dab845b5086a7fd44f49844e5e6a7c9d7f4d02bf798b2ee5"
+    },
+    {
+      "path": "README.ru-RU.md",
+      "role": "readme",
+      "language": "ru-RU",
+      "sha256": "78882a996c4d6339a9e212da862eb5cc55dbe99e8701984974b81dfccf90494c"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "role": "changelog",
+      "language": "en",
+      "sha256": "4cb6d17b7780016062769337b7b8ce347bc8eba61b6d4015c6fe721a46c2c211"
+    },
+    {
+      "path": "CHANGELOG.zh-CN.md",
+      "role": "changelog",
+      "language": "zh-CN",
+      "sha256": "de91a2ba5b334b56635e80a1c949a27735a3aa1381e8417281eedec401a71c05"
+    },
+    {
+      "path": "SECURITY.md",
+      "role": "release_notes",
+      "language": "en",
+      "sha256": "83b73ba953e064d8c61bf2b0203702d788ac9d73a656e3233a20bd8c42f265e6"
+    },
+    {
+      "path": "docs/releases/v0.7.0.md",
+      "role": "release_notes",
+      "language": "en",
+      "sha256": "e489e500475a989e17e145fa4e64dd5af33ca31aa251738a1c868f6d5dc4449b"
+    },
+    {
+      "path": "docs/acceptance/v0.7.0-candidate.md",
+      "role": "release_notes",
+      "language": "en",
+      "sha256": "ce33343a8f403004799ed21058870bef5a9e66d57428c3286ba6006117345ac8"
+    }
+  ],
+  "document_set_sha256": "40ab8a4eee77db5c64a2b43cba66e477218fa86dbf20cf0228422d53f439afc6",
+  "method": {
+    "kind": "cold_read",
+    "implementation_context_used": false,
+    "claim_ledger_used": false
+  },
+  "checks": [
+    {
+      "id": "document_role",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "SECURITY.md",
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
+      ],
+      "note": "README explains use and operation; changelogs record deltas; release draft frames the upgrade; security and acceptance record detail risks and scoped evidence."
+    },
+    {
+      "id": "reader_outcome",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "SECURITY.md",
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
+      ],
+      "note": "Each README gives prerequisites, candidate or published installation path, composer command, report paths and deterministic option; upgrade and risk decisions are stated."
+    },
+    {
+      "id": "term_onboarding",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "SECURITY.md",
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
+      ],
+      "note": "First-use action and outcome are concrete in each README. Dense internal terms occur chiefly in advanced or maintainer sections; the manual CLI invocation warrants clarification."
+    },
+    {
+      "id": "evidence_boundary",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "SECURITY.md",
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
+      ],
+      "note": "Candidate and pending publication, the dependency decision, exact-commit CI, host/platform boundaries and historical artifact reuse are distinguished in the documents."
+    },
+    {
+      "id": "density_and_order",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "SECURITY.md",
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
+      ],
+      "note": "The three first paths lead from purpose and result to prerequisites, security and installation; the first command at line 51 follows material risk and publication caveats."
+    },
+    {
+      "id": "language_independence",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "SECURITY.md",
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
+      ],
+      "note": "English, Chinese and Russian README first-use paths are independently understandable; Russian screenshot and change history are English-only, as noted in findings."
+    }
+  ],
+  "findings": [
+    {
+      "code": "managed_cli_path",
+      "severity": "advisory",
+      "document": "README.md",
+      "line": 187,
+      "message": "The manual semantic examples use bare dsh-session-insights after the managed installation introduced an absolute $CLI path; unless PATH is configured separately, readers may be unable to run them. The Chinese and Russian editions repeat this at line 187."
+    },
+    {
+      "code": "russian_visual_history_coverage",
+      "severity": "advisory",
+      "document": "README.ru-RU.md",
+      "line": 34,
+      "message": "The Russian README uses the English dashboard screenshot and links to the English changelog (line 3); Russian readers can follow first use, but visual and release-history language coverage is incomplete."
+    },
+    {
+      "code": "wait_expectation",
+      "severity": "advisory",
+      "document": "README.md",
+      "line": 71,
+      "message": "The default model-assisted command queues serial batches, but does not set a reader expectation for waiting or say that elapsed time varies. The Chinese and Russian first-use paths make the same omission."
+    }
+  ],
+  "limitations": [
+    "Cold reading and structural audit only; factual correctness, operational commands, native platform acceptance, model output, UI behavior and publication were not independently verified.",
+    "Schema permits only readme, changelog and release_notes roles: SECURITY.md and the acceptance record are classified as release_notes solely to include and bind their bytes; their actual roles are security policy and candidate evidence.",
+    "Russian README is maintained, but a Russian changelog and Russian release-note block are not present in the reviewed set.",
+    "No external network, UI, model requests, implementation history, private reports, prior receipt or claim ledger was consulted."
+  ]
+}
