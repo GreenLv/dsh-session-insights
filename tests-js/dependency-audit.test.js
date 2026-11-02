@@ -13,9 +13,9 @@ const raw=readFileSync(new URL('../tests/fixtures/npm-audit-known-root.json',imp
 const report=JSON.parse(raw),lock=JSON.parse(files['package-lock.json'])
 const clone=value=>structuredClone(value)
 const assess=(value=report,p=policy,files_=files,scan={})=>assessAudit({raw:JSON.stringify(value),exit_code:1,...scan},p,files_)
-// The repository no longer carries a standing exception: the 0.6.1 grant
-// expired with its release cohort. These tests synthesize a policy bound to
-// the exact current files to exercise the authorized-exception branch.
+// These tests synthesize an independent policy bound to the exact current
+// files. They do not inherit either the expired 0.6.1 decision or the current
+// candidate's maintainer decision.
 function syntheticPolicy(reportValue=report,filesValue=files,lockValue=lock){
   const policy={
     schema:'dsi-node-audit-exception/v1',
@@ -185,8 +185,8 @@ test('an updated hash cannot broaden the fixed package version or host family',(
     rejectedWith(()=>assess(report,p,drift),reason)
   }
 })
-test('policy cannot silently expand to another CVE, version, calendar expiry or missing host lock',()=>{
-  for(const mutate of [p=>{p.exception.cve='CVE-2099-0001'},p=>{p.exception.version='4.5.0'},p=>{p.expiry.calendar_expiry='2099-01-01'},p=>{delete p.cohort.files['tests/dsh-host-rc5/package-lock.json']}]){
+test('policy cannot silently expand to another CVE, version, patch, calendar expiry or missing host lock',()=>{
+  for(const mutate of [p=>{p.exception.cve='CVE-2099-0001'},p=>{p.exception.version='4.5.0'},p=>{p.exception.patched_version='9.9.9'},p=>{p.expiry.calendar_expiry='2099-01-01'},p=>{delete p.cohort.files['tests/dsh-host-rc5/package-lock.json']}]){
     const p=clone(policy);mutate(p);rejectedWith(()=>assess(report,p))
   }
 })
@@ -276,6 +276,73 @@ test('spawn exceptions still emit a failed scan receipt',()=>outputs(dir=>{
 // 4.4.3, a satisfied range the exact-string check used to reject.
 const rangeReport=JSON.parse(readFileSync(new URL('../tests/fixtures/npm-audit-rc5-typert-range.json',import.meta.url),'utf8'))
 const rangePolicy=syntheticPolicy(rangeReport)
+function pairedPolicy(){
+  const value=clone(policy)
+  value.report_graph_sha256_variants=[rangePolicy.report_graph_sha256]
+  return value
+}
+test('the two explicitly reviewed graphs both pass under one bound policy',()=>{
+  const accepted=pairedPolicy()
+  for(const [value,expectedCount,expectedHash] of [
+    [report,23,policy.report_graph_sha256],
+    [rangeReport,24,rangePolicy.report_graph_sha256],
+  ]){
+    const result=assess(value,accepted)
+    assert.equal(result.status,'accepted_known_risk')
+    assert.equal(result.affected_packages,expectedCount)
+    assert.equal(result.advisories,1)
+    assert.equal(result.graph_sha256,expectedHash)
+  }
+})
+test('two different reviewed graphs survive capture and summary without being called clean',()=>outputs(dir=>{
+  const root=stageRoot(true)
+  try{
+    writeFileSync(join(root,POLICY_PATH),JSON.stringify(pairedPolicy(),null,2)+'\n')
+    const prod=captureAudit('prod',join(dir,'prod'),{root,runner:knownScan})
+    const full=captureAudit('full',join(dir,'full'),{root,runner:()=>({status:1,stdout:JSON.stringify(rangeReport),stderr:''})})
+    assert.equal(prod.status,'accepted_known_risk');assert.equal(full.status,'accepted_known_risk')
+    assert.equal(prod.scan.exit_code,1);assert.equal(full.scan.exit_code,1)
+    const summary=verifyResults(dir,{prod:'success',full:'success',python:'success'},{root})
+    assert.equal(summary.status,'passed_with_known_upstream_risk')
+    assert.equal(summary.exception_fixed,false)
+    assert.deepEqual(summary.assessments.map(a=>a.affected_packages),[23,24])
+    assert.deepEqual(summary.assessments.map(a=>a.graph_sha256),[policy.report_graph_sha256,rangePolicy.report_graph_sha256])
+  }finally{rmSync(root,{recursive:true,force:true})}
+}))
+for(const [name,mutate] of [
+  ['missing primary hash',p=>{delete p.report_graph_sha256}],
+  ['non-string primary hash',p=>{p.report_graph_sha256=[p.report_graph_sha256]}],
+  ['malformed primary hash',p=>{p.report_graph_sha256='not-a-sha256'}],
+  ['unreviewed primary hash',p=>{p.report_graph_sha256='f'.repeat(64)}],
+  ['null variants',p=>{p.report_graph_sha256_variants=null}],
+  ['non-array variants',p=>{p.report_graph_sha256_variants=p.report_graph_sha256_variants[0]}],
+  ['empty variants',p=>{p.report_graph_sha256_variants=[]}],
+  ['duplicate primary and variant',p=>{p.report_graph_sha256_variants=[p.report_graph_sha256]}],
+  ['malformed variant',p=>{p.report_graph_sha256_variants=['invalid']}],
+  ['unreviewed but well-formed variant',p=>{p.report_graph_sha256_variants=['f'.repeat(64)]}],
+  ['too many variants',p=>{p.report_graph_sha256_variants=[rangePolicy.report_graph_sha256,'f'.repeat(64)]}],
+])test('paired exception rejects '+name,()=>{
+  const bad=pairedPolicy();mutate(bad)
+  for(const value of [report,rangeReport])rejectedWith(()=>assess(value,bad),/report graph/)
+})
+test('the paired policy still rejects a structurally valid but unreviewed graph',()=>{
+  const value=clone(report),llm='@deepseek-ai/dsh-llm'
+  value.vulnerabilities={zod:value.vulnerabilities.zod,[llm]:value.vulnerabilities[llm]}
+  value.vulnerabilities.zod.effects=[llm];value.vulnerabilities[llm].effects=[]
+  value.metadata.vulnerabilities.high=2;value.metadata.vulnerabilities.total=2
+  assert.equal(inspectReport(value,lock).advisories,1)
+  rejectedWith(()=>assess(value,pairedPolicy()),/graph drifted/)
+})
+test('the paired policy still rejects a new advisory, critical severity and cohort drift',()=>{
+  const extra=clone(report),edge=clone(extra.vulnerabilities.zod.via[0])
+  edge.url='https://github.com/advisories/GHSA-xxxx-yyyy-zzzz'
+  extra.vulnerabilities.zod.via.push(edge)
+  rejectedWith(()=>assess(extra,pairedPolicy()),/unaccepted direct advisory/)
+  const critical=clone(report);critical.vulnerabilities.zod.severity='critical'
+  rejectedWith(()=>assess(critical,pairedPolicy()),/severity/)
+  const drift={...files,'package-lock.json':Buffer.concat([files['package-lock.json'],Buffer.from('\n')])}
+  rejectedWith(()=>assess(report,pairedPolicy(),drift),/cohort changed/)
+})
 test('the real 24-entry rc.5 graph with a ranged edge validates and binds to its cohort',()=>{
   const result=assess(rangeReport,rangePolicy)
   assert.equal(result.status,'accepted_known_risk')

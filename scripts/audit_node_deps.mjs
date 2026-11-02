@@ -22,6 +22,12 @@ export const COHORT_PATHS=['package.json','package-lock.json','pyproject.toml','
 const WORKFLOW='.github/workflows/ci.yml'
 const GHSA='GHSA-mrhx-c7xc-m3w5',CVE='CVE-2023-54404',ADVISORY_URL=`https://github.com/advisories/${GHSA}`
 const LEVELS=['info','low','moderate','high','critical']
+// The maintainer accepted exactly these two real report shapes for the 0.7.0
+// cohort. A future shape still requires a new decision and code review.
+const REVIEWED_GRAPHS=new Set([
+  'b3b647f4af6be5146493b175889906c7884f749fb337281430e564af7daa5bac',
+  'fe0b1aa71eec3e33eb53859aa771281f61522230650bdfa09bc2b354cee7d466',
+])
 export const digest=bytes=>createHash('sha256').update(bytes).digest('hex')
 export function canonical(value){
   if(Array.isArray(value))return '['+value.map(canonical).join(',')+']'
@@ -32,6 +38,16 @@ function requireThat(ok,message){if(!ok)throw new Error(message)}
 function object(value){return value!==null&&typeof value==='object'&&!Array.isArray(value)}
 function sameKeys(value,keys){return object(value)&&canonical(Object.keys(value).sort())===canonical([...keys].sort())}
 function strings(value){return Array.isArray(value)&&value.every(x=>typeof x==='string')&&new Set(value).size===value.length}
+function authorizedGraphs(policy){
+  const primary=policy.report_graph_sha256
+  const valid=hash=>typeof hash==='string'&&/^[0-9a-f]{64}$/.test(hash)&&REVIEWED_GRAPHS.has(hash)
+  requireThat(valid(primary),'invalid or unreviewed primary report graph')
+  if(!Object.hasOwn(policy,'report_graph_sha256_variants'))return [primary]
+  const variants=policy.report_graph_sha256_variants
+  requireThat(strings(variants)&&variants.length===1&&valid(variants[0])&&variants[0]!==primary,
+    'invalid, duplicate or unreviewed report graph variants')
+  return [primary,...variants]
+}
 export function hostQueueDigest(workflow){
   const jobs=String(workflow).split('\n  dsh-contract:\n')
   requireThat(jobs.length===2,'acceptance host job missing or ambiguous')
@@ -47,8 +63,9 @@ export function verifyCohort(policy,files){
   requireThat(policy?.schema==='dsi-node-audit-exception/v1','unknown exception policy')
   requireThat(policy.product_version===PRODUCT_VERSION,`exception expired: it applies to product ${policy?.product_version}, not ${PRODUCT_VERSION}`)
   requireThat(policy.authorization?.decision==='accepted'&&typeof policy.authorization.recorded_on==='string'&&policy.authorization.recorded_on.length>0,'maintainer decision missing')
-  requireThat(policy.exception?.advisory===GHSA&&policy.exception.cve===CVE&&policy.exception.package==='zod'&&policy.exception.version==='4.4.3'&&policy.exception.range==='<4.6.6'&&policy.exception.severity==='high','exception identity differs from the sole accepted risk')
+  requireThat(policy.exception?.advisory===GHSA&&policy.exception.cve===CVE&&policy.exception.package==='zod'&&policy.exception.version==='4.4.3'&&policy.exception.range==='<4.6.6'&&policy.exception.severity==='high'&&policy.exception.patched_version==='4.6.6','exception identity differs from the sole accepted risk')
   requireThat(policy.expiry?.kind==='event_bound'&&policy.expiry.calendar_expiry===null&&policy.expiry.automatic_monitoring===false,'exception must have the authorized event-bound expiry')
+  authorizedGraphs(policy)
   requireThat(sameKeys(policy.cohort?.files,COHORT_PATHS),'exception cohort file set changed')
   requireThat(sameKeys(files,[...COHORT_PATHS,WORKFLOW]),'source cohort incomplete')
   for(const path of COHORT_PATHS)requireThat(digest(files[path])===policy.cohort.files[path],`exception expired: cohort changed (${path})`)
@@ -187,7 +204,7 @@ export function assessAudit({raw,exit_code,signal=null,error=null},policy,files)
   const record={status:'unauthorized_findings',advisory:GHSA,cve:CVE,package:'zod'}
   try{
     const cohort=verifyCohort(policy,files),graph=inspectReport(report,cohort.lock)
-    requireThat(graph.sha256===policy.report_graph_sha256,'vulnerability graph drifted from the exact reviewed cohort')
+    requireThat(authorizedGraphs(policy).includes(graph.sha256),'vulnerability graph drifted from the exact reviewed cohort')
     return {status:'accepted_known_risk',advisory:GHSA,cve:CVE,package:'zod',version:'4.4.3',affected_packages:graph.affected_packages,advisories:graph.advisories,cohort_sha256:cohort.sha256,graph_sha256:graph.sha256}
   }catch(e){
     return {...record,reason:e.message,...summarizeFindings(report)}

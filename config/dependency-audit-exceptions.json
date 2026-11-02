@@ -1,0 +1,61 @@
+{
+  "schema": "dsi-node-audit-exception/v1",
+  "product_version": "0.7.0",
+  "authorization": {
+    "decision": "accepted",
+    "recorded_on": "2026-11-03",
+    "authority": "Repository maintainer",
+    "scope": "Only this release, the exact reviewed rc.2/rc.5 cohort, and the two stated report graphs; not a security fix or low-probability assurance."
+  },
+  "exception": {
+    "advisory": "GHSA-mrhx-c7xc-m3w5",
+    "cve": "CVE-2023-54404",
+    "package": "zod",
+    "version": "4.4.3",
+    "severity": "high",
+    "range": "<4.6.6",
+    "patched_version": "4.6.6"
+  },
+  "audited_scope": "Root package-lock npm production and full scans only. The host/runtime trees bind the reviewed cohort; no exception for a new advisory, unreviewed graph or another dependency tree.",
+  "prerequisite": "Large invalid arrays can exhaust memory during affected schema validation. Reachability through a DSH entry point and ordinary-use likelihood are not established.",
+  "cohort": {
+    "files": {
+      "package.json": "95b87185a9d8adf50a971e5293531d85a25d679941899b80121a6474008fa4e7",
+      "package-lock.json": "d62276cb62d27b67f64d5a99d285dec9b703afecede1e751a54497ef436f9fb0",
+      "pyproject.toml": "db82c6becada3236a627d0542d87d99c3cf77fa42a83ea5ee20221a4bf888c30",
+      "src/dsh_session_insights/__init__.py": "fae4f39e92d1df6553bfc34673af31b9e21cc6ffb0b1cf416b06d8c7da69ec01",
+      "tests/dsh-runtime/package.json": "65d30d2a7101433bdbb4c2fcaf960ca544d04d5fac0357f4a8168819868b95aa",
+      "tests/dsh-runtime/package-lock.json": "8b51fa9714452e72e43cb7b2d91588dfbc987a7bc6da30eac807e53eb47e3db6",
+      "tests/dsh-runtime-rc5/package.json": "20611b611c751de858268d7df58f771710fd6e5fa37088c9627f50eef6580828",
+      "tests/dsh-runtime-rc5/package-lock.json": "f0abfb959f06d597c76767ad571ce5d226777456966de24d20390e3c7b861fc9",
+      "tests/dsh-host/package.json": "418badd91175d5fd9eac2c77165da122db6ffae6bc3c415352725acaa194468d",
+      "tests/dsh-host/package-lock.json": "747f45d50de77174d93057a10606aaf9eca5340475184a3149b120fe99139b64",
+      "tests/dsh-host-rc5/package.json": "c10525d7ff0891980e3a74e257060e53f1869d943a7944fca11871d3f1f33cea",
+      "tests/dsh-host-rc5/package-lock.json": "dcdb6872337569de2720baf6f172f6627ae9b9d2447467028829fe52e4d336a4",
+      "scripts/acceptance_identity.mjs": "83105f57b72aa0054642f9373a3932adfc11793eaa4eb56c343977260fc9345f"
+    },
+    "host_queue_sha256": "58926450dbd836652fcf3f9b16230bc7fd21b45ebd4c6c1bcd4f5b3f8886a96a"
+  },
+  "report_graph_sha256": "b3b647f4af6be5146493b175889906c7884f749fb337281430e564af7daa5bac",
+  "report_graph_sha256_variants": [
+    "fe0b1aa71eec3e33eb53859aa771281f61522230650bdfa09bc2b354cee7d466"
+  ],
+  "expiry": {
+    "kind": "event_bound",
+    "events": [
+      "product version change",
+      "any bound manifest/lock/runtime/host identity change",
+      "acceptance host queue change",
+      "any advisory change or vulnerability graph outside the two exact reviewed variants",
+      "patched dependency closure resolves cleanly"
+    ],
+    "required_action": "Remove this exception or obtain a new explicit maintainer decision when an expiry event occurs; never automatically carry it into a later version or cohort.",
+    "calendar_expiry": null,
+    "automatic_monitoring": false
+  },
+  "sources": [
+    "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+    "https://nvd.nist.gov/vuln/detail/CVE-2023-54404",
+    "https://github.com/deepseek-ai/deepseek-harness/discussions/10847"
+  ]
+}

@@ -43,7 +43,7 @@ The `0.7.0` Bundle requires DSH `>=0.2.1-rc.2` and Node.js `^22.19.0 || >=24.0.0
 
 **DSH compatibility:** The package requires `>=0.2.1-rc.2` — `0.2.1-rc.5` is the primary host this release is acceptance-tested against, and `0.2.1-rc.2` keeps compatibility coverage. DSH `0.2.0-rc.2` and `0.2.1-rc.1` are below the supported floor, and later releases are admitted by the declared range, not by static version tables; a future host version inside the range is admitted but not yet tested. Contract and service tests cover synthetic V4 input. Native, model and UI results are recorded separately in the acceptance receipts attached to each exact release artifact; range admission does not establish testing of future hosts. See [DSH compatibility](#dsh-compatibility).
 
-**Known upstream security gap:** six official DSH packages through rc.5 pin vulnerable `zod@4.4.3` (GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404). The 0.6.1 exception for this gap expired with its release cohort and has not been renewed: no acceptance decision exists for the current candidate yet, so publication is blocked until the maintainer records a new explicit decision. Everyday trigger probability has not been established. Read the [risk and decision status](SECURITY.md#known-upstream-dependency-gap) before installing.
+**Known upstream security gap:** six official DSH packages through rc.5 pin vulnerable `zod@4.4.3` (GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404). The 0.6.1 exception expired with its release cohort and was not renewed. On 2026-11-03 the maintainer made a new, limited risk decision for the reviewed 0.7.0 cohort. The vulnerability remains unfixed; a reachable DSH path and everyday trigger probability have not been established. Accepting the risk does not establish release readiness; see the [candidate acceptance record](docs/acceptance/v0.7.0-candidate.md) for artifact and release-check status. Read the [risk and decision status](SECURITY.md#known-upstream-dependency-gap) before installing.
 
 The registry command below requires `0.7.0` to be published. When testing a candidate, install its reviewed tarball or source revision instead. Check the version on [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) before using the registry command:
 
@@ -61,6 +61,8 @@ git checkout --detach REVIEWED_REF
 dsh plugin --profile web add .
 dsh web
 ```
+
+By default, semantic analysis sends bounded session evidence through the current DSH agent to its configured model provider; that provider’s data handling and charges apply. Session excerpts may contain sensitive information, and redaction is not a disclosure guarantee. Add `--deterministic` to skip model analysis. Batches run serially, so duration varies with the selected sessions and model response time.
 
 Then run this in the DSH composer:
 
