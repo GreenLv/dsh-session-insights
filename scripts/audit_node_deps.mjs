@@ -207,6 +207,11 @@ export function captureAudit(scope,output,{root=ROOT,runner=spawnSync}={}){
   requireThat(['prod','full'].includes(scope),'unknown audit scope')
   mkdirSync(output,{recursive:true})
   const args=['audit',...(scope==='prod'?['--omit=dev']:[]),'--audit-level=high','--json']
+  // Bind the audited inputs BEFORE the scan runs: the retained identity must
+  // describe the tree npm actually scanned, not whatever the tree contains
+  // when the scanner happens to return.
+  const before=context(root)
+  const binding=inputBinding(before.files)
   let captured
   try{captured=process.platform==='win32'
     ?runner(process.env.ComSpec||'cmd.exe',['/d','/s','/c','npm '+args.join(' ')],{cwd:root,encoding:'utf8',timeout:120000,maxBuffer:4*1024*1024})
@@ -217,9 +222,14 @@ export function captureAudit(scope,output,{root=ROOT,runner=spawnSync}={}){
   const scan={exit_code:captured.status??null,signal:captured.signal??null,error:captured.error?.code??null,raw_sha256:digest(raw),stderr_sha256:digest(stderr)}
   const result={schema:'dsi-node-audit-result/v1',scope,command:['npm',...args],scan,status:'failed'}
   try{
-    const {policy,files}=context(root)
-    result.input_binding=inputBinding(files)
-    result.assessment=assessAudit({raw,...scan},policy,files)
+    result.input_binding=binding
+    // The input must be unchanged between the pre-scan binding and the scan's
+    // return; otherwise the retained output cannot be attributed to one input
+    // and the capture fails regardless of what the scan reported.
+    const after=context(root)
+    requireThat(canonical(inputBinding(after.files))===canonical(binding),
+      'audit input changed while the scanner ran; the retained output cannot be attributed to the bound input')
+    result.assessment=assessAudit({raw,...scan},before.policy,before.files)
     result.status=result.assessment.status
   }catch(e){result.reason=e.message}
   writeFileSync(join(output,'result.json'),JSON.stringify(result,null,2)+'\n')

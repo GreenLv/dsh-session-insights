@@ -355,6 +355,68 @@ test('an exception capture cannot be summarized after cohort drift',()=>outputs(
   rmSync(root,{recursive:true,force:true})
 }))
 
+// RV-01 lifecycle: the binding must describe the tree npm actually scanned,
+// so a root swapped while the runner executes voids the capture itself.
+function cleanFixtureManifest(){
+  const lock=JSON.parse(files['package-lock.json']),semver={...lock.packages['node_modules/semver']}
+  delete semver.dev;delete semver.peer
+  return Buffer.from(JSON.stringify({name:'dsh-session-insights',version:'0.7.0',private:true,dependencies:{semver:semver.version}},null,2)+'\n')
+}
+function cleanFixtureLock(){
+  const manifest=JSON.parse(cleanFixtureManifest())
+  return Buffer.from(JSON.stringify({name:manifest.name,version:manifest.version,lockfileVersion:3,requires:true,packages:{'':{name:manifest.name,version:manifest.version,dependencies:manifest.dependencies},'node_modules/semver':JSON.parse(cleanFixtureManifest()).dependencies&&semverEntry()}},null,2)+'\n')
+}
+function semverEntry(){
+  const lock=JSON.parse(files['package-lock.json']),semver={...lock.packages['node_modules/semver']}
+  delete semver.dev;delete semver.peer;return semver
+}
+test('drift while the runner executes fails the capture and keeps the pre-scan binding',()=>outputs(dir=>{
+  const root=stageRoot(false)
+  // Install a genuinely clean semver-only tree, exactly like the reviewer probe.
+  writeFileSync(join(root,'package.json'),cleanFixtureManifest())
+  writeFileSync(join(root,'package-lock.json'),cleanFixtureLock())
+  const cleanScan=()=>({status:0,signal:null,stdout:JSON.stringify(cleanReport),stderr:''})
+  const result=captureAudit('prod',join(dir,'prod'),{root,runner:(command,args,options)=>{
+    const scan=cleanScan()
+    // Swap manifest/lock exactly while captureAudit is inside its runner.
+    writeFileSync(join(options.cwd,'package.json'),files['package.json'])
+    writeFileSync(join(options.cwd,'package-lock.json'),files['package-lock.json'])
+    return scan
+  }})
+  assert.equal(result.status,'failed')
+  assert.match(String(result.reason),/changed while the scanner ran/)
+  const binding=result.input_binding
+  assert.ok(binding,'failed capture still records the pre-scan binding')
+  assert.equal(binding.lock_sha256,digest(cleanFixtureLock()))
+  assert.notEqual(binding.lock_sha256,digest(files['package-lock.json']))
+  assert.throws(()=>verifyResults(dir,{prod:'success',full:'success',python:'success'},{root}),/missing or failed/)
+  rmSync(root,{recursive:true,force:true})
+}))
+test('identical during-runner drift in both scopes fails the summary',()=>outputs(dir=>{
+  const root=stageRoot(false)
+  writeFileSync(join(root,'package.json'),cleanFixtureManifest())
+  writeFileSync(join(root,'package-lock.json'),cleanFixtureLock())
+  const cleanScan=()=>({status:0,signal:null,stdout:JSON.stringify(cleanReport),stderr:''})
+  const driftDuring=(command,args,options)=>{
+    const scan=cleanScan()
+    writeFileSync(join(options.cwd,'package.json'),files['package.json'])
+    writeFileSync(join(options.cwd,'package-lock.json'),files['package-lock.json'])
+    return scan
+  }
+  captureAudit('prod',join(dir,'prod'),{root,runner:driftDuring})
+  captureAudit('full',join(dir,'full'),{root,runner:driftDuring})
+  assert.throws(()=>verifyResults(dir,{prod:'success',full:'success',python:'success'},{root}),/missing or failed/)
+  rmSync(root,{recursive:true,force:true})
+}))
+test('scanner failure and cancellation still refuse under the pre-scan binding',()=>outputs(dir=>{
+  const root=stageRoot(false)
+  const failing=captureAudit('prod',join(dir,'prod'),{root,runner:()=>({status:2,stdout:'{}',stderr:'synthetic outage'})})
+  assert.equal(failing.status,'failed')
+  const cancelled=captureAudit('full',join(dir,'full'),{root,runner:()=>({status:null,signal:'SIGTERM',stdout:'',stderr:''})})
+  assert.equal(cancelled.status,'failed')
+  rmSync(root,{recursive:true,force:true})
+}))
+
 test('CI always collects all audits, checks outcome, and propagates Python pipeline failures',()=>{
   const source=String(files[workflow]),job=source.split('\n  dependency-security:\n')[1].split('\n  dsh-contract:\n')[0]
   for(const id of ['audit_prod','audit_full','audit_python']){
