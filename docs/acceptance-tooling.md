@@ -1,11 +1,19 @@
 # Acceptance tooling and CI coverage
 
 The source CI runs the Python suite for each declared OS/Python combination.
-The Node suite runs once for macOS/rc.2 and in each DSH contract cell. The
-contract cells cover rc.3 on Linux, macOS and Windows, rc.2 on Linux and
-Windows, and the separately declared Node 24 cell. Target-sensitive tests
-check the resolved package identity; a matrix label alone is not evidence of
-the runtime actually used.
+Python 3.12 cells run the rc.5 primary runtime; the other cells keep rc.2
+floor coverage. The Node suite runs once for macOS/rc.5 and in each DSH
+contract cell. The contract cells cover rc.5 on Linux, macOS and Windows,
+rc.2 on Linux and Windows, and the separately declared Node 24 cell.
+Target-sensitive tests check the resolved package identity; a matrix label
+alone is not evidence of the runtime actually used.
+
+The dependency audit distinguishes three outcomes: a clean scan passes only
+with a valid, non-empty dependency inventory; a finding passes only under the
+exact single-release, cohort-bound exception recorded in
+`config/dependency-audit-exceptions.json` (none is present for the current
+candidate); anything else — network failure, invalid JSON, a missing step,
+cancellation, or a new high/critical finding — fails the job.
 
 The profile and portable scripts use isolated test homes. A failed operation
 or failed cleanup produces a failed outcome. Profile cleanup attempts each

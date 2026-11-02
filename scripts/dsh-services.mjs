@@ -9,7 +9,7 @@ import {tmpdir} from 'node:os'
 import assert from 'node:assert/strict'
 import {cleanupPreservingFailure} from './acceptance_cleanup.mjs'
 const runtime=resolve(process.argv[2] || ''), packageRoot=resolve(process.argv[3] || '.')
-if(!runtime)throw new Error('target runtime root required (tests/dsh-runtime or tests/dsh-runtime-rc3)')
+if(!runtime)throw new Error('target runtime root required (tests/dsh-runtime or tests/dsh-runtime-rc5)')
 if(!runtime) throw new Error('runtime required')
 const req=createRequire(join(resolve(runtime),'package.json'))
 const load=async name=>import(pathToFileURL(req.resolve(name)).href)

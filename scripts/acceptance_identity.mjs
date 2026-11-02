@@ -18,14 +18,14 @@ export const digest = value => createHash('sha256').update(value).digest('hex')
 // The single map of acceptance host targets. `primary` is the release
 // acceptance host; `compatibility` hosts keep their source/contract coverage.
 export const HOST_TARGETS = Object.freeze({
-  primary: '0.2.1-rc.3',
+  primary: '0.2.1-rc.5',
   compatibility: Object.freeze(['0.2.1-rc.2']),
 })
 // Back-compat export for tools not yet parameterized (tests, one-off checks):
 // the primary acceptance target.
 export const TARGET = HOST_TARGETS.primary
 export const MINIMUM_DSH_RANGE = '>=0.2.1-rc.2'
-export const PRODUCT_VERSION = '0.6.1'
+export const PRODUCT_VERSION = '0.7.0'
 
 export async function fileManifest(root) {
   const files = []
@@ -44,7 +44,7 @@ export async function fileManifest(root) {
 
 // Walk the runtime's actual DSH/Cordis closure and assert every member's
 // published identity equals `expectedVersion`. The expected version is an
-// argument, not a constant: the same helper verifies the rc.3 primary runtime
+// argument, not a constant: the same helper verifies the rc.5 primary runtime
 // and the rc.2 compatibility runtime without reordering anything.
 export async function inspectRuntime(root, expectedVersion = TARGET) {
   const anchor = join(resolve(root), 'package.json')

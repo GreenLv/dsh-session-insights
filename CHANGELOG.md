@@ -6,9 +6,26 @@ Public releases are listed newest first.
 
 ## Unreleased
 
+Everything below is the staged 0.7.0 candidate. It is not published yet; the section is dated when the release is cut.
+
 ### Added
 
-- Russian (`ru`) locale for the deterministic report, HTML dashboard, semantic prompts, native runtime and Python CLI, with a full `README.ru-RU.md`.
+- Russian (`ru`) is now a published locale, no longer source-only: the deterministic report, HTML dashboard, semantic prompts, native runtime and Python CLI all ship the full Russian catalog, and `README.ru-RU.md` documents the plugin in Russian. Message texts moved into keyed catalogs, so the semantic-prompt contract (untrusted-data notices and prompt rules) is written natively per locale instead of one English constant for every language. `ru` is accepted in the recorded run scope, resume validation and every entry that already accepted `en`/`zh-CN`.
+- DSH `0.2.1-rc.5` is the primary acceptance host. The declared floor stays `>=0.2.1-rc.2`, and `0.2.1-rc.2` keeps compatibility coverage; the previous rc.3 host trees are no longer maintained, consistent with the contributing policy of not maintaining historical hosts.
+
+### Changed
+
+- Acceptance tooling tells the truth about failures and cleanup: failing steps and cleanup failures return their real exit status, an isolated result directory is never overwritten or silently reused, cleanup keeps the scene when the stop state is unclear, and public diagnostics no longer carry arbitrary exception text or machine paths. Fault probes are CRLF-portable.
+- Tests run the runtime they claim: every CI cell installs and names its exact DSH runtime (rc.5 primary, rc.2 compatibility), duplicate suites were reduced, and the candidate artifact is packed from the actual PR head instead of relabelling GitHub's merge checkout.
+
+### Security
+
+- The known upstream dependency gap is still open: six official DSH rc.5 packages pin `zod@4.4.3` exactly ([GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), patched in 4.6.6). The full rc.5 host tree resolves its root `zod` to the patched 4.6.7, but the exact-pinned nested copies remain 4.4.3, and this project's peer closure resolves to 4.4.3. The 0.6.1 exception expired by its own terms with the release-version and dependency-cohort change; it has not been renewed. Dependency auditing now has three honest outcomes — clean pass, exact cohort-bound exception, or failure — and this candidate currently reports `unauthorized_findings` (one advisory, 23 affected package entries). **Publication is blocked until the maintainer makes a new explicit risk decision for this candidate.** See [Security Policy](SECURITY.md#known-upstream-dependency-gap).
+- The audit gate now accepts a genuinely clean scan (with a valid, non-empty dependency inventory) without any exception file; network failures, invalid JSON, missing steps and new high/critical findings still fail closed.
+
+### Migration
+
+- The analyzer version string is `0.7.0-v4-dsh021rc2.5`; the input identity and semantic schema (`1.2.0`) are unchanged, so 0.6.1 native runs keep their recorded scope and stay resumable, and existing HTML/JSON/Markdown reports remain openable. Deterministic CLI caches written by 0.6.1 are ignored automatically and re-parsed from source; deleting them stays an optional manual cleanup via `dsh-session-insights cache`.
 
 ## 0.6.1 - 2026-10-26
 

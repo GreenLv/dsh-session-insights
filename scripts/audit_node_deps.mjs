@@ -1,18 +1,23 @@
-// A single-release exception, not a general advisory allowlist. Raw npm scan
-// output and its actual exit status are retained even when this assessment passes.
+// Three-state dependency audit gate: a clean scan passes only with a valid
+// non-empty inventory; a finding passes only under the exact single-release,
+// cohort-bound exception recorded in POLICY_PATH; everything else fails.
+// Raw npm scan output and its actual exit status are retained either way.
+// An absent, expired or mismatched exception is never silently extended:
+// findings without a currently valid policy report `unauthorized_findings`.
 import {createHash} from 'node:crypto'
 import {spawnSync} from 'node:child_process'
-import {readFileSync,writeFileSync,mkdirSync} from 'node:fs'
+import {readFileSync,writeFileSync,mkdirSync,existsSync} from 'node:fs'
 import {dirname,join,resolve} from 'node:path'
 import {fileURLToPath,pathToFileURL} from 'node:url'
+import {HOST_TARGETS,PRODUCT_VERSION} from './acceptance_identity.mjs'
 
 const ROOT=fileURLToPath(new URL('../',import.meta.url))
 export const POLICY_PATH='config/dependency-audit-exceptions.json'
 export const COHORT_PATHS=['package.json','package-lock.json','pyproject.toml','src/dsh_session_insights/__init__.py',
   'tests/dsh-runtime/package.json','tests/dsh-runtime/package-lock.json',
-  'tests/dsh-runtime-rc3/package.json','tests/dsh-runtime-rc3/package-lock.json',
+  'tests/dsh-runtime-rc5/package.json','tests/dsh-runtime-rc5/package-lock.json',
   'tests/dsh-host/package.json','tests/dsh-host/package-lock.json',
-  'tests/dsh-host-rc3/package.json','tests/dsh-host-rc3/package-lock.json','scripts/acceptance_identity.mjs']
+  'tests/dsh-host-rc5/package.json','tests/dsh-host-rc5/package-lock.json','scripts/acceptance_identity.mjs']
 const WORKFLOW='.github/workflows/ci.yml'
 const GHSA='GHSA-mrhx-c7xc-m3w5',CVE='CVE-2023-54404',ADVISORY_URL=`https://github.com/advisories/${GHSA}`
 const LEVELS=['info','low','moderate','high','critical']
@@ -34,10 +39,13 @@ export function hostQueueDigest(workflow){
   requireThat(strategy,'acceptance host queue missing')
   return digest(strategy[1])
 }
+// Validate the single-release exception against the exact current cohort. Any
+// mismatch throws: a stale policy can never authorize fresh findings.
 export function verifyCohort(policy,files){
+  requireThat(object(policy),'exception policy missing')
   requireThat(policy?.schema==='dsi-node-audit-exception/v1','unknown exception policy')
-  requireThat(policy.product_version==='0.6.1','exception only applies to product 0.6.1')
-  requireThat(policy.authorization?.decision==='accepted'&&policy.authorization.recorded_on==='2026-10-26','maintainer decision missing')
+  requireThat(policy.product_version===PRODUCT_VERSION,`exception expired: it applies to product ${policy?.product_version}, not ${PRODUCT_VERSION}`)
+  requireThat(policy.authorization?.decision==='accepted'&&typeof policy.authorization.recorded_on==='string'&&policy.authorization.recorded_on.length>0,'maintainer decision missing')
   requireThat(policy.exception?.advisory===GHSA&&policy.exception.cve===CVE&&policy.exception.package==='zod'&&policy.exception.version==='4.4.3'&&policy.exception.range==='<4.6.6'&&policy.exception.severity==='high','exception identity differs from the sole accepted risk')
   requireThat(policy.expiry?.kind==='event_bound'&&policy.expiry.calendar_expiry===null&&policy.expiry.automatic_monitoring===false,'exception must have the authorized event-bound expiry')
   requireThat(sameKeys(policy.cohort?.files,COHORT_PATHS),'exception cohort file set changed')
@@ -46,20 +54,24 @@ export function verifyCohort(policy,files){
   const queue=hostQueueDigest(files[WORKFLOW])
   requireThat(queue===policy.cohort.host_queue_sha256,'exception expired: acceptance host queue changed')
   const pkg=JSON.parse(files['package.json']),lock=JSON.parse(files['package-lock.json'])
-  requireThat(pkg.name==='dsh-session-insights'&&pkg.version==='0.6.1'&&lock.version==='0.6.1'&&lock.packages?.['']?.version==='0.6.1','exception expired: project version changed')
+  requireThat(pkg.name==='dsh-session-insights'&&pkg.version===PRODUCT_VERSION&&lock.version===PRODUCT_VERSION&&lock.packages?.['']?.version===PRODUCT_VERSION,'exception expired: project version changed')
   const project=String(files['pyproject.toml']).match(/\[project\]([\s\S]*?)(?=\n\[|$)/)?.[1]
-  requireThat(project&&/^version\s*=\s*"0\.6\.1"\s*$/m.test(project)&&/__version__\s*=\s*["']0\.6\.1["']/.test(String(files['src/dsh_session_insights/__init__.py'])),'exception expired: Python product version changed')
-  for(const [dir,version] of [['tests/dsh-runtime','0.2.1-rc.2'],['tests/dsh-runtime-rc3','0.2.1-rc.3'],['tests/dsh-host','0.2.1-rc.2'],['tests/dsh-host-rc3','0.2.1-rc.3']]){
+  const versionPattern=PRODUCT_VERSION.replaceAll('.','\\.')
+  requireThat(project&&new RegExp(`^version\\s*=\\s*"${versionPattern}"\\s*$`,'m').test(project)&&new RegExp(`__version__\\s*=\\s*["']${versionPattern}["']`).test(String(files['src/dsh_session_insights/__init__.py'])),'exception expired: Python product version changed')
+  // Every accepted host/runtime tree must pin exactly one DSH version, and the
+  // set of pinned trees is fixed by the exception cohort.
+  const primary=HOST_TARGETS.primary
+  const trees=[['tests/dsh-runtime','0.2.1-rc.2'],['tests/dsh-runtime-rc5',primary],['tests/dsh-host','0.2.1-rc.2'],['tests/dsh-host-rc5',primary]]
+  for(const [dir,version] of trees){
     const manifest=JSON.parse(files[dir+'/package.json'])
     requireThat(Object.keys(manifest.dependencies??{}).length>0&&Object.values(manifest.dependencies).every(v=>v===version),'exception expired: host pins changed')
   }
-  requireThat(lock.packages?.['node_modules/zod']?.version==='4.4.3','only locked zod 4.4.3 is accepted')
+  requireThat(lock.packages?.['node_modules/zod']?.version===policy.exception.version,`only locked zod ${policy.exception.version} is accepted`)
   return {lock,sha256:digest(canonical({files:policy.cohort.files,host_queue_sha256:queue}))}
 }
-
-// Every advisory chain must terminate at the sole known leaf. The reviewed
-// 23-node graph is a DAG; cycles are not accepted, even with another leaf exit.
-// The exact node/edge/path/range shape is additionally pinned below.
+// Every advisory chain must terminate at the sole known leaf when the
+// exception is used. The exact node/edge/path/range shape is pinned here;
+// cycles are not accepted even with another leaf exit.
 export function inspectReport(report,lock){
   requireThat(sameKeys(report,['auditReportVersion','vulnerabilities','metadata'])&&report.auditReportVersion===2,'npm audit report is malformed or reports an error')
   const rows=report.vulnerabilities,metadata=report.metadata
@@ -75,7 +87,12 @@ export function inspectReport(report,lock){
     requireThat(strings(row.nodes)&&canonical(row.nodes)===canonical(['node_modules/'+name]),'vulnerability outside the reviewed root node paths')
     const installed=lock.packages?.[row.nodes[0]]
     requireThat(installed&&typeof installed.version==='string','vulnerability node not resolved by the root lock')
-    requireThat(name==='zod'?installed.version==='4.4.3':name.startsWith('@deepseek-ai/dsh-')&&installed.version==='0.2.1-rc.2','package version outside the accepted dependency chain')
+    if(name==='zod')requireThat(installed.version==='4.4.3','only zod 4.4.3 is accepted')
+    else{
+      requireThat(name.startsWith('@deepseek-ai/dsh-')||name==='@deepseek-ai/cordis','package outside the accepted DSH/Cordis dependency chain')
+      const chain=lock.packages?.['node_modules/@deepseek-ai/dsh-commands']?.version
+      requireThat(installed.version===chain,'package version outside the accepted dependency chain')
+    }
     requireThat(Array.isArray(row.via)&&row.via.length>0&&row.via.length<=256&&strings(row.effects),'empty or invalid advisory chain')
     const via=[]
     for(const edge of row.via){
@@ -119,15 +136,56 @@ export function inspectReport(report,lock){
   return {sha256:digest(canonical(graph)),affected_packages:graph.length,advisories:1}
 }
 
-export function assessAudit({raw,exit_code,signal=null,error=null},policy,files){
-  requireThat(!error&&!signal&&exit_code===1,'npm scanner failure or unexpected exit status')
-  requireThat(typeof raw==='string'&&raw.trim().length>0&&Buffer.byteLength(raw)<=4*1024*1024,'empty or oversized scan output')
-  const cohort=verifyCohort(policy,files),report=inspectReport(JSON.parse(raw),cohort.lock)
-  requireThat(report.sha256===policy.report_graph_sha256,'vulnerability graph drifted from the exact reviewed cohort')
-  return {status:'accepted_known_risk',advisory:GHSA,cve:CVE,package:'zod',version:'4.4.3',affected_packages:report.affected_packages,advisories:1,cohort_sha256:cohort.sha256,graph_sha256:report.sha256}
+// Shape-check a report enough to summarize unauthorized findings. This is the
+// no-exception path: it never approves, only reports what npm found.
+function summarizeFindings(report){
+  requireThat(object(report)&&report.auditReportVersion===2,'npm audit report is malformed or reports an error')
+  const rows=report.vulnerabilities,metadata=report.metadata
+  requireThat(object(metadata)&&sameKeys(metadata,['vulnerabilities','dependencies'])&&object(metadata.dependencies),'npm audit metadata missing')
+  requireThat(Object.values(metadata.dependencies).every(n=>Number.isSafeInteger(n)&&n>=0)&&metadata.dependencies.total>0,'empty or invalid dependency inventory')
+  requireThat(object(rows)&&Object.keys(rows).length>0,'exit 1 without a vulnerability report')
+  const advisories=new Set()
+  let highest='info'
+  const rank=Object.fromEntries(LEVELS.map((l,i)=>[l,i]))
+  for(const row of Object.values(rows)){
+    requireThat(object(row)&&typeof row.severity==='string','malformed vulnerability entry')
+    if(rank[row.severity]>rank[highest])highest=row.severity
+    for(const edge of Array.isArray(row.via)?row.via:[])if(object(edge)&&typeof edge.url==='string')advisories.add(edge.url)
+  }
+  return {affected_packages:Object.keys(rows).length,direct_advisories:[...advisories].sort(),highest_severity:highest,counts:metadata.vulnerabilities}
 }
-function context(root){return {policy:JSON.parse(readFileSync(join(root,POLICY_PATH),'utf8')),files:Object.fromEntries([...COHORT_PATHS,WORKFLOW].map(p=>[p,readFileSync(join(root,p))]))}}
 
+function loadPolicy(root){
+  const policyPath=join(root,POLICY_PATH)
+  if(!existsSync(policyPath))return null
+  return JSON.parse(readFileSync(policyPath,'utf8'))
+}
+export function assessAudit({raw,exit_code,signal=null,error=null},policy,files){
+  requireThat(!error&&!signal,'npm scanner failed or was terminated')
+  requireThat((exit_code===0||exit_code===1),'npm scanner unexpected exit status')
+  requireThat(typeof raw==='string'&&raw.trim().length>0&&Buffer.byteLength(raw)<=4*1024*1024,'empty or oversized scan output')
+  const report=JSON.parse(raw)
+  if(exit_code===0){
+    // Clean scan: still require a real, non-empty dependency inventory so a
+    // broken/empty lock can never masquerade as a pass.
+    requireThat(object(report)&&report.auditReportVersion===2,'clean scan report is malformed')
+    requireThat(object(report.vulnerabilities)&&Object.keys(report.vulnerabilities).length===0,'clean exit with vulnerability entries')
+    const metadata=report.metadata
+    requireThat(object(metadata)&&sameKeys(metadata,['vulnerabilities','dependencies'])&&sameKeys(metadata.vulnerabilities,[...LEVELS,'total'])&&object(metadata.dependencies),'clean scan metadata missing')
+    requireThat(Object.values(metadata.dependencies).every(n=>Number.isSafeInteger(n)&&n>=0)&&metadata.dependencies.total>0,'empty or invalid dependency inventory')
+    requireThat(LEVELS.every(l=>metadata.vulnerabilities[l]===0)&&metadata.vulnerabilities.total===0,'clean exit with nonzero vulnerability counts')
+    return {status:'clean',affected_packages:0,advisories:0,dependencies:metadata.dependencies.total}
+  }
+  const record={status:'unauthorized_findings',advisory:GHSA,cve:CVE,package:'zod'}
+  try{
+    const cohort=verifyCohort(policy,files),graph=inspectReport(report,cohort.lock)
+    requireThat(graph.sha256===policy.report_graph_sha256,'vulnerability graph drifted from the exact reviewed cohort')
+    return {status:'accepted_known_risk',advisory:GHSA,cve:CVE,package:'zod',version:'4.4.3',affected_packages:graph.affected_packages,advisories:graph.advisories,cohort_sha256:cohort.sha256,graph_sha256:graph.sha256}
+  }catch(e){
+    return {...record,reason:e.message,...summarizeFindings(report)}
+  }
+}
+function context(root){return {policy:loadPolicy(root),files:Object.fromEntries([...COHORT_PATHS,WORKFLOW].map(p=>[p,readFileSync(join(root,p))]))}}
 export function captureAudit(scope,output,{root=ROOT,runner=spawnSync}={}){
   requireThat(['prod','full'].includes(scope),'unknown audit scope')
   mkdirSync(output,{recursive:true})
@@ -141,27 +199,35 @@ export function captureAudit(scope,output,{root=ROOT,runner=spawnSync}={}){
   writeFileSync(join(output,'audit.json'),raw);writeFileSync(join(output,'stderr.log'),stderr)
   const scan={exit_code:captured.status??null,signal:captured.signal??null,error:captured.error?.code??null,raw_sha256:digest(raw),stderr_sha256:digest(stderr)}
   const result={schema:'dsi-node-audit-result/v1',scope,command:['npm',...args],scan,status:'failed'}
-  try{const {policy,files}=context(root);result.assessment=assessAudit({raw,...scan},policy,files);result.status='accepted_known_risk'}catch(e){result.reason=e.message}
+  try{
+    const {policy,files}=context(root)
+    result.assessment=assessAudit({raw,...scan},policy,files)
+    result.status=result.assessment.status
+  }catch(e){result.reason=e.message}
   writeFileSync(join(output,'result.json'),JSON.stringify(result,null,2)+'\n')
   return result
 }
-
+const PASSING=['clean','accepted_known_risk']
 export function verifyResults(output,outcomes,{root=ROOT}={}){
   requireThat(sameKeys(outcomes,['prod','full','python'])&&Object.values(outcomes).every(v=>v==='success'),'required audit step missing, failed, skipped or cancelled')
-  const {policy,files}=context(root),assessments=[]
+  const {policy,files}=context(root)
+  const assessments=[]
   for(const scope of ['prod','full']){
     const dir=join(output,scope),result=JSON.parse(readFileSync(join(dir,'result.json'),'utf8')),raw=readFileSync(join(dir,'audit.json'),'utf8'),stderr=readFileSync(join(dir,'stderr.log'))
-    requireThat(result.schema==='dsi-node-audit-result/v1'&&result.scope===scope&&result.status==='accepted_known_risk','required npm assessment missing or failed')
+    requireThat(result.schema==='dsi-node-audit-result/v1'&&result.scope===scope&&PASSING.includes(result.status),'required npm assessment missing or failed')
     requireThat(digest(raw)===result.scan.raw_sha256&&digest(stderr)===result.scan.stderr_sha256,'retained scan bytes changed')
     assessments.push(assessAudit({raw,...result.scan},policy,files))
+    requireThat(PASSING.includes(assessments[assessments.length-1].status),'re-assessed scan no longer passes')
   }
-  requireThat(assessments[0].cohort_sha256===assessments[1].cohort_sha256,'audit input cohort changed between scans')
-  return {schema:'dsi-required-dependency-audits/v1',status:'passed_with_known_upstream_risk',exception_fixed:false,scopes:['prod','full','python'],assessments}
+  requireThat(assessments[0].status===assessments[1].status,'audit scopes disagree on the exception state')
+  if(assessments[0].status==='accepted_known_risk')requireThat(assessments[0].cohort_sha256===assessments[1].cohort_sha256,'audit input cohort changed between scans')
+  const accepted=assessments[0].status==='accepted_known_risk'
+  return {schema:'dsi-required-dependency-audits/v1',status:accepted?'passed_with_known_upstream_risk':'passed',exception_fixed:!accepted,scopes:['prod','full','python'],assessments}
 }
 function main(){
   const args=process.argv.slice(2)
   if(args.length===4&&args[0]==='--scope'&&args[2]==='--output'){
-    const result=captureAudit(args[1],resolve(args[3]));console.log(JSON.stringify(result));return result.status==='accepted_known_risk'?0:1
+    const result=captureAudit(args[1],resolve(args[3]));console.log(JSON.stringify(result));return PASSING.includes(result.status)?0:1
   }
   if(args.length===2&&args[0]==='--verify-results'){
     const out=resolve(args[1]);mkdirSync(out,{recursive:true})

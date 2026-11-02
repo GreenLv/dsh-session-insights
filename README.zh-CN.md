@@ -37,22 +37,22 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 ## 安装 Bundle
 
-俄语（`--locale ru`）目前仅在源码中提供，尚未发布。使用俄语时，请按下方源码安装步骤选择包含该功能的已审查提交。已发布的 `0.6.1` 包及标签支持 `zh-CN` 和 `en`。
+`0.7.0` Bundle 随版本发布三种 locale——`zh-CN`、`en` 与俄语（`--locale ru`），并提供完整俄语版 [`README.ru-RU.md`](README.ru-RU.md)。
 
-`0.6.1` Bundle 需要 DSH `>=0.2.1-rc.2` 和 Node.js `^22.19.0 || >=24.0.0`，无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。从 0.6.0 升级后请开始新的分析运行。
+`0.7.0` Bundle 需要 DSH `>=0.2.1-rc.2` 和 Node.js `^22.19.0 || >=24.0.0`，无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。0.6.1 创建的 run 保留其记录范围、仍可恢复；旧确定性缓存被自动忽略。
 
-**DSH 兼容性：** 软件包要求 `>=0.2.1-rc.2`——`0.2.1-rc.3` 是本版本主验收宿主，`0.2.1-rc.2` 保留兼容覆盖。DSH `0.2.0-rc.2` 与 `0.2.1-rc.1` 低于支持下限；范围内未来版本按声明准入但尚未实测。契约与服务测试覆盖合成 V4 输入；源码与合成检查保留在 [0.6.0 开发记录](docs/acceptance/v0.6.0-rc2.1-candidate.md)；原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录。范围准入不代表未来宿主已经过实测。详见 [DSH 兼容性](#dsh-兼容性)。
+**DSH 兼容性：** 软件包要求 `>=0.2.1-rc.2`——`0.2.1-rc.5` 是本版本主验收宿主，`0.2.1-rc.2` 保留兼容覆盖。DSH `0.2.0-rc.2` 与 `0.2.1-rc.1` 低于支持下限；范围内未来版本按声明准入但尚未实测。契约与服务测试覆盖合成 V4 输入；原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录。范围准入不代表未来宿主已经过实测。详见 [DSH 兼容性](#dsh-兼容性)。
 
-**已知上游安全缺口：** DSH rc.2/rc.3 固定使用的 `zod@4.4.3` 存在内存耗尽漏洞（GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404）。0.6.1 接受了这项尚未修复的特定风险，日用触发概率未经验证；下次升级 DSH 时必须重新评估。安装前请阅读[风险与例外范围](SECURITY.md#known-upstream-dependency-gap-in-061)。
+**已知上游安全缺口：** 直到 rc.5 的六个 DSH 官方包仍固定使用有漏洞的 `zod@4.4.3`（GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404）。0.6.1 针对该缺口的例外已随其发布集合失效，且未续期：当前候选尚无新的接受决定，发布在维护者作出新的明确决定前保持阻塞。日用触发概率未经验证。安装前请阅读[风险与决定状态](SECURITY.md#known-upstream-dependency-gap)。
 
-下方 registry 命令需要 `0.6.1` 已发布。验收候选时，请安装已审查的 tgz 或源码版本；使用 registry 命令前，请先在 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) 核实版本：
+下方 registry 命令需要 `0.7.0` 已发布。验收候选时，请安装已审查的 tgz 或源码版本；使用 registry 命令前，请先在 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) 核实版本：
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.6.1
+dsh plugin --profile web add dsh-session-insights@0.7.0
 dsh web
 ```
 
-从源码安装时，请把 `REVIEWED_REF` 替换为发布后的 `v0.6.1`，或候选制品清单中记录的完整提交号。安装前先选择该版本；仅克隆仓库会检出默认分支，它可能还是其他版本：
+从源码安装时，请把 `REVIEWED_REF` 替换为发布后的 `v0.7.0`，或候选制品清单中记录的完整提交号。安装前先选择该版本；仅克隆仓库会检出默认分支，它可能还是其他版本：
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
@@ -207,9 +207,9 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 最低支持宿主与实际测试版本分开记录。声明范围准入 0.2.1-rc.2 及以上版本，包括后续预发布版本；输入格式和 API 检查仍会拒绝不兼容的操作。准入规则不代表未来宿主已经过实测。
 
-本版要求 DSH `>=0.2.1-rc.2`，拒绝更旧宿主；输入格式仍为 V4（0.2.1 宿主扩展了 V4 事件词汇，但格式号未变）。原生分析读取宿主恢复后的 V4 快照；可选 Python CLI 只读取 `session.v4.jsonl` 和 `session.v4.jsonl.zstd`。旧原始日志需先由上游 DSH 迁移。当前文件损坏或存在高于 V4 的代数时，不会回退读取旧文件。
+本版要求 DSH `>=0.2.1-rc.2`，拒绝更旧宿主；输入格式仍为 V4（0.2.1 宿主扩展了 V4 事件词汇，但格式号未变，rc.5 亦然）。原生分析读取宿主恢复后的 V4 快照；可选 Python CLI 只读取 `session.v4.jsonl` 和 `session.v4.jsonl.zstd`。旧原始日志需先由上游 DSH 迁移。当前文件损坏或存在高于 V4 的代数时，不会回退读取旧文件。
 
-升级后请新建分析运行：旧 manifest 和缓存不符合新输入契约，不能继续 resume。已经输出的 HTML、JSON 和 Markdown 报告保留。单独安装的 CLI/Skill 需从同一版本更新；安装 Bundle 不会更新它们。
+0.6.1 创建的 run 仍可 resume：输入身份与语义 schema 未变。更早版本的确定性 CLI 缓存被自动忽略，运行会从源重新解析。已经输出的 HTML、JSON 和 Markdown 报告保留。单独安装的 CLI/Skill 需从同一版本更新；安装 Bundle 不会更新它们。
 
 工具工作量包含日志记录的程序化工具调用（PTC）内层调用。JSON 的 `tool_execution` 分别记录外层运输调用、内层执行、失败和未结束调用；每个失败调用结果计一次。若内层调用和外层程序都失败，则保留两个结果，不据此推断它们是否源于同一个原因。权限拒绝不算验证命令执行失败。developer 工具注册消息和定时注入不计人工请求。
 
@@ -258,10 +258,15 @@ DSH 0.2.1-rc.2 仍使用会话格式 4，但新增了必需的 `job/registered`�
 ```bash
 python3 -m pip install -e '.[dev]'
 npm ci --ignore-scripts
+# rc.2 兼容 runtime（声明下限）：
 npm ci --prefix tests/dsh-runtime --ignore-scripts
 DSH_RUNTIME="$PWD/tests/dsh-runtime" python3 -m unittest discover -s tests -v
+# rc.5 主验收 runtime：
+npm ci --prefix tests/dsh-runtime-rc5 --ignore-scripts
+DSH_RUNTIME="$PWD/tests/dsh-runtime-rc5" DSH_EXPECTED_VERSION=0.2.1-rc.5 \
+  python3 -m unittest discover -s tests -v
+DSH_RUNTIME="$PWD/tests/dsh-runtime-rc5" DSH_EXPECTED_VERSION=0.2.1-rc.5 npm test
 python3 scripts/build_native_rules.py --check
-npm test
 python3 scripts/build_fixture.py --check
 python3 scripts/audit_public_tree.py --root .
 ```

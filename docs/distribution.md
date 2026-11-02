@@ -1,5 +1,9 @@
 # Distribution status
 
+## Candidate 0.7.0 (not published)
+
+The 0.7.0 candidate (Russian locale as a shipped locale, DSH `0.2.1-rc.5` as the primary tested host, rc.2 floor unchanged) is in acceptance preparation; see the [candidate acceptance record](acceptance/v0.7.0-candidate.md) and the [bilingual release-body draft](releases/v0.7.0.md). Publication is blocked by the still-open upstream dependency risk decision; npm, GitHub Release, tag and marketplace refresh have not been performed and no public download has been verified for this version.
+
 ## Published 0.6.1 (2026-10-26)
 
 [npm 0.6.1](https://www.npmjs.com/package/dsh-session-insights/v/0.6.1) and the [GitHub Release](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.6.1) publish the same accepted artifact. Tag `v0.6.1` points to `d27d64a2e740b7b5d51217191c30f4dcd0e946e5`; the tarball SHA-256 is `0c684a8d1b60a5ed8fd528f9cf0ca215978703aa32123e0f9272286592bf6fd6`. Anonymous downloads from both channels match, and all seven Release attachments and the bilingual notes were compared with the frozen files.
