@@ -2,7 +2,7 @@
   "schema": "repository-reader-review/v1",
   "status": "passed",
   "audience": {
-    "role": "Plugin users, upgraders from 0.6.1, and security reviewers evaluating the 0.7.0 candidate",
+    "role": "Plugin users, upgraders from 0.6.1, and security reviewers evaluating the repaired 0.7.0 candidate",
     "prior_knowledge": "careful_upgrader"
   },
   "documents": [
@@ -28,28 +28,34 @@
       "path": "CHANGELOG.md",
       "role": "changelog",
       "language": "en",
-      "sha256": "3f2a39b77eda871da0b415ca78a97181c875e7af9fd918209a0a7f25813f24ee"
+      "sha256": "4cb6d17b7780016062769337b7b8ce347bc8eba61b6d4015c6fe721a46c2c211"
     },
     {
       "path": "CHANGELOG.zh-CN.md",
       "role": "changelog",
       "language": "zh-CN",
-      "sha256": "f5d90e75cf9b21dd91c4c96522e21c6cc6aee98982de901fcbcf5cbf12b70756"
+      "sha256": "de91a2ba5b334b56635e80a1c949a27735a3aa1381e8417281eedec401a71c05"
     },
     {
       "path": "SECURITY.md",
       "role": "release_notes",
       "language": "en",
-      "sha256": "18a2607d8246a6eca30930d33e2699359f06e99073e13f1110c9a569b66b3d6c"
+      "sha256": "83b73ba953e064d8c61bf2b0203702d788ac9d73a656e3233a20bd8c42f265e6"
     },
     {
       "path": "docs/releases/v0.7.0.md",
       "role": "release_notes",
       "language": "default",
-      "sha256": "28a0c9776c6fdb183057eabf11fde87beeed168ea2a5fc72087bca9dce50c951"
+      "sha256": "79b683355045f4f86ecf135c1dc87c0b415177645241c6a85c6a59e25731c0f2"
+    },
+    {
+      "path": "docs/acceptance/v0.7.0-candidate.md",
+      "role": "release_notes",
+      "language": "default",
+      "sha256": "74119fb5666fe4e6c73c52fb63dcbc6307fc397a1b0e977ce631b7281576cb25"
     }
   ],
-  "document_set_sha256": "ac9f03d343c1624e3c6d24f5c284fcf7df5e7f591ab0ad2b274fcabfaf6de440",
+  "document_set_sha256": "96110d4d8225354850911b5137bc2d60d9c80d92dc1b51902a3f6824ccd5ea4a",
   "method": {
     "kind": "cold_read",
     "implementation_context_used": false,
@@ -69,7 +75,7 @@
         "SECURITY.md",
         "docs/releases/v0.7.0.md"
       ],
-      "note": "README explains fit, install and first run per locale; changelogs record version differences; bilingual release notes explain the upgrade; SECURITY.md scopes the risk decision."
+      "note": "README explains fit, install and first run per locale; changelogs record version differences; bilingual release notes carry accurate done/pending acceptance scope; SECURITY.md scopes the risk decision."
     },
     {
       "id": "reader_outcome",
@@ -80,18 +86,17 @@
         "README.zh-CN.md",
         "README.ru-RU.md"
       ],
-      "note": "A new reader reaches registry and reviewed-source install paths plus a working first-run command in their own locale; all three READMEs state three shipped locales with Russian first-class, no source-only framing."
+      "note": "A new reader reaches registry and reviewed-source install paths plus a working first-run command in their own locale; three shipped locales with Russian first-class; unchanged by the repair round and re-read against final bytes."
     },
     {
       "id": "term_onboarding",
       "required": true,
       "status": "passed",
       "evidence_paths": [
-        "README.md",
         "CHANGELOG.md",
         "docs/releases/v0.7.0.md"
       ],
-      "note": "Resume, deterministic caches, locales and cleanup terms are introduced before use; upgrade statements agree that 0.6.1 runs stay resumable and no new analysis run is required for this upgrade."
+      "note": "Upgrade terms stay consistent: 0.6.1 runs stay resumable, caches are ignored automatically, and the packaged SKILL.md now states the same migration contract."
     },
     {
       "id": "evidence_boundary",
@@ -100,9 +105,10 @@
       "evidence_paths": [
         "SECURITY.md",
         "CHANGELOG.md",
-        "docs/releases/v0.7.0.md"
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
       ],
-      "note": "Historical 0.6.1 exception, current unauthorized_findings status with publication block, and explicit non-claims (reachability, trigger probability) stay separated; anchors used by readers exist."
+      "note": "Counts are time-scoped (23–24 entries across 2026-11-02 rc.5 scans, one single advisory); the audit repair is nowhere claimed as risk acceptance; publication stays blocked; the single canonical artifact is named with the pre-repair artifact relabelled historical."
     },
     {
       "id": "density_and_order",
@@ -110,11 +116,10 @@
       "status": "passed",
       "evidence_paths": [
         "README.md",
-        "README.zh-CN.md",
-        "README.ru-RU.md",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "docs/acceptance/v0.7.0-candidate.md"
       ],
-      "note": "Identity 0.7.0, rc.5 primary / rc.2 floor, locale lists, Node engines and dev-command blocks agree across languages before deeper detail appears."
+      "note": "Frozen identity (87038935…/c1be1ba6…/226,799 B/29 files) agrees across the identity table, the canonical-artifact section and the repair-round re-verification; GUI gate is required-and-pending everywhere."
     },
     {
       "id": "language_independence",
@@ -125,12 +130,12 @@
         "CHANGELOG.zh-CN.md",
         "docs/releases/v0.7.0.md"
       ],
-      "note": "The Russian README is fully translated with no untranslated paragraphs; Chinese changelog and Chinese release-notes sections read independently of the English text."
+      "note": "Russian README fully translated; Chinese changelog and release-notes sections read independently; the previously noted translation drift (新维护者) is corrected to the maintainer making a new decision."
     }
   ],
   "findings": [],
   "limitations": [
-    "Cold read covers reader comprehension of the frozen bytes; native host, real-model, GUI and publication checks are separate gates recorded in docs/acceptance/v0.7.0-candidate.md and remain pending or separately recorded.",
+    "Cold read covers reader comprehension of the frozen bytes; the Windows batch, on-screen GUI gates, exact-commit CI and the dependency-risk decision remain separate pending gates.",
     "The release notes reference the candidate acceptance record by its in-repository path; the published Release body will link the path as it exists at the release tag."
   ]
 }
