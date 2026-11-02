@@ -7,6 +7,7 @@ import {readFile,writeFile,mkdtemp,rm,cp,mkdir,readdir as readDir,realpath} from
 import {createHash} from 'node:crypto'
 import {tmpdir} from 'node:os'
 import assert from 'node:assert/strict'
+import {cleanupPreservingFailure} from './acceptance_cleanup.mjs'
 const runtime=resolve(process.argv[2] || ''), packageRoot=resolve(process.argv[3] || '.')
 if(!runtime)throw new Error('target runtime root required (tests/dsh-runtime or tests/dsh-runtime-rc3)')
 if(!runtime) throw new Error('runtime required')
@@ -38,9 +39,12 @@ const {releasedV4SessionFormatCodec}=await load('@deepseek-ai/dsh-session-format
 // that tree's official packages. The staged copy's identity is verified
 // byte-for-byte against the production plugin before use, and its resolved
 // dsh-llm version must equal the runtime's target.
-const stagedRoot=join(resolve(runtime),'node_modules','.dsh-session-insights-under-test')
+// Own a unique staging directory; do not delete a pre-existing directory from
+// an earlier run or another process.
+const stagedRoot=await mkdtemp(join(resolve(runtime),'node_modules','.dsh-session-insights-under-test-'))
+let primaryFailure,result,contextCleaned=true
+try {
 const stagedPlugin=join(stagedRoot,'plugin')
-await rm(stagedRoot,{recursive:true,force:true})
 await mkdir(dirname(stagedPlugin),{recursive:true})
 await cp(join(packageRoot,'plugin'),stagedPlugin,{recursive:true})
 const stagedFiles=await fileTreeDigest(stagedPlugin)
@@ -60,6 +64,11 @@ const plugin=await import(pathToFileURL(join(stagedPlugin,'lib/index.js')).href)
 const rows=(await readFile(new URL('../tests/fixtures/synthetic-session.jsonl',import.meta.url),'utf8')).trim().split('\n').map(JSON.parse)
 const {type,...header}=rows[0]
 const ctx=new Context()
+contextCleaned=false
+let folder,sceneFailure
+// Own the context immediately, including registration failures before the
+// separate synthetic-session directory has been created.
+try {
 const sessions=new SessionStore(ctx)
 const query=new SessionQueryEngine(ctx)
 new SystemPrompt(ctx,{})
@@ -113,8 +122,7 @@ live.append('step/end',{turn:2,step:1})
 live.append('turn/end',{turn:2,reason:{kind:'completed'}})
 // Encode actual session events, write to an isolated file and restore using the
 // same official strict catalog used by persistence, then create a new Session.
-const folder=await mkdtemp(join(tmpdir(),'insights-dsh-services-'))
-try {
+folder=await mkdtemp(join(tmpdir(),'insights-dsh-services-'))
  const encoded=[{type:'session',...live.header},...live.snapshotEvents().map(e=>releasedV4SessionFormatCodec.encodeEvent(e))]
  const path=join(folder,'session.v4.jsonl')
  await writeFile(path,encoded.map(r=>JSON.stringify(r)).join('\n')+'\n')
@@ -148,7 +156,24 @@ try {
    setImmediate(()=>controller.abort());await assert.rejects(cancelled,e=>e.code==='SESSION_QUERY_ABORTED');assert.equal(closed,2)
    mode='corrupt';await assert.rejects(coldQuery.observeSession(coldHeader.id,{projectionMode:'none'}),e=>e.code==='SESSION_QUERY_CORRUPT_SESSION');assert.equal(closed,3)
  } finally {await coldCtx.fiber.dispose()}
- var result={status:'pass',scope:'real target Session/query/codec, synthetic input; no model or GUI',persistedEvents:artifact.events.length,noticeReopened:true,queryDetached:true,realCordisRegistrationReload:true,developerHistoryReopened:true,coldReadClosed:closed,coldCancelled:true,coldCorruptionPropagated:true}
-} finally {await ctx.fiber.dispose();await rm(folder,{recursive:true,force:true})}
+ result={status:'pass',scope:'real target Session/query/codec, synthetic input; no model or GUI',persistedEvents:artifact.events.length,noticeReopened:true,queryDetached:true,realCordisRegistrationReload:true,developerHistoryReopened:true,coldReadClosed:closed,coldCancelled:true,coldCorruptionPropagated:true}
+} catch(error) {sceneFailure=error;throw error}
+finally {
+ const cleanup=[async()=>{await ctx.fiber.dispose();contextCleaned=true}]
+ if(folder)cleanup.push(async()=>{
+  if(!contextCleaned)throw new Error('synthetic session tree retained: context disposal failed')
+  await rm(folder,{recursive:true,force:true})
+ })
+ await cleanupPreservingFailure(sceneFailure,cleanup)
+}
 
+} catch(error) {
+  primaryFailure=error
+  throw error
+} finally {
+  await cleanupPreservingFailure(primaryFailure,[async()=>{
+    if(!contextCleaned)throw new Error('plugin staging retained: context disposal failed')
+    await rm(stagedRoot,{recursive:true,force:true})
+  }])
+}
 console.log(JSON.stringify(result))

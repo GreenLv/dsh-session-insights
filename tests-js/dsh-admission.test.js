@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { buildReport } from '../plugin/lib/analyzer.js'
 import { validateV4 } from '../plugin/lib/v4.js'
-import { _test, apply } from '../plugin/lib/index.js'
+import {loadTargetPlugin} from './fixtures/target-runtime.mjs'
+const {_test,apply}=await loadTargetPlugin()
 const rows = JSON.parse('[' + readFileSync(new URL('../tests/fixtures/synthetic-session.jsonl',import.meta.url),'utf8').trim().split('\n').join(',') + ']')
 const snapshot = () => { const [header,...events] = structuredClone(rows); delete header.type; return {session:header,events,inheritedEventCount:0} }
 const options = {now:rows[0].createdAt+86400000,days:30,privacy:'redacted',locale:'en',analysis_depth:'evidence'}

@@ -35,7 +35,13 @@ jobs:
         env:
           DSH_RUNTIME: tests/dsh-runtime
       - run: python scripts/build_native_rules.py --check
+      # The contract job covers JS on all three OSes with rc.3 and on Linux
+      # and Windows with rc.2. Keep macOS/rc.2 once, not once per Python.
       - run: npm test
+        if: matrix.os == 'macos-latest' && matrix.python == '3.12'
+        env:
+          DSH_RUNTIME: tests/dsh-runtime
+          DSH_EXPECTED_VERSION: '0.2.1-rc.2'
       - run: python scripts/build_fixture.py --check
       - run: python scripts/audit_public_tree.py --root .
 
@@ -118,6 +124,9 @@ jobs:
       - run: node scripts/dsh-contract-tests.mjs ${{ matrix.runtime }}
       - run: node scripts/dsh-services.mjs ${{ matrix.runtime }}
       - run: npm test
+        env:
+          DSH_RUNTIME: ${{ matrix.runtime }}
+          DSH_EXPECTED_VERSION: ${{ matrix.dsh }}
       - name: Freeze the candidate artifact
         # Exactly one producer: the rc.3 primary ubuntu/22.19.0 cell. The rc.2
         # compatibility cell runs the same tests but never freezes or uploads

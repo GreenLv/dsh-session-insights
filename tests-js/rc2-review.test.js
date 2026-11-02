@@ -9,7 +9,8 @@ import {Store} from '../plugin/lib/storage.js'
 import {loadManifest} from '../plugin/lib/semantic.js'
 
 const rows=readFileSync(new URL('../tests/fixtures/synthetic-session.jsonl',import.meta.url),'utf8').trim().split('\n').map(JSON.parse)
-const {apply, _test}=await import('../plugin/lib/index.js')
+import {loadTargetPlugin} from './fixtures/target-runtime.mjs'
+const {apply,_test}=await loadTargetPlugin()
 const signal=new AbortController().signal
 async function scope(operation) {
   const home=mkdtempSync(join(tmpdir(),'si-review 中文 空格-')),previous=process.env.DSH_HOME

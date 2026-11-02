@@ -14,7 +14,8 @@ import {
 } from '../plugin/lib/semantic.js'
 import { Store } from '../plugin/lib/storage.js'
 import { validateV4 } from '../plugin/lib/v4.js'
-import { apply, _test } from '../plugin/lib/index.js'
+import {loadTargetPlugin} from './fixtures/target-runtime.mjs'
+const {apply,_test}=await loadTargetPlugin()
 
 const NOW = 1786423200000
 const urlVectors = JSON.parse(readFileSync(new URL('../tests/fixtures/url-sanitize-vectors.json', import.meta.url), 'utf8'))

@@ -1,18 +1,19 @@
 // Production plugin loaded through real Cordis sibling-service contexts.
 // Controlled approval decisions exercise lookup and ownership; the separate
 // native approval scene verifies the official ApprovalService audit/persistence.
-import {createRequire} from 'node:module'
 import {pathToFileURL} from 'node:url'
-import {join,resolve} from 'node:path'
+import {join} from 'node:path'
 import {tmpdir} from 'node:os'
 import {mkdtempSync,rmSync,existsSync,readFileSync} from 'node:fs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import * as plugin from '../plugin/lib/index.js'
 import {Store} from '../plugin/lib/storage.js'
+import {targetRequire,assertTargetPackage,loadTargetPlugin} from './fixtures/target-runtime.mjs'
 
-const require=createRequire(join(resolve(process.env.DSH_RUNTIME || 'tests/dsh-runtime'),'package.json'))
+const require=targetRequire
 const load=async name=>import(pathToFileURL(require.resolve(name)).href)
+for(const name of ['@deepseek-ai/dsh-system-prompt','@deepseek-ai/dsh-tools','@deepseek-ai/dsh-commands'])assertTargetPackage(name)
+const plugin=await loadTargetPlugin()
 const {Context}=await load('@deepseek-ai/cordis')
 const {SystemPrompt}=await load('@deepseek-ai/dsh-system-prompt')
 const {ToolRuntime}=await load('@deepseek-ai/dsh-tools')

@@ -28,7 +28,8 @@ import {
   selectFamilies,
   loadManifest,
 } from '../plugin/lib/semantic.js'
-import { _test, apply } from '../plugin/lib/index.js'
+import {loadTargetPlugin} from './fixtures/target-runtime.mjs'
+const {_test,apply}=await loadTargetPlugin()
 
 function fixture() {
   const now = Date.now(),

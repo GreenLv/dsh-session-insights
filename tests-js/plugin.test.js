@@ -4,7 +4,8 @@ import assert from 'node:assert/strict'
 import { access, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { apply, inject, _test } from '../plugin/lib/index.js'
+import {loadTargetPlugin} from './fixtures/target-runtime.mjs'
+const {apply,inject,_test}=await loadTargetPlugin()
 
 function syntheticSessions(count = 1) {
   const now = Date.now()

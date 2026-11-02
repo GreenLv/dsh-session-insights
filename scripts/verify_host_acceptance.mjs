@@ -5,9 +5,10 @@
 import {createRequire} from 'node:module'
 import {pathToFileURL} from 'node:url'
 import {resolve, join, dirname, basename} from 'node:path'
-import {readFile, writeFile, mkdir, mkdtemp, rm, readdir, symlink, cp, realpath, stat} from 'node:fs/promises'
+import {readFile, writeFile, mkdir, mkdtemp, rm, rmdir, readdir, symlink, cp, realpath, stat, lstat} from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import {run, digest, fileManifest, inspectRuntime, HOST_TARGETS, MINIMUM_DSH_RANGE, PRODUCT_VERSION} from './acceptance_identity.mjs'
+import {classifyAcceptanceError} from './acceptance_diagnostics.mjs'
 
 const TOOLS = ['session_insights_prepare', 'session_insights_get_batch', 'session_insights_submit_batch', 'session_insights_get_aggregate', 'session_insights_submit_aggregate', 'session_insights_finalize', 'session_insights_cleanup']
 const REQUIRED = ['artifact_digest', 'artifact_identity', 'runtime_closure', 'host_cli_identity', 'install_official_cli', 'installed_manifest', 'uninstall_official_cli', 'reload_official_cli', 'reloaded_manifest', 'loaded_manifest', 'load_and_register', 'project_isolation', 'deterministic_report', 'cancel_recovers', 'rerun_after_cancel', 'registration_reload', 'dispose_cleanup']
@@ -54,6 +55,16 @@ async function findInstalled(root) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2))
+  await mkdir(dirname(options.annex), {recursive: true})
+  const reservation = options.annex + '.reservation'
+  // Claim this result path before installing anything. An existing receipt,
+  // diagnostic or live/stale reservation requires a different batch path.
+  await mkdir(reservation)
+  try {
+  for (const path of [options.annex, options.annex + '.diagnostic.json']) {
+    try { await lstat(path); throw new Error('existing acceptance result') }
+    catch (error) { if (error.code !== 'ENOENT') throw error }
+  }
   const annex = {
     schema: 'native-acceptance/v2', status: 'failed', product: 'dsh-session-insights', gate_profile: 'portable-installed-artifact',
     repository: {url: 'https://github.com/GreenLv/dsh-session-insights', commit: options.commit},
@@ -63,7 +74,7 @@ async function main() {
     run: {started_at: new Date().toISOString(), finished_at: '', run_url: process.env.GITHUB_RUN_ID ? `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null},
     unperformed_actions: ['commit', 'push', 'merge', 'tag', 'package_publish', 'release', 'public_promotion'],
   }
-  let stage = 'artifact_digest', work, ctx, handle, savedHome = process.env.DSH_HOME
+  let stage = 'artifact_digest', work, ctx, handle, savedHome = process.env.DSH_HOME, quiescenceUnknown = false
   const record = (id, ok, note, subject = annex.artifact ? {kind: 'artifact', id: annex.artifact.sha256} : {kind: 'commit', id: options.commit}) => {
     annex.gates.push({id, required: true, status: ok ? 'passed' : 'failed', subject, exit_code: ok ? 0 : 1, note,
       evidence: {mode: 'executed', source_result_sha256: null, source_gate_id: null, invalidation_reason: null}})
@@ -208,29 +219,46 @@ async function main() {
       assert.ok(TOOLS.every(name => ctx.tools.get(name))); assert.ok(ctx.commands.find(undefined, 'session-insights'))
       record('registration_reload', true, 'dispose and fresh registration; repeated old disposer preserves new owner')
     })
-  } catch {
+  } catch (error) {
+    // A killed/timed-out subprocess can leave descendants using this tree.
+    // execFile only confirms the direct child, so retain the tree in that case.
+    quiescenceUnknown = Boolean(error?.killed || error?.signal || error?.code === 'ETIMEDOUT' || error?.code === 'ABORT_ERR' || error?.name === 'AbortError')
+    // Retain only bounded classifications; error messages/subprocess output may
+    // contain private paths, access URLs or credentials.
+    try {
+      await mkdir(dirname(options.annex), {recursive: true})
+      await writeFile(options.annex + '.diagnostic.json', JSON.stringify(classifyAcceptanceError(stage,error)) + '\n', {mode: 0o600, flag: 'wx'})
+    } catch { console.error('[failed] diagnostic_write') }
     if (!annex.gates.some(g => g.id === stage)) {
       annex.gates.push({id: stage, required: true, status: 'failed', subject: annex.artifact ? {kind: 'artifact', id: annex.artifact.sha256} : {kind: 'commit', id: options.commit}, exit_code: 1, note: 'operation failed; no private paths or subprocess output published', evidence: {mode: 'executed', source_result_sha256: null, source_gate_id: null, invalidation_reason: null}})
       console.error(`[failed] ${stage}`)
     }
   } finally {
+    let contextDisposed = !ctx
     if (ctx) {
-      try { await ctx.fiber.dispose(); assert.ok(!ctx.tools || TOOLS.every(name => !ctx.tools.get(name))); record('dispose_cleanup', true, 'context disposed and tools absent') }
+      try { await ctx.fiber.dispose(); assert.ok(!ctx.tools || TOOLS.every(name => !ctx.tools.get(name))); contextDisposed = true; record('dispose_cleanup', true, 'context disposed and tools absent') }
       catch { if (!annex.gates.some(g => g.id === 'dispose_cleanup')) annex.gates.push({id: 'dispose_cleanup', required: true, status: 'failed', subject: {kind: 'commit', id: options.commit}, exit_code: 1, note: 'context disposal failed', evidence: {mode: 'executed', source_result_sha256: null, source_gate_id: null, invalidation_reason: null}}) }
     }
-    try {
-      if (work) { await rm(work, {recursive: true, force: true, maxRetries: 3}); await assert.rejects(stat(work), {code: 'ENOENT'}) }
-      annex.cleanup = {status: 'passed', remaining_ids: []}
-    } catch { annex.cleanup = {status: 'failed', remaining_ids: ['scratch-work']} }
+    if (!contextDisposed || quiescenceUnknown) {
+      annex.cleanup = {status: 'failed', remaining_ids: [
+        ...(!contextDisposed ? ['context'] : []), ...(quiescenceUnknown ? ['process-tree'] : []), ...(work ? ['scratch-work'] : []),
+      ]}
+    } else {
+      try {
+        if (work) { await rm(work, {recursive: true, force: true, maxRetries: 3}); await assert.rejects(stat(work), {code: 'ENOENT'}) }
+        annex.cleanup = {status: 'passed', remaining_ids: []}
+      } catch { annex.cleanup = {status: 'failed', remaining_ids: ['scratch-work']} }
+    }
     if (savedHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = savedHome
     for (const id of REQUIRED) if (!annex.gates.some(g => g.id === id)) annex.gates.push({id, required: true, status: 'not_run', subject: {kind: 'commit', id: options.commit}, exit_code: null, note: 'prerequisite failed', evidence: {mode: 'executed', source_result_sha256: null, source_gate_id: null, invalidation_reason: null}})
     for (const id of ['full_profile_boot', 'real_jsonl_persistence', 'real_agent_command', 'real_model_workflow']) annex.gates.push({id, required: false, status: 'not_run', subject: {kind: 'commit', id: options.commit}, exit_code: null, note: 'separate actual-host acceptance; outside this portable service gate', evidence: {mode: 'executed', source_result_sha256: null, source_gate_id: null, invalidation_reason: null}})
     annex.status = annex.gates.every(g => !g.required || g.status === 'passed') && annex.cleanup.status === 'passed' ? 'passed' : 'failed'
     annex.run.finished_at = new Date().toISOString()
-    await mkdir(dirname(options.annex), {recursive: true}); await writeFile(options.annex, JSON.stringify(annex, null, 2) + '\n')
+    await mkdir(dirname(options.annex), {recursive: true}); await writeFile(options.annex, JSON.stringify(annex, null, 2) + '\n', {flag: 'wx'})
   }
   return annex.status === 'passed' ? 0 : 1
+  } finally {await rmdir(reservation)}
 }
 
 main().then(code => {process.exitCode = code}, () => {console.error('invalid acceptance invocation'); process.exitCode = 1})
