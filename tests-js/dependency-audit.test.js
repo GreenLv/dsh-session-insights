@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync,chmodSync} from 'node:fs'
+import fs, {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync} from 'node:fs'
+import {syncBuiltinESMExports} from 'node:module'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {spawnSync} from 'node:child_process'
@@ -435,6 +436,9 @@ test('an A->B->A source swap during the runner keeps the capture honest',()=>out
     // Concurrent writer: B into the SOURCE tree, restore A afterwards.
     writeFileSync(join(root,'package.json'),realManifest)
     writeFileSync(join(root,'package-lock.json'),realLock)
+    assert.notEqual(options.cwd,root,'scanner must not read the mutable source tree')
+    assert.deepEqual(readFileSync(join(options.cwd,'package.json')),manifest)
+    assert.deepEqual(readFileSync(join(options.cwd,'package-lock.json')),lock)
     const scan=cleanScan()
     writeFileSync(join(root,'package.json'),manifest)
     writeFileSync(join(root,'package-lock.json'),lock)
@@ -452,37 +456,51 @@ test('an A->B->A source swap during the runner keeps the capture honest',()=>out
 test('a real finding input is scanned as itself even when the source is swapped to clean',()=>outputs(dir=>{
   const root=stageRoot(false)
   const {manifest,lock}=cleanTreeBuffers()
-  writeFileSync(join(root,'package.json'),manifest)
-  writeFileSync(join(root,'package-lock.json'),lock)
+  const candidateManifest=files['package.json'],candidateLock=files['package-lock.json']
   const knownScan=()=>({status:1,signal:null,stdout:raw,stderr:''})
-  const result=captureAudit('prod',join(dir,'prod'),{root,runner:(command,args,options)=>{
-    // Writer swaps the vulnerable candidate lock in for the scan window...
-    writeFileSync(join(root,'package.json'),files['package.json'])
-    writeFileSync(join(root,'package-lock.json'),files['package-lock.json'])
-    const scan=knownScan()
+  const drift=(command,args,options)=>{
+    // A is the vulnerable candidate. Only the original source becomes clean B.
     writeFileSync(join(root,'package.json'),manifest)
     writeFileSync(join(root,'package-lock.json'),lock)
+    assert.notEqual(options.cwd,root,'scanner must not read the mutable source tree')
+    assert.deepEqual(readFileSync(join(options.cwd,'package.json')),candidateManifest)
+    assert.deepEqual(readFileSync(join(options.cwd,'package-lock.json')),candidateLock)
+    const scan=knownScan()
+    writeFileSync(join(root,'package.json'),candidateManifest)
+    writeFileSync(join(root,'package-lock.json'),candidateLock)
     return scan
-  }})
-  // ...but npm scanned the bound clean snapshot, so no clean result can be
-  // manufactured from a scan whose bytes never contained the finding.
-  assert.equal(result.status,'unauthorized_findings')
+  }
+  for(const scope of ['prod','full']){
+    const result=captureAudit(scope,join(dir,scope),{root,runner:drift})
+    assert.equal(result.status,'unauthorized_findings')
+    assert.equal(result.input_binding.lock_sha256,digest(candidateLock))
+  }
+  assert.throws(()=>verifyResults(dir,{prod:'success',full:'success',python:'success'},{root}),/required npm assessment missing or failed/)
   rmSync(root,{recursive:true,force:true})
 }))
 test('snapshot cleanup failure fails the capture with a recorded reason',()=>outputs(dir=>{
   const root=stageRoot(false)
   const cleanScan=()=>({status:0,signal:null,stdout:JSON.stringify(cleanReport),stderr:''})
-  let scanDir=null
-  const result=captureAudit('prod',join(dir,'prod'),{root,runner:(command,args,options)=>{
-    const scan=cleanScan()
-    // Make the snapshot directory undeletable while the capture finishes.
-    scanDir=options.cwd;chmodSync(scanDir,0o555)
-    return scan
-  }})
+  let scanDir=null,result
+  const originalRemove=fs.rmSync
+  // Directory chmod is not a portable deletion refusal on Windows. Inject one
+  // EACCES at the actual cleanup call and restore the builtin before any other
+  // fixture cleanup; the production entrypoint and receipt remain unchanged.
+  fs.rmSync=(path,options)=>{
+    if(scanDir&&path===scanDir)throw Object.assign(new Error('synthetic snapshot removal refusal'),{code:'EACCES'})
+    return originalRemove(path,options)
+  }
+  syncBuiltinESMExports()
+  try{
+    result=captureAudit('prod',join(dir,'prod'),{root,runner:(command,args,options)=>{
+      scanDir=options.cwd
+      return cleanScan()
+    }})
+  }finally{fs.rmSync=originalRemove;syncBuiltinESMExports()}
   assert.equal(result.status,'failed')
-  assert.match(String(result.reason),/cleanup failed/)
-  // Restore permissions so the evidence directory can be released.
-  if(scanDir)chmodSync(scanDir,0o755)
+  assert.match(String(result.reason),/scan snapshot cleanup failed: synthetic snapshot removal refusal/)
+  assert.equal(JSON.parse(readFileSync(join(dir,'prod','result.json'),'utf8')).status,'failed')
+  if(scanDir)rmSync(scanDir,{recursive:true,force:true})
   rmSync(root,{recursive:true,force:true})
 }))
 test('scan failure and cancellation still refuse under the snapshot binding',()=>outputs(dir=>{
