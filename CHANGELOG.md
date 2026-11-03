@@ -6,9 +6,26 @@ Public releases are listed newest first.
 
 ## Unreleased
 
+Everything below is the staged 0.7.0 candidate. It is not published yet; the section is dated when the release is cut.
+
 ### Added
 
-- Russian (`ru`) locale for the deterministic report, HTML dashboard, semantic prompts, native runtime and Python CLI, with a full `README.ru-RU.md`.
+- Russian (`ru`) is now a published locale, no longer source-only: the deterministic report, HTML dashboard, semantic prompts, native runtime and Python CLI all ship the full Russian catalog, and `README.ru-RU.md` documents the plugin in Russian. Message texts moved into keyed catalogs, so the semantic-prompt contract (untrusted-data notices and prompt rules) is written natively per locale instead of one English constant for every language. `ru` is accepted in the recorded run scope, resume validation and every entry that already accepted `en`/`zh-CN`.
+- DSH `0.2.1-rc.5` is the primary acceptance host. The declared floor stays `>=0.2.1-rc.2`, and `0.2.1-rc.2` keeps compatibility coverage; the previous rc.3 host trees are no longer maintained, consistent with the contributing policy of not maintaining historical hosts.
+
+### Changed
+
+- Acceptance tooling tells the truth about failures and cleanup: failing steps and cleanup failures return their real exit status, an isolated result directory is never overwritten or silently reused, cleanup keeps the scene when the stop state is unclear, and public diagnostics no longer carry arbitrary exception text or machine paths. Fault probes are CRLF-portable.
+- Tests run the runtime they claim: every CI cell installs and names its exact DSH runtime (rc.5 primary, rc.2 compatibility), duplicate suites were reduced, and the candidate artifact is packed from the actual PR head instead of relabelling GitHub's merge checkout.
+
+### Security
+
+- The known upstream dependency gap remains unresolved: six official DSH rc.5 packages pin `zod@4.4.3` ([GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), patched in 4.6.6); nested pinned copies and this project’s peer closure remain vulnerable despite the host root resolving 4.6.7. The 0.6.1 exception expired and was not renewed. On 2026-11-03 the maintainer made a new, limited decision accepting this risk for 0.7.0 and the exact reviewed rc.2/rc.5 cohort: 13 bound files, the host queue and the reviewed 23- and 24-entry report graphs. In local checks, fresh production and full npm scans each exited 1 with the single advisory and 23 affected entries; the policy-aware assessment classified both as `accepted_known_risk`, and the reviewed 24-entry fixture was also accepted. This is neither a clean scan nor an exact-commit CI result. New findings or cohort drift fail closed. The replacement artifact, affected installation identity checks and exact-commit CI remain pending. See [Security Policy](SECURITY.md#known-upstream-dependency-gap).
+- The audit gate now accepts a genuinely clean scan (with a valid, non-empty dependency inventory) without any exception file; network failures, invalid JSON, missing steps and new high/critical findings still fail closed.
+
+### Migration
+
+- The analyzer version string is `0.7.0-v4-dsh021rc2.5`; the input identity and semantic schema (`1.2.0`) are unchanged, so 0.6.1 native runs keep their recorded scope and stay resumable, and existing HTML/JSON/Markdown reports remain openable. Deterministic CLI caches written by 0.6.1 are ignored automatically and re-parsed from source; deleting them stays an optional manual cleanup via `dsh-session-insights cache`.
 
 ## 0.6.1 - 2026-10-26
 
@@ -16,7 +33,7 @@ Security and correctness patch for 0.6.0: closes the output-boundary, cache-mini
 
 ### Security
 
-- Known upstream gap: DSH rc.2/rc.3 pins `zod@4.4.3`, affected by GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404 (memory exhaustion; patched in 4.6.6). The maintainer accepts only this risk for 0.6.1 on the current host dependency cohort; scans stay active and other high/critical findings still block. The exception expires on a release-version or DSH dependency-cohort change and must be reassessed at the next DSH upgrade. This is not a fix or a low-probability claim; see [Security Policy](SECURITY.md#known-upstream-dependency-gap-in-061).
+- Known upstream gap: DSH rc.2/rc.3 pins `zod@4.4.3`, affected by GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404 (memory exhaustion; patched in 4.6.6). The maintainer accepts only this risk for 0.6.1 on the current host dependency cohort; scans stay active and other high/critical findings still block. The exception expires on a release-version or DSH dependency-cohort change and must be reassessed at the next DSH upgrade. This is not a fix or a low-probability claim; see the [Security Policy as recorded at v0.6.1](https://github.com/GreenLv/dsh-session-insights/blob/v0.6.1/SECURITY.md#known-upstream-dependency-gap-in-061).
 
 - Derived CLI/bridge outputs (main file, HTML companion JSON, atomic temporaries) are boundary-checked before the first byte is written: targets inside the sessions source tree, pre-existing symlinks, hard links, non-regular files and NTFS alternate-data-stream names are refused with an actionable error, the previous report bytes stay untouched, and main/companion paths can never overwrite each other (`report --format html --output audit.json` writes `audit.data.json`).
 - The deterministic parse cache is minimized and scope-gated: a bounded header read decides window/project scope first, so out-of-scope logs are never parsed and never cached; persisted entries carry only a whitelisted, pre-projected session projection (no raw cwd, job registry, team roster, provider metadata or topic text), new POSIX cache directories/files use `0700`/`0600` regardless of umask (Windows uses ACLs, including private-parent inheritance and runtime-created private ACLs), and the cache schema moves to version 9 (version-8 entries are ignored, never auto-imported or auto-deleted). A new `cache` CLI subcommand previews per-root file counts and sizes and deletes listed roots only with an explicit `--delete`.

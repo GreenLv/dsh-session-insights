@@ -11,6 +11,7 @@ reports/
 *.data.json
 
 node_modules/
+/.pnpm-store/
 
 # Local development task plans stay out of the public tree.
 docs/DEVELOPMENT_PLAN_*.md

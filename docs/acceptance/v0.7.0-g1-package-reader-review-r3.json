@@ -1,0 +1,151 @@
+{
+  "schema": "repository-reader-review/v1",
+  "status": "passed",
+  "audience": {
+    "role": "Plugin users, 0.6.1 upgraders, and maintainers deciding the known-risk boundary",
+    "prior_knowledge": "careful_upgrader"
+  },
+  "documents": [
+    {
+      "path": "README.md",
+      "role": "readme",
+      "language": "en",
+      "sha256": "b5bb154f7ce4a34a834c7c297dd87035f595e69e86221a0ed9868876b9af629e"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "role": "readme",
+      "language": "zh-CN",
+      "sha256": "745d4495c099dedfe52d7b1ef6ee4ce5daa1b59c4a87d1477bf69998db4c21bb"
+    },
+    {
+      "path": "README.ru-RU.md",
+      "role": "readme",
+      "language": "ru-RU",
+      "sha256": "e2791e75a118a137542a9fbb420f7c222d836f3550105f4e92f503c748818c21"
+    },
+    {
+      "path": "SECURITY.md",
+      "role": "release_notes",
+      "language": "en",
+      "sha256": "00f4d29ad2d912ddfd3efd66ae11348e387ac4e8010f47459eec64d19cbd3f8a"
+    }
+  ],
+  "document_set_sha256": "892cd30527f673280e7773ae5351869c459ee424b3debbfe237466802b8c9fe8",
+  "method": {
+    "kind": "cold_read",
+    "implementation_context_used": false,
+    "claim_ledger_used": false
+  },
+  "checks": [
+    {
+      "id": "document_role",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "SECURITY.md"
+      ],
+      "note": "Each README covers first use and upgrade; SECURITY.md supplies security and risk guidance and is represented as release_notes because the schema lacks a policy role."
+    },
+    {
+      "id": "reader_outcome",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "SECURITY.md"
+      ],
+      "note": "Each language supplies prerequisites, conditional installation, locale command, expected HTML/JSON, wait, model privacy choice and upgrade limits; the policy explains the risk scope."
+    },
+    {
+      "id": "term_onboarding",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "SECURITY.md"
+      ],
+      "note": "The first path names session input and local report output, introduces host and Bundle context, and places technical mechanics later."
+    },
+    {
+      "id": "evidence_boundary",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "SECURITY.md"
+      ],
+      "note": "All README risk summaries agree with the security policy on the limited 0.7.0 decision and unresolved vulnerability; readiness is separate and linked to an acceptance record."
+    },
+    {
+      "id": "density_and_order",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "SECURITY.md"
+      ],
+      "note": "Prerequisite and risk cautions precede installation; provider handling, costs and disclosure limits precede the first semantic command. Detailed operation follows."
+    },
+    {
+      "id": "language_independence",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "SECURITY.md"
+      ],
+      "note": "English, Chinese and Russian were fully read independently; each gives its locale command, output, waiting, default provider boundary, upgrade and risk summary."
+    }
+  ],
+  "findings": [
+    {
+      "code": "legacy_resume_en",
+      "severity": "advisory",
+      "document": "README.md",
+      "line": 214,
+      "message": "The broad 0.6.1 resume statement could identify that legacy Python runs must be finished with the CLI, as SECURITY.md:46 explains."
+    },
+    {
+      "code": "legacy_resume_zh",
+      "severity": "advisory",
+      "document": "README.zh-CN.md",
+      "line": 214,
+      "message": "The broad 0.6.1 resume statement could identify that legacy Python runs must be finished with the CLI, as SECURITY.md:46 explains."
+    },
+    {
+      "code": "legacy_resume_ru",
+      "severity": "advisory",
+      "document": "README.ru-RU.md",
+      "line": 214,
+      "message": "The broad 0.6.1 resume statement could identify that legacy Python runs must be finished with the CLI, as SECURITY.md:46 explains."
+    },
+    {
+      "code": "risk_details_english",
+      "severity": "advisory",
+      "document": "README.ru-RU.md",
+      "line": 46,
+      "message": "The Russian summary describes the risk decision but its linked security policy provides detailed scope and reassessment triggers only in English."
+    }
+  ],
+  "limitations": [
+    "Prepack review covers four named documents; SECURITY.md uses release_notes as the closest schema role but is a security policy.",
+    "No implementation, claim ledger, other review or operational behavior was examined; factual accuracy and installed behavior are not established.",
+    "No native, model, UI, CI, artifact freeze or public release evidence is established by this receipt.",
+    "Detailed security policy is English only. Linked acceptance record content and package availability, external links, and operational commands were not tested.",
+    "Any later edit to a bound document invalidates this receipt and requires a fresh cold read rather than digest replacement."
+  ]
+}

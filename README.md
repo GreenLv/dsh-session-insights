@@ -37,22 +37,22 @@ The HTML file contains its own styles and data, so you can keep it locally and o
 
 ## Install the Bundle
 
-Russian (`--locale ru`) is available in the source tree and is not yet published. To use it, follow the source installation steps below with a reviewed commit containing Russian support. The published `0.6.1` bundle and tag support `zh-CN` and `en`.
+The `0.7.0` Bundle ships three locales — `zh-CN`, `en`, and Russian (`--locale ru`) — with a full [`README.ru-RU.md`](README.ru-RU.md).
 
-The `0.6.1` Bundle requires DSH `>=0.2.1-rc.2` and Node.js `^22.19.0 || >=24.0.0`, without Python. The optional file-log CLI still requires Python 3.11+. Start a new analysis run after upgrading from 0.6.0.
+The `0.7.0` Bundle requires DSH `>=0.2.1-rc.2` and Node.js `^22.19.0 || >=24.0.0`, without Python. The optional file-log CLI still requires Python 3.11+. Runs created by 0.6.1 keep their recorded scope and stay resumable; old deterministic caches are ignored automatically.
 
-**DSH compatibility:** The package requires `>=0.2.1-rc.2` — `0.2.1-rc.3` is the primary host this release is acceptance-tested against, and `0.2.1-rc.2` keeps compatibility coverage. DSH `0.2.0-rc.2` and `0.2.1-rc.1` are below the supported floor and later releases are admitted by the declared range, not by static version tables; a future host version inside the range is admitted but not yet tested. Contract and service tests cover synthetic V4 input. Source and synthetic checks are preserved in the [0.6.0 development record](docs/acceptance/v0.6.0-rc2.1-candidate.md). Native, model and UI results are recorded separately in the acceptance receipts attached to each exact release artifact; range admission does not establish testing of future hosts. See [DSH compatibility](#dsh-compatibility).
+**DSH compatibility:** The package requires `>=0.2.1-rc.2` — `0.2.1-rc.5` is the primary host this release is acceptance-tested against, and `0.2.1-rc.2` keeps compatibility coverage. DSH `0.2.0-rc.2` and `0.2.1-rc.1` are below the supported floor, and later releases are admitted by the declared range, not by static version tables; a future host version inside the range is admitted but not yet tested. Contract and service tests cover synthetic V4 input. Native, model and UI results are recorded separately in the acceptance receipts attached to each exact release artifact; range admission does not establish testing of future hosts. See [DSH compatibility](#dsh-compatibility).
 
-**Known upstream security gap:** DSH rc.2/rc.3 pins vulnerable `zod@4.4.3` (GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404). The 0.6.1 release accepts this specific unresolved memory-exhaustion risk; everyday trigger probability has not been established. The exception must be reassessed at the next DSH upgrade. Read the [risk and exception scope](SECURITY.md#known-upstream-dependency-gap-in-061) before installing.
+**Known upstream security gap:** six official DSH packages through rc.5 pin vulnerable `zod@4.4.3` (GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404). The 0.6.1 exception expired with its release cohort and was not renewed. On 2026-11-03 the maintainer made a new, limited risk decision for the reviewed 0.7.0 cohort. The vulnerability remains unfixed; a reachable DSH path and everyday trigger probability have not been established. Accepting the risk does not establish release readiness; see the [candidate acceptance record](docs/acceptance/v0.7.0-candidate.md) for artifact and release-check status. Read the [risk and decision status](SECURITY.md#known-upstream-dependency-gap) before installing.
 
-The registry command below requires `0.6.1` to be published. When testing a candidate, install its reviewed tarball or source revision instead. Check the version on [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) before using the registry command:
+The registry command below requires `0.7.0` to be published. When testing a candidate, install its reviewed tarball or source revision instead. Check the version on [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) before using the registry command:
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.6.1
+dsh plugin --profile web add dsh-session-insights@0.7.0
 dsh web
 ```
 
-To install from source, replace `REVIEWED_REF` with `v0.6.1` after publication, or with the full candidate commit recorded in its artifact manifest. Select that revision before installing; cloning alone checks out the default branch, which may contain another version:
+To install from source, replace `REVIEWED_REF` with `v0.7.0` after publication, or with the full candidate commit recorded in its artifact manifest. Select that revision before installing; cloning alone checks out the default branch, which may contain another version:
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
@@ -61,6 +61,8 @@ git checkout --detach REVIEWED_REF
 dsh plugin --profile web add .
 dsh web
 ```
+
+By default, semantic analysis sends bounded session evidence through the current DSH agent to its configured model provider; that provider’s data handling and charges apply. Session excerpts may contain sensitive information, and redaction is not a disclosure guarantee. Add `--deterministic` to skip model analysis. Batches run serially, so duration varies with the selected sessions and model response time.
 
 Then run this in the DSH composer:
 
@@ -207,9 +209,9 @@ Historical 0.2.0 package, CI, native macOS, and focused native Windows evidence 
 
 The minimum supported host is fixed separately from the versions actually tested. The declared range admits DSH releases at or above 0.2.1-rc.2, including later prereleases. Input-format and API checks still reject incompatible operations; admission is not evidence that a future host has been tested.
 
-This version requires DSH `>=0.2.1-rc.2` and refuses older hosts; input remains V4 (the 0.2.1 host extends the V4 vocabulary without changing the format number). Native analysis uses host-restored V4 snapshots; the optional Python CLI reads only `session.v4.jsonl` and `session.v4.jsonl.zstd`. Migrate older raw logs with upstream DSH before using the CLI. It never falls back to an older generation when the current file is corrupt or newer than V4.
+This version requires DSH `>=0.2.1-rc.2` and refuses older hosts; input remains V4 (the 0.2.1 host extends the V4 vocabulary without changing the format number, unchanged through rc.5). Native analysis uses host-restored V4 snapshots; the optional Python CLI reads only `session.v4.jsonl` and `session.v4.jsonl.zstd`. Migrate older raw logs with upstream DSH before using the CLI. It never falls back to an older generation when the current file is corrupt or newer than V4.
 
-Start a new analysis run after upgrading: earlier manifests and caches have a different input contract. Existing HTML, JSON and Markdown reports are retained. Update a separately installed CLI/Skill from this same version; installing the Bundle does not update it.
+Runs created by 0.6.1 remain resumable: the input identity and semantic schema are unchanged. Deterministic CLI caches from earlier versions are ignored automatically and runs reparse from source. Existing HTML, JSON and Markdown reports are retained. Update a separately installed CLI/Skill from this same version; installing the Bundle does not update it.
 
 Tool workload includes recorded programmatic tool calling (PTC) inner calls. The JSON `tool_execution` fields separate outer transport calls, inner executions, failures and unsettled inner calls; each recorded failed call outcome is counted once. If both an inner call and its outer program fail, both outcomes remain visible; the report does not infer whether they share one root cause. Permission denials are distinct from failed verification commands. Developer tool-registration messages and scheduled injections do not count as human requests.
 
@@ -258,10 +260,15 @@ The cumulative chart is generated daily from the npm Downloads API. npm download
 ```bash
 python3 -m pip install -e '.[dev]'
 npm ci --ignore-scripts
+# rc.2 compatibility runtime (the declared floor):
 npm ci --prefix tests/dsh-runtime --ignore-scripts
 DSH_RUNTIME="$PWD/tests/dsh-runtime" python3 -m unittest discover -s tests -v
+# rc.5 primary acceptance runtime:
+npm ci --prefix tests/dsh-runtime-rc5 --ignore-scripts
+DSH_RUNTIME="$PWD/tests/dsh-runtime-rc5" DSH_EXPECTED_VERSION=0.2.1-rc.5 \
+  python3 -m unittest discover -s tests -v
+DSH_RUNTIME="$PWD/tests/dsh-runtime-rc5" DSH_EXPECTED_VERSION=0.2.1-rc.5 npm test
 python3 scripts/build_native_rules.py --check
-npm test
 python3 scripts/build_fixture.py --check
 python3 scripts/audit_public_tree.py --root .
 ```

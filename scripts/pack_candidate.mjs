@@ -5,7 +5,7 @@
 import {join, resolve, dirname} from 'node:path'
 import {readFile, writeFile, mkdir, mkdtemp, cp, rm, stat} from 'node:fs/promises'
 import assert from 'node:assert/strict'
-import {run, npm, digest, fileManifest} from './acceptance_identity.mjs'
+import {run, npm, digest, fileManifest, PRODUCT_VERSION} from './acceptance_identity.mjs'
 
 async function main() {
   const [commit, destination] = process.argv.slice(2)
@@ -28,7 +28,7 @@ async function main() {
       await mkdir(dirname(target), {recursive: true}); await cp(join(root, item.path), target)
     }
     const manifest = JSON.parse(await readFile(join(stage, 'package.json'), 'utf8'))
-    assert.equal(manifest.name, 'dsh-session-insights'); assert.equal(manifest.version, '0.6.1')
+    assert.equal(manifest.name, 'dsh-session-insights'); assert.equal(manifest.version, PRODUCT_VERSION)
     manifest.gitHead = commit
     await writeFile(join(stage, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
     const [packed] = JSON.parse((await npm(['pack', '--json', '--ignore-scripts', '--pack-destination', packDir], {cwd: stage, env})).stdout)

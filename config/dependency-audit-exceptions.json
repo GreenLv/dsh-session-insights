@@ -1,11 +1,11 @@
 {
   "schema": "dsi-node-audit-exception/v1",
-  "product_version": "0.6.1",
+  "product_version": "0.7.0",
   "authorization": {
     "decision": "accepted",
-    "recorded_on": "2026-10-26",
+    "recorded_on": "2026-11-03",
     "authority": "Repository maintainer",
-    "scope": "Only the stated upstream risk for this release and frozen cohort; not a security fix or a low-probability assurance"
+    "scope": "Only this release, the exact reviewed rc.2/rc.5 cohort, and the two stated report graphs; not a security fix or low-probability assurance."
   },
   "exception": {
     "advisory": "GHSA-mrhx-c7xc-m3w5",
@@ -16,35 +16,40 @@
     "range": "<4.6.6",
     "patched_version": "4.6.6"
   },
-  "audited_scope": "Only root package-lock npm production and full scans. No exception for other DSH trees or unrelated advisories.",
-  "prerequisite": "The advisory describes oversized invalid array inputs without a maximum-length bound accumulating validation issues and exhausting memory. Reachability through a specific DSH entry and real-world likelihood are not established.",
+  "audited_scope": "Root package-lock npm production and full scans only. The host/runtime trees bind the reviewed cohort; no exception for a new advisory, unreviewed graph or another dependency tree.",
+  "prerequisite": "Large invalid arrays can exhaust memory during affected schema validation. Reachability through a DSH entry point and ordinary-use likelihood are not established.",
   "cohort": {
     "files": {
-      "package.json": "99abe83e4b026bac301f8556a2e749dd9ef1ba4bd07928835cd3822528c7c804",
-      "package-lock.json": "59a7565e6e82966118a0b02dee69976946e5229dd34eed0591f683718f10d34a",
-      "pyproject.toml": "91a2cb39105810747f03444a5f75528acea5d9dc4a38d93f7b3fa9dfaaa10e92",
-      "src/dsh_session_insights/__init__.py": "99b711287340d0fc61ce5138c1fdd070f5bcced11cc774a1f01556944cea9a77",
+      "package.json": "95b87185a9d8adf50a971e5293531d85a25d679941899b80121a6474008fa4e7",
+      "package-lock.json": "d62276cb62d27b67f64d5a99d285dec9b703afecede1e751a54497ef436f9fb0",
+      "pyproject.toml": "db82c6becada3236a627d0542d87d99c3cf77fa42a83ea5ee20221a4bf888c30",
+      "src/dsh_session_insights/__init__.py": "fae4f39e92d1df6553bfc34673af31b9e21cc6ffb0b1cf416b06d8c7da69ec01",
       "tests/dsh-runtime/package.json": "65d30d2a7101433bdbb4c2fcaf960ca544d04d5fac0357f4a8168819868b95aa",
       "tests/dsh-runtime/package-lock.json": "8b51fa9714452e72e43cb7b2d91588dfbc987a7bc6da30eac807e53eb47e3db6",
-      "tests/dsh-runtime-rc3/package.json": "e94697bbf902bff19c35b800122eb36b9572cb76169c4db00ad701a5d8774e6a",
-      "tests/dsh-runtime-rc3/package-lock.json": "c8df99eb2b303f412696e488c904cc294700813543d3c74a12d8addebb705762",
+      "tests/dsh-runtime-rc5/package.json": "20611b611c751de858268d7df58f771710fd6e5fa37088c9627f50eef6580828",
+      "tests/dsh-runtime-rc5/package-lock.json": "f0abfb959f06d597c76767ad571ce5d226777456966de24d20390e3c7b861fc9",
       "tests/dsh-host/package.json": "418badd91175d5fd9eac2c77165da122db6ffae6bc3c415352725acaa194468d",
       "tests/dsh-host/package-lock.json": "747f45d50de77174d93057a10606aaf9eca5340475184a3149b120fe99139b64",
-      "tests/dsh-host-rc3/package.json": "0d25b0b20a334fe7dd559e6128f8583d1a46f66f3ecb29dbeeb1420d71004e37",
-      "tests/dsh-host-rc3/package-lock.json": "961df03facb676c88c6418709d6208f1ad612113098a2e13ae589581d5138185",
-      "scripts/acceptance_identity.mjs": "1cccbbf890a99ee1cbbd6c2ede8a27929441a28f1a0134915b5655ac366d20b2"
+      "tests/dsh-host-rc5/package.json": "c10525d7ff0891980e3a74e257060e53f1869d943a7944fca11871d3f1f33cea",
+      "tests/dsh-host-rc5/package-lock.json": "dcdb6872337569de2720baf6f172f6627ae9b9d2447467028829fe52e4d336a4",
+      "scripts/acceptance_identity.mjs": "83105f57b72aa0054642f9373a3932adfc11793eaa4eb56c343977260fc9345f"
     },
-    "host_queue_sha256": "4730ab1178134ab64cabfc07b4170586fdbf24817d6bd9e4a974106186626c88"
+    "host_queue_sha256": "58926450dbd836652fcf3f9b16230bc7fd21b45ebd4c6c1bcd4f5b3f8886a96a"
   },
   "report_graph_sha256": "b3b647f4af6be5146493b175889906c7884f749fb337281430e564af7daa5bac",
+  "report_graph_sha256_variants": [
+    "fe0b1aa71eec3e33eb53859aa771281f61522230650bdfa09bc2b354cee7d466"
+  ],
   "expiry": {
     "kind": "event_bound",
     "events": [
-      "Project version changes from 0.6.1",
-      "Next DSH host upgrade, including any primary or compatibility host pin/queue change",
-      "Any pinned dependency, manifest or lock cohort changes"
+      "product version change",
+      "any bound manifest/lock/runtime/host identity change",
+      "acceptance host queue change",
+      "any advisory change or vulnerability graph outside the two exact reviewed variants",
+      "patched dependency closure resolves cleanly"
     ],
-    "required_action": "Remove this exception or obtain a new explicit maintainer assessment in the next DSH upgrade batch; never carry it to a future rc or release automatically.",
+    "required_action": "Remove this exception or obtain a new explicit maintainer decision when an expiry event occurs; never automatically carry it into a later version or cohort.",
     "calendar_expiry": null,
     "automatic_monitoring": false
   },

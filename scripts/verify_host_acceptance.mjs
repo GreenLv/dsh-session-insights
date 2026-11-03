@@ -178,7 +178,7 @@ async function main() {
     await fixture('optional-isError', 'acceptance-unrelated', unrelatedProject)
     await gate('project_isolation', async () => {
       const all = await ctx.sessionQuery.listSessions()
-      const selected = await plugin._test.collectSnapshots(ctx, {now: Date.now(), days: 30, project})
+      const selected = await plugin._test.collectSnapshots(ctx, {...plugin._test.normalizeOptions({days: 30, project}), now: Date.now()})
       assert.equal(all.length, 2); assert.equal(selected.length, 1); assert.equal(selected[0].session.id, 'acceptance-target')
       record('project_isolation', true, 'actual query and production project filter select one of two populated sessions')
     })

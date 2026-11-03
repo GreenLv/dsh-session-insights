@@ -1,0 +1,185 @@
+{
+  "schema": "repository-reader-review/v1",
+  "status": "passed",
+  "audience": {
+    "role": "Plugin users, 0.6.1 upgraders and maintainers assessing candidate risk and release readiness",
+    "prior_knowledge": "careful_upgrader"
+  },
+  "documents": [
+    {
+      "path": "README.md",
+      "role": "readme",
+      "language": "en",
+      "sha256": "b5bb154f7ce4a34a834c7c297dd87035f595e69e86221a0ed9868876b9af629e"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "role": "readme",
+      "language": "zh-CN",
+      "sha256": "745d4495c099dedfe52d7b1ef6ee4ce5daa1b59c4a87d1477bf69998db4c21bb"
+    },
+    {
+      "path": "README.ru-RU.md",
+      "role": "readme",
+      "language": "ru-RU",
+      "sha256": "e2791e75a118a137542a9fbb420f7c222d836f3550105f4e92f503c748818c21"
+    },
+    {
+      "path": "SECURITY.md",
+      "role": "release_notes",
+      "language": "en",
+      "sha256": "00f4d29ad2d912ddfd3efd66ae11348e387ac4e8010f47459eec64d19cbd3f8a"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "role": "changelog",
+      "language": "en",
+      "sha256": "77f05eb3278b42fc4abf1def90e4a2e0d3310147cc1db48dc7af42739e62eeb2"
+    },
+    {
+      "path": "CHANGELOG.zh-CN.md",
+      "role": "changelog",
+      "language": "zh-CN",
+      "sha256": "d3f2e7d8b7d599461dad16cf793e56e76ee334ba6b3826c4c8fbdacc599623dd"
+    },
+    {
+      "path": "docs/releases/v0.7.0.md",
+      "role": "release_notes",
+      "language": "default",
+      "sha256": "901b568d057191eed4877de2093f88c93e0eb99a8ddcf8cd5c16ef5d3dac4efb"
+    },
+    {
+      "path": "docs/acceptance/v0.7.0-candidate.md",
+      "role": "release_notes",
+      "language": "en",
+      "sha256": "82e5f905953a544886599048cdbf2377972aa77279dce233ebd385cccd8c64d0"
+    }
+  ],
+  "document_set_sha256": "15dc7ac4e9a2f6794f45e93fa1f261726299dd1796c6c943569d32416fe31c7a",
+  "method": {
+    "kind": "cold_read",
+    "implementation_context_used": false,
+    "claim_ledger_used": false
+  },
+  "checks": [
+    {
+      "id": "document_role",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "SECURITY.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
+      ],
+      "note": "READMEs support first use; changelogs record version changes; the release draft summarizes 0.7.0; security and acceptance documents explain risk and evidence. Schema maps the latter two to release_notes."
+    },
+    {
+      "id": "reader_outcome",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "SECURITY.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
+      ],
+      "note": "Each README identifies prerequisites, conditional installation, locale command, model choice, expected local files and waiting. Upgrade notes explain native 0.6.1 resume and separate CLI updates."
+    },
+    {
+      "id": "term_onboarding",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "SECURITY.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
+      ],
+      "note": "Entry paths name session input and report output before advanced concepts; security policy explains the unresolved dependency gap and its limits."
+    },
+    {
+      "id": "evidence_boundary",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "SECURITY.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
+      ],
+      "note": "Both changelogs and other current documents consistently describe a new limited risk decision, non-clean local scan results and pending replacement and exact-commit CI."
+    },
+    {
+      "id": "density_and_order",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "SECURITY.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
+      ],
+      "note": "Prerequisites, dependency risk and model-provider handling are stated before the affected actions; candidate status and pending checks appear near the release draft and acceptance openings."
+    },
+    {
+      "id": "language_independence",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "SECURITY.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/releases/v0.7.0.md",
+        "docs/acceptance/v0.7.0-candidate.md"
+      ],
+      "note": "English, Chinese and Russian README paths were read independently. English and Chinese changelogs and release sections are consistent; detailed security policy and Russian changelog are unavailable in Russian."
+    }
+  ],
+  "findings": [
+    {
+      "code": "legacy_resume_clarity",
+      "severity": "advisory",
+      "document": "README.md",
+      "line": 214,
+      "message": "The broad 0.6.1 resume statement could identify legacy Python runs as CLI-only, as SECURITY.md:46 explains."
+    },
+    {
+      "code": "russian_detail_language",
+      "severity": "advisory",
+      "document": "README.ru-RU.md",
+      "line": 46,
+      "message": "The Russian README summarizes the risk, but detailed policy and reassessment triggers are in English; the linked changelog and release notes are not in Russian."
+    }
+  ],
+  "limitations": [
+    "Eight named documents only; SECURITY.md and the acceptance record use release_notes as the closest schema role, and the bilingual release draft uses default language.",
+    "The review assesses readability and internal document consistency; it does not establish factual correctness or operational behavior.",
+    "Source, native, model, UI, exact-commit CI, artifact freeze and publication were not verified by this review.",
+    "Detailed security policy is English; no Russian changelog or release-note section was reviewed. External links and operational commands were not tested.",
+    "Replacement artifact, affected installation identity checks and exact-commit CI are documented as pending; any bound document edit invalidates this receipt."
+  ]
+}
