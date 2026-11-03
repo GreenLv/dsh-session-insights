@@ -8,7 +8,7 @@ Public releases are listed newest first.
 
 ### Added
 
-- Russian (`ru`) is now a published locale, no longer source-only: the deterministic report, HTML dashboard, semantic prompts, native runtime and Python CLI all ship the full Russian catalog, and `README.ru-RU.md` documents the plugin in Russian. Message texts moved into keyed catalogs, so the semantic-prompt contract (untrusted-data notices and prompt rules) is written natively per locale instead of one English constant for every language. `ru` is accepted in the recorded run scope, resume validation and every entry that already accepted `en`/`zh-CN`.
+- Russian (`ru`) is now a published locale, no longer source-only: the deterministic report, HTML dashboard, semantic prompts, native runtime and Python CLI all ship the full Russian catalog, and `README.ru-RU.md` documents the plugin in Russian. Message texts moved into keyed catalogs, so the semantic-prompt contract (untrusted-data notices and prompt rules) is written natively per locale instead of one English constant for every language. `ru` is accepted in the recorded run scope, resume validation and every entry that already accepted `en`/`zh-CN`. Russian localization by @xilec in [#2](https://github.com/GreenLv/dsh-session-insights/pull/2).
 - DSH `0.2.1-rc.5` is the primary acceptance host. The declared floor stays `>=0.2.1-rc.2`, and `0.2.1-rc.2` keeps compatibility coverage; the previous rc.3 host trees are no longer maintained, consistent with the contributing policy of not maintaining historical hosts.
 
 ### Changed
