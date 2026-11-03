@@ -4,9 +4,7 @@
 
 Public releases are listed newest first.
 
-## Unreleased
-
-Everything below is the staged 0.7.0 candidate. It is not published yet; the section is dated when the release is cut.
+## 0.7.0 - 2026-11-03
 
 ### Added
 
@@ -20,7 +18,7 @@ Everything below is the staged 0.7.0 candidate. It is not published yet; the sec
 
 ### Security
 
-- The known upstream dependency gap remains unresolved: six official DSH rc.5 packages pin `zod@4.4.3` ([GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), patched in 4.6.6); nested pinned copies and this project’s peer closure remain vulnerable despite the host root resolving 4.6.7. The 0.6.1 exception expired and was not renewed. On 2026-11-03 the maintainer made a new, limited decision accepting this risk for 0.7.0 and the exact reviewed rc.2/rc.5 cohort: 13 bound files, the host queue and the reviewed 23- and 24-entry report graphs. In local checks, fresh production and full npm scans each exited 1 with the single advisory and 23 affected entries; the policy-aware assessment classified both as `accepted_known_risk`, and the reviewed 24-entry fixture was also accepted. This is neither a clean scan nor an exact-commit CI result. New findings or cohort drift fail closed. The replacement artifact, affected installation identity checks and exact-commit CI remain pending. See [Security Policy](SECURITY.md#known-upstream-dependency-gap).
+- The known upstream dependency gap remains unresolved: six official DSH rc.5 packages pin `zod@4.4.3` ([GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), patched in 4.6.6); nested pinned copies and this project’s peer closure remain vulnerable despite the host root resolving 4.6.7. The 0.6.1 exception expired and was not renewed. On 2026-11-03 the maintainer made a new, limited decision accepting this risk for 0.7.0 and the exact reviewed rc.2/rc.5 cohort: 13 bound files, the host queue and the reviewed 23- and 24-entry report graphs. In local checks, fresh production and full npm scans each exited 1 with the single advisory and 23 affected entries; the policy-aware assessment classified both as `accepted_known_risk`, and the reviewed 24-entry fixture was also accepted. These local checks are not a clean scan; [CI #92](https://github.com/GreenLv/dsh-session-insights/actions/runs/41559707449) separately recorded `accepted_known_risk` for both scopes. New findings or cohort drift fail closed. The published artifact and isolated installation identities were verified on macOS and Windows; candidate and main CI each passed 16/16 jobs. Daily installation remains pending. See [Security Policy](SECURITY.md#known-upstream-dependency-gap).
 - The audit gate now accepts a genuinely clean scan (with a valid, non-empty dependency inventory) without any exception file; network failures, invalid JSON, missing steps and new high/critical findings still fail closed.
 
 ### Migration

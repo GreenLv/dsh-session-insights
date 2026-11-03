@@ -1,8 +1,10 @@
 # Distribution status
 
-## Candidate 0.7.0 (not published)
+## Published 0.7.0 (2026-11-03)
 
-The 0.7.0 candidate (Russian locale as a shipped locale, DSH `0.2.1-rc.5` as the primary tested host, rc.2 floor unchanged) is in acceptance preparation; see the [candidate acceptance record](acceptance/v0.7.0-candidate.md) and the [bilingual release-body draft](releases/v0.7.0.md). Publication is blocked by the still-open upstream dependency risk decision; npm, GitHub Release, tag and marketplace refresh have not been performed and no public download has been verified for this version.
+[npm 0.7.0](https://www.npmjs.com/package/dsh-session-insights/v/0.7.0) and the [GitHub Release](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.7.0) publish the same artifact; npm `latest` resolves to 0.7.0. Tag `v0.7.0` points to `639405384235eb9fe13c55c17d08b30395088de4`. The verified tarball contains 29 files, is 229,194 bytes, and has SHA-256 `ae39d835997de06e6e64f7e369862fb711fe9ef199a2d8256d575fc2ab383a94`. See the [public release receipt](acceptance/v0.7.0-release-receipt.json), [published bilingual notes](releases/v0.7.0.md) and [historical candidate record](acceptance/v0.7.0-candidate.md).
+
+Candidate and main CI each passed 16/16 jobs. The published artifact was installed and its identity verified in isolated macOS and Windows profiles; daily installation remains pending. The upstream Zod risk remains under the limited decision described in the release notes. Community listings have not been freshly revalidated; publication does not establish marketplace ingestion or approval.
 
 ## Published 0.6.1 (2026-10-26)
 
