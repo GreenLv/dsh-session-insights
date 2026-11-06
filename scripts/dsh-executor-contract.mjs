@@ -295,6 +295,44 @@ try {
   assert.equal(ptcBase.totals.sessions,1)
   result.agent_ptc_route=true
 
+  // A program's direct fs calls run in the confined PTC child. SDK tool
+  // callbacks (including the probes below and DSI storage) run in the host,
+  // so their ability to write under home is not a child-process permission.
+  // Windows workspace-write grants this Agent's workdir and a private temp,
+  // not its home parent. Prove the boundary with the same Agent and toolSet.
+  if (process.platform==='win32') {
+    const insideMarker=join(workdir,'ptc-direct-fs-inside.txt')
+    const outsideMarker=join(home,'ptc-direct-fs-outside.txt')
+    // A host positive control rules out a missing/unwritable parent as the
+    // reason the child is refused. The unique scratch starts without a file.
+    await writeFile(outsideMarker,'host-control',{flag:'wx'})
+    assert.equal(await readFile(outsideMarker,'utf8'),'host-control')
+    await rm(outsideMarker)
+    assert.ok(!existsSync(outsideMarker),'the host control must leave no file for the child probe')
+    const fsBoundaryBatch=await tools.execute({agent:agentA,signal,toolSet:setA,calls:[{
+      type:'tool-call',id:'dsi-ptc-direct-fs-1',name:'run_code',
+      arguments:JSON.stringify({code:`const fs = await import('node:fs/promises')\nawait fs.writeFile(${JSON.stringify(insideMarker)}, 'child-inside', {flag: 'wx'})\ntry {\n  await fs.writeFile(${JSON.stringify(outsideMarker)}, 'child-outside', {flag: 'wx'})\n  return {inside: 'written', outside: {status: 'unexpected-success'}}\n} catch (error) {\n  return {inside: 'written', outside: {status: 'refused', code: error?.code ?? '', path: error?.path ?? ''}}\n}`,description:'check direct PTC filesystem write boundaries'}),
+    }]})
+    assert.equal(fsBoundaryBatch.results[0].callId,'dsi-ptc-direct-fs-1','the boundary batch must report its own call')
+    assert.equal(fsBoundaryBatch.results[0].result.isError,false,
+      'the direct-fs boundary program must settle successfully: '+JSON.stringify(fsBoundaryBatch.results[0].result).slice(0,400))
+    const fsBoundary=JSON.parse(textOf(fsBoundaryBatch.results[0].result))
+    assert.equal(fsBoundary.inside,'written','the PTC child must reach the inside write')
+    assert.equal(await readFile(insideMarker,'utf8'),'child-inside','the PTC child must actually write inside the Agent workspace')
+    assert.equal(fsBoundary.outside?.status,'refused','the PTC child must refuse the host-writable home path outside the workspace')
+    assert.ok(['EACCES','EPERM'].includes(fsBoundary.outside?.code),
+      'the outside write must fail with a permission error, got: '+JSON.stringify(fsBoundary.outside))
+    assert.equal(resolve(fsBoundary.outside?.path ?? '').toLowerCase(),resolve(outsideMarker).toLowerCase(),
+      'the permission error must identify the actual outside probe path')
+    assert.ok(!existsSync(outsideMarker),'the refused outside write must not create a file')
+    result.ptc_direct_fs_boundary={platform:'win32',inside_workspace_written:true,
+      outside_host_control:true,outside_workspace_refused:true,denial_code:fsBoundary.outside.code}
+  } else {
+    // In particular, macOS permits the system temp tree under workspace-write;
+    // this Windows-only home-parent refusal is not a macOS policy assertion.
+    result.ptc_direct_fs_boundary={platform:process.platform,windows_home_refusal:'not_run'}
+  }
+
   // The default scope answers run_code with native: refused — the same call
   // the override executes, so the two scopes demonstrably route differently.
   const rootRunCode=await tools.execute({signal,toolSet:rootSet,calls:[{
@@ -452,7 +490,7 @@ try {
   // The program proves it started (marker), then idles; the caller aborts and
   // the batch settles as cancelled. The started marker stays: started work
   // may have produced side effects and is never claimed as "not executed".
-  const startedMarker=join(home,'ptc-started-marker.txt'),doneMarker=join(home,'ptc-done-marker.txt')
+  const startedMarker=join(workdir,'ptc-started-marker.txt'),doneMarker=join(workdir,'ptc-done-marker.txt')
   const cancelController=new AbortController()
   const midFlight=tools.execute({agent:agentA,signal:cancelController.signal,calls:[{
     type:'tool-call',id:'dsi-midflight-1',name:'run_code',
@@ -499,7 +537,7 @@ try {
   // must not continue; the withdrawn selection must not fall back to the
   // deployment default, which demonstrably serves the same tool.
   const disposeController=new AbortController()
-  const started2=join(home,'ptc-started-marker-2.txt'),done2=join(home,'ptc-done-marker-2.txt')
+  const started2=join(workdir,'ptc-started-marker-2.txt'),done2=join(workdir,'ptc-done-marker-2.txt')
   const midDispose=tools.execute({agent:agentA,signal:disposeController.signal,calls:[{
     type:'tool-call',id:'dsi-mid-dispose-1',name:'run_code',
     arguments:JSON.stringify({code:`await (await import('node:fs/promises')).writeFile(${JSON.stringify(started2)},'started')\nawait new Promise(r=>setTimeout(r,8000))\nawait (await import('node:fs/promises')).writeFile(${JSON.stringify(done2)},'done')\nreturn 'completed'`,description:'long program for owner dispose'}),
