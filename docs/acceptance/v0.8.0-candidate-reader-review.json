@@ -10,13 +10,13 @@
       "path": "CHANGELOG.md",
       "role": "changelog",
       "language": "en",
-      "sha256": "50f1ee5568758be6e330e11c917a484b7f25542addc7c49fd8081d149187405c"
+      "sha256": "49a06d29c39afc78757e834c62fa6ca180ad58c2bd31550e50bd4a6ae056133a"
     },
     {
       "path": "CHANGELOG.zh-CN.md",
       "role": "changelog",
       "language": "zh-CN",
-      "sha256": "a44c01445d20353de1c3bd43b6fee95d7524386352c19f963cd98c66cc718a7c"
+      "sha256": "a8547a182e1fc312f7778babf8a966ef9ea5cdd91fa55bc01733069cff274ea3"
     },
     {
       "path": "README.md",
@@ -46,7 +46,7 @@
       "path": "docs/acceptance/v0.8.0-candidate.md",
       "role": "release_notes",
       "language": "en",
-      "sha256": "5671e50f764fad75cc31ca8a3ef4436f0c0405535fe3f89ebc404a660f1122df"
+      "sha256": "ef90b2522ce24f7a84d18bca0dd0541891985bb7c7d3abb1abadd9ef0018770e"
     },
     {
       "path": "docs/releases/v0.8.0.md",
@@ -55,7 +55,7 @@
       "sha256": "07a3c7350026c58eaf4a271b7350e407b548d55da6ff1587dbff799eb46c929e"
     }
   ],
-  "document_set_sha256": "458d2190af638b0c72411cbcfbb00eabad401c5161d99e1034723d2cdadd0ab5",
+  "document_set_sha256": "4cc1461a8bfa1ad2465bc4e6457672a6b289bb22f01a49f3f5debd708ccfc518",
   "method": {
     "kind": "cold_read",
     "implementation_context_used": false,
@@ -157,6 +157,6 @@
     "This receipt binds reader comprehension of the listed bytes only; it does not establish factual correctness beyond the recorded evidence, native acceptance, exact-commit CI, publication or human preference.",
     "The candidate is unpublished: README registry commands describe a future published state and are marked as such; readers testing the candidate must use a reviewed tarball or source revision.",
     "A Russian changelog edition remains a coverage gap carried over from 0.7.0; the Russian README is independently readable and links the English changelog.",
-    "Regenerated after the 2026-11-06 repair round: the changelog editions and the candidate acceptance record were re-read cold with the F1/F2/G1 closure content; the README, SECURITY and release-draft bytes are unchanged from the previously reviewed set."
+    "Regenerated after the 2026-11-06 second repair round: the changelog editions and the candidate acceptance record were re-read cold with the R2-PATH/R2-G1/R2-CLEANUP closure content; README, SECURITY and release-draft bytes are unchanged from the previously reviewed set."
   ]
 }

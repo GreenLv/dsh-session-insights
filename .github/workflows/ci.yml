@@ -119,8 +119,12 @@ jobs:
       - run: node scripts/dsh-contract-tests.mjs ${{ matrix.runtime }}
       - run: node scripts/dsh-services.mjs ${{ matrix.runtime }}
       # Real-executor and Agent-scope integration: the official native/PTC
-      # executors over the official composition; the full host closure lives
-      # in tests/dsh-host, so this step runs once per OS on the primary lane.
+      # executors over the official loader composition — supported Agent
+      # scopes, one freshly resolved toolSet through resolve → assembly →
+      # execute, positive-controlled refusals, mid-flight cancellation and
+      # owner-dispose teardown, and cleanup ownership under injected
+      # failures. The full host closure lives in tests/dsh-host, so this
+      # step runs once per OS on the primary lane.
       - run: node scripts/dsh-executor-contract.mjs tests/dsh-host
         if: matrix.primary == true
       - run: npm test

@@ -1,9 +1,12 @@
-# Official rc.1 composition for the real-executor integration checks
-# (scripts/dsh-services.mjs --executors). This is a minimal host composition:
+# Official rc.1 composition template for the real-executor integration checks
+# (scripts/dsh-executor-contract.mjs). This is a minimal host composition:
 # the service providers the PTC stack requires, mounted through the official
-# loader against the exact tests/dsh-host closure. The Session/query/tools/
-# system-prompt services and the plugin under test mount on the booted
-# context exactly as the zero-model contract checks always have.
+# loader against the exact tests/dsh-host closure. The placeholder is rendered
+# per run with the runner's own writable root, so every path — including ones
+# with spaces — crosses the URL boundary via fileURLToPath. The
+# Session/query/tools/system-prompt/working-directory services and the plugin
+# under test mount on the booted context exactly as the zero-model contract
+# checks always have.
 - id: fs
   name: '@deepseek-ai/dsh-fs-local'
 - id: subprocess
@@ -12,6 +15,9 @@
   name: '@deepseek-ai/dsh-session-projection'
 - id: sandboxPolicy
   name: '@deepseek-ai/dsh-sandbox-policy'
+  config:
+    mode: workspace-write
+    workspaceRoot: "__WORKSPACE_ROOT__"
 - id: sandbox
   name: '@deepseek-ai/dsh-sandbox-local'
 - id: ptcRuntime
