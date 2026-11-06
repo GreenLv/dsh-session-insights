@@ -16,17 +16,19 @@ const ROOT=fileURLToPath(new URL('../',import.meta.url))
 export const POLICY_PATH='config/dependency-audit-exceptions.json'
 export const COHORT_PATHS=['package.json','package-lock.json','pyproject.toml','src/dsh_session_insights/__init__.py',
   'tests/dsh-runtime/package.json','tests/dsh-runtime/package-lock.json',
-  'tests/dsh-runtime-rc5/package.json','tests/dsh-runtime-rc5/package-lock.json',
-  'tests/dsh-host/package.json','tests/dsh-host/package-lock.json',
-  'tests/dsh-host-rc5/package.json','tests/dsh-host-rc5/package-lock.json','scripts/acceptance_identity.mjs']
+  'tests/dsh-host/package.json','tests/dsh-host/package-lock.json','scripts/acceptance_identity.mjs']
 const WORKFLOW='.github/workflows/ci.yml'
 const GHSA='GHSA-mrhx-c7xc-m3w5',CVE='CVE-2023-54404',ADVISORY_URL=`https://github.com/advisories/${GHSA}`
 const LEVELS=['info','low','moderate','high','critical']
-// The maintainer accepted exactly these two real report shapes for the 0.7.0
-// cohort. A future shape still requires a new decision and code review.
+// The maintainer accepted exactly these two real report shapes for the 0.8.0
+// cohort: the local npm 11 enumeration and its alternate same-closure shape
+// (transitive-only zod path for dsh-session-projection; 18 affected packages,
+// one zod leaf each). Both audit scopes produce the primary graph because the
+// only dev dependency is clean. A future shape still requires a new decision
+// and code review.
 const REVIEWED_GRAPHS=new Set([
-  'b3b647f4af6be5146493b175889906c7884f749fb337281430e564af7daa5bac',
-  'fe0b1aa71eec3e33eb53859aa771281f61522230650bdfa09bc2b354cee7d466',
+  'b56c12167268a2dca8057b564069b6830db96a4aae82932ece985f354d0d53b5',
+  '4c0bfa1d184d962a431190369b1b1652966774b40ecb7eab77a795d169b19f1f',
 ])
 export const digest=bytes=>createHash('sha256').update(bytes).digest('hex')
 export function canonical(value){
@@ -79,7 +81,7 @@ export function verifyCohort(policy,files){
   // Every accepted host/runtime tree must pin exactly one DSH version, and the
   // set of pinned trees is fixed by the exception cohort.
   const primary=HOST_TARGETS.primary
-  const trees=[['tests/dsh-runtime','0.2.1-rc.2'],['tests/dsh-runtime-rc5',primary],['tests/dsh-host','0.2.1-rc.2'],['tests/dsh-host-rc5',primary]]
+  const trees=[['tests/dsh-runtime',primary],['tests/dsh-host',primary]]
   for(const [dir,version] of trees){
     const manifest=JSON.parse(files[dir+'/package.json'])
     requireThat(Object.keys(manifest.dependencies??{}).length>0&&Object.values(manifest.dependencies).every(v=>v===version),'exception expired: host pins changed')

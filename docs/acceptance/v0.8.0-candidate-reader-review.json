@@ -1,0 +1,161 @@
+{
+  "schema": "repository-reader-review/v1",
+  "status": "passed",
+  "audience": {
+    "role": "Plugin users, 0.7.0 upgraders, and maintainers evaluating host/Node floors, the cancellation semantics change and dependency risk",
+    "prior_knowledge": "careful_upgrader"
+  },
+  "documents": [
+    {
+      "path": "CHANGELOG.md",
+      "role": "changelog",
+      "language": "en",
+      "sha256": "de89eefc29258c0f2746d93e9cdd37330c901be6bec7955a61a63eface3272af"
+    },
+    {
+      "path": "CHANGELOG.zh-CN.md",
+      "role": "changelog",
+      "language": "zh-CN",
+      "sha256": "78f04b0a7c8cc1b612ecfab0edc3da2026e48c8baee770573eca7b74448d49e7"
+    },
+    {
+      "path": "README.md",
+      "role": "readme",
+      "language": "en",
+      "sha256": "ea09e703c9d7337191fe73ce92514d8a8416dad464c6270d52bf003991971bb0"
+    },
+    {
+      "path": "README.ru-RU.md",
+      "role": "readme",
+      "language": "ru-RU",
+      "sha256": "31fdbe167f0a08bf39ecd55cb162c01cef49c9d75280e4ed5b79f6f14b7becef"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "role": "readme",
+      "language": "zh-CN",
+      "sha256": "d067de2edc404ebf119f9310615c42f1953186d02337ab9e9107eee1152a2c5c"
+    },
+    {
+      "path": "SECURITY.md",
+      "role": "release_notes",
+      "language": "en",
+      "sha256": "67be2533011e9baaddf0be298ff0b3e2764a39cb65cbd8500edf45cecaf3452c"
+    },
+    {
+      "path": "docs/acceptance/v0.8.0-candidate.md",
+      "role": "release_notes",
+      "language": "en",
+      "sha256": "4972964676ae380c86ce605c62a2cca926c68272b58cc754ffcab791f6dbe662"
+    },
+    {
+      "path": "docs/releases/v0.8.0.md",
+      "role": "release_notes",
+      "language": "en",
+      "sha256": "07a3c7350026c58eaf4a271b7350e407b548d55da6ff1587dbff799eb46c929e"
+    }
+  ],
+  "document_set_sha256": "861c239deb478e35d9e1a9d05298fdd198e0be10aa0192e01461ffa65bc569a4",
+  "method": {
+    "kind": "cold_read",
+    "implementation_context_used": false,
+    "claim_ledger_used": false
+  },
+  "checks": [
+    {
+      "id": "document_role",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "SECURITY.md",
+        "docs/releases/v0.8.0.md",
+        "docs/acceptance/v0.8.0-candidate.md"
+      ],
+      "note": "READMEs explain fit, floors and first use; changelogs record the 0.7.0-to-0.8.0 delta; the release draft frames the upgrade decision; the security policy carries the risk record; the acceptance record scopes evidence and pending gates."
+    },
+    {
+      "id": "reader_outcome",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/releases/v0.8.0.md"
+      ],
+      "note": "Upgrader paraphrase: before installing 0.8.0, upgrade DSH to >=0.2.2-rc.1 and Node to >=24.9.0; older hosts are refused, no old-API fallback. 0.7.0-and-earlier semantic runs no longer resume (finish with the creating version or start anew); old caches invalidate automatically; existing reports stay readable. Install via registry once 0.8.0 is published, else a reviewed tarball/source revision; --deterministic skips the model stage."
+    },
+    {
+      "id": "term_onboarding",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "docs/releases/v0.8.0.md"
+      ],
+      "note": "Caller cancellation is introduced through its concrete effect (a settled outcome counted separately, side effects still possible) before the error-code names; ABORTED / ABORTED_BEFORE_DISPATCH and their error.code/info.code locations are explained locally; the input-identity term is tied to the observable resume refusal."
+    },
+    {
+      "id": "evidence_boundary",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "CHANGELOG.md",
+        "SECURITY.md",
+        "docs/releases/v0.8.0.md",
+        "docs/acceptance/v0.8.0-candidate.md"
+      ],
+      "note": "Candidate state is explicit everywhere (unpublished, registry command gated on publication); source/interface results are separated from pending exact-commit CI, native dual-platform acceptance, artifact freeze, publication and consumer adoption; local scan results are marked as not exact-commit CI; range admission is not claimed as future-host testing; historical 0.2.1-rc.2 vocabulary statements stay in provenance position."
+    },
+    {
+      "id": "density_and_order",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "docs/releases/v0.8.0.md"
+      ],
+      "note": "Each README opens with purpose and first command, states floors and upgrade actions in the install section, and moves mechanism detail (cancellation taxonomy, recovery, PTC, generations) into later reference sections; the release draft leads with the floor decision before the risk and limits sections."
+    },
+    {
+      "id": "language_independence",
+      "required": true,
+      "status": "passed",
+      "evidence_paths": [
+        "README.md",
+        "README.zh-CN.md",
+        "README.ru-RU.md",
+        "CHANGELOG.md",
+        "CHANGELOG.zh-CN.md",
+        "docs/releases/v0.8.0.md"
+      ],
+      "note": "All three READMEs and both changelogs state the same floors, resume contract, cancellation semantics, known-gap decision and install commands independently in their own language; the bilingual release draft carries both editions in one file with matching facts."
+    }
+  ],
+  "findings": [
+    {
+      "code": "advisory-coverage-notes",
+      "severity": "advisory",
+      "document": "README.md",
+      "line": 50,
+      "message": "Bundled release-candidate auditor advisories carried over from 0.7.0: install command appears after the first 50 lines, exact-version compatibility claims need provenance classification (current spec versus historical statements are already separated in the compatibility section), and a Russian changelog edition does not exist. None blocks comprehension."
+    }
+  ],
+  "limitations": [
+    "This receipt binds reader comprehension of the listed bytes only; it does not establish factual correctness beyond the recorded evidence, native acceptance, exact-commit CI, publication or human preference.",
+    "The candidate is unpublished: README registry commands describe a future published state and are marked as such; readers testing the candidate must use a reviewed tarball or source revision.",
+    "A Russian changelog edition remains a coverage gap carried over from 0.7.0; the Russian README is independently readable and links the English changelog."
+  ]
+}

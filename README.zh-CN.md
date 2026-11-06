@@ -37,22 +37,22 @@ HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继
 
 ## 安装 Bundle
 
-`0.7.0` Bundle 随版本发布三种 locale——`zh-CN`、`en` 与俄语（`--locale ru`），并提供完整俄语版 [`README.ru-RU.md`](README.ru-RU.md)。
+`0.8.0` Bundle 随版本发布三种 locale——`zh-CN`、`en` 与俄语（`--locale ru`），并提供完整俄语版 [`README.ru-RU.md`](README.ru-RU.md)。
 
-`0.7.0` Bundle 需要 DSH `>=0.2.1-rc.2` 和 Node.js `^22.19.0 || >=24.0.0`，无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。0.6.1 创建的 run 保留其记录范围、仍可恢复；旧确定性缓存被自动忽略。
+`0.8.0` Bundle 需要 DSH `>=0.2.2-rc.1` 和 Node.js `>=24.9.0`，无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。更早的宿主必须先升级到 `>=0.2.2-rc.1`，本版本不提供旧接口回退。早期产品版本创建的 semantic run 在 0.8.0 输入身份下不再恢复——用创建它的版本完成，或在本版本新建 run；旧确定性缓存自动失效并从源码重新解析。
 
-**DSH 兼容性：** 软件包要求 `>=0.2.1-rc.2`——`0.2.1-rc.5` 是本版本主验收宿主，`0.2.1-rc.2` 保留兼容覆盖。DSH `0.2.0-rc.2` 与 `0.2.1-rc.1` 低于支持下限；范围内未来版本按声明准入但尚未实测。契约与服务测试覆盖合成 V4 输入；原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录。范围准入不代表未来宿主已经过实测。详见 [DSH 兼容性](#dsh-兼容性)。
+**DSH 兼容性：** 软件包要求 `>=0.2.2-rc.1`——`0.2.2-rc.1` 是本版本契约与服务测试实际运行的精确宿主，更早的宿主不再保留正向支持。低于 `0.2.2-rc.1` 的宿主（包括整个 0.2.0/0.2.1 线以及 `rc.1` 之前的 `0.2.2` 预发布）都会被拒绝；范围内未来版本按声明准入但尚未实测。契约与服务测试在精确 rc.1 runtime 上覆盖合成 V4 输入；原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录。范围准入不代表未来宿主已经过实测。详见 [DSH 兼容性](#dsh-兼容性)。
 
-**已知上游安全缺口：** 直到 rc.5 的六个 DSH 官方包仍固定使用有漏洞的 `zod@4.4.3`（GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404）。0.6.1 的例外已随其发布集合失效，且未续期。维护者于 2026-11-03 针对已审查的 0.7.0 集合作出新的限定风险接受决定。漏洞仍未修复，DSH 具体可达路径和日用触发概率尚未确定。接受风险不等于具备发布条件；制品与发布检查状态见[候选验收记录](docs/acceptance/v0.7.0-candidate.md)。安装前请阅读[风险与决定状态](SECURITY.md#known-upstream-dependency-gap)。
+**已知上游安全缺口：** 本版本 peer 闭包（rc.1）解析到的 DSH 官方包仍通过 `dsh-commands`、`dsh-llm` 与 `dsh-agent` 固定使用有漏洞的 `zod@4.4.3`（GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404）；rc.1 生产扫描解析出 18 个受影响包。0.7.0 的例外已随其发布集合失效，且未续期。维护者于 2026-11-06 针对已审查的 0.8.0 集合作出新的限定风险接受决定。漏洞仍未修复，DSH 具体可达路径和日用触发概率尚未确定。接受风险不等于具备发布条件；制品与发布检查状态见[候选验收记录](docs/acceptance/v0.8.0-candidate.md)。安装前请阅读[风险与决定状态](SECURITY.md#known-upstream-dependency-gap)。
 
-下方 registry 命令需要 `0.7.0` 已发布。验收候选时，请安装已审查的 tgz 或源码版本；使用 registry 命令前，请先在 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) 核实版本：
+下方 registry 命令需要 `0.8.0` 已发布。验收候选时，请安装已审查的 tgz 或源码版本；使用 registry 命令前，请先在 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) 核实版本：
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.7.0
+dsh plugin --profile web add dsh-session-insights@0.8.0
 dsh web
 ```
 
-从源码安装时，请把 `REVIEWED_REF` 替换为发布后的 `v0.7.0`，或候选制品清单中记录的完整提交号。安装前先选择该版本；仅克隆仓库会检出默认分支，它可能还是其他版本：
+从源码安装时，请把 `REVIEWED_REF` 替换为发布后的 `v0.8.0`，或候选制品清单中记录的完整提交号。安装前先选择该版本；仅克隆仓库会检出默认分支，它可能还是其他版本：
 
 ```bash
 git clone https://github.com/GreenLv/dsh-session-insights.git
@@ -96,7 +96,7 @@ Bundle 在 Node.js worker 中分析 `sessionQuery` 快照，不再启动 Python 
 | 环境与凭据 | 宿主仅用 `DSH_HOME` 或操作系统用户目录定位存储。原生分析不探测解释器、不转发环境变量、不需要独立 API Key，也不调用凭据库。会话内容仍可能含有秘密，脱敏不能保证适合公开。 |
 | 网络与模型 | 确定性分析可离线运行。默认语义流程经当前 DSH agent 把清洗并限制范围的证据交给配置的模型提供方，遵循该提供方的数据处理规则和计费方式。添加 `--deterministic` 可跳过此阶段。 |
 
-Bundle 需要 Node.js `^22.19.0 || >=24.0.0`，以及 DSH 的 `commands`、`tools` 和 `sessionQuery` 服务，并使用声明的 `>=0.2.1-rc.2` DSH peer 依赖（含官方消息 helper）。服务缺失、worker 失败、不安全路径或无效语义输出都会使相关操作停止。模型输出先在内存校验再写入；无效的替换请求不会覆盖已有合法结果。显式回退会生成标记为降级的确定性报告。
+Bundle 需要 Node.js `>=24.9.0`，以及 DSH 的 `commands`、`tools` 和 `sessionQuery` 服务，并使用声明的 `>=0.2.2-rc.1` DSH peer 依赖（含官方消息 helper）。服务缺失、worker 失败、不安全路径或无效语义输出都会使相关操作停止。模型输出先在内存校验再写入；无效的替换请求不会覆盖已有合法结果。显式回退会生成标记为降级的确定性报告。
 
 每次最多分析 2,000 个选中快照，序列化输入上限为 64 MiB；超出时请缩短 `--days` 或按 `--project` 筛选。每个插件实例最多同时进行两个分析，更多请求进入可取消的排队队列，slash command 与 tool 并发调用不会无界地倍增 Worker；单个 Worker 的 `maxOldGenerationSizeMb` 只限制该 Worker 的 V8 old space，不是宿主 RSS 上限。新运行记录完整选择范围（归一化 project、时间窗长度、隐私对、depth、locale）；恢复必须绑定显式 run 且范围完全一致，因此恢复不会选中其他项目或更宽的隐私范围。缺少范围记录、或格式/分析语义身份不符的 manifest 会被拒绝；仅宿主版本号增长不会使语义相同的运行失效。新运行保留自身已验证输出供恢复使用，不跨运行复用语义缓存。
 
@@ -207,15 +207,17 @@ dsh-session-insights semantic finalize --workdir /safe/workdir --output report.h
 
 ## DSH 兼容性
 
-最低支持宿主与实际测试版本分开记录。声明范围准入 0.2.1-rc.2 及以上版本，包括后续预发布版本；输入格式和 API 检查仍会拒绝不兼容的操作。准入规则不代表未来宿主已经过实测。
+最低支持宿主与实际测试版本分开记录。声明范围准入 0.2.2-rc.1 及以上版本，包括后续预发布版本；输入格式和 API 检查仍会拒绝不兼容的操作。准入规则不代表未来宿主已经过实测。
 
-本版要求 DSH `>=0.2.1-rc.2`，拒绝更旧宿主；输入格式仍为 V4（0.2.1 宿主扩展了 V4 事件词汇，但格式号未变，rc.5 亦然）。原生分析读取宿主恢复后的 V4 快照；可选 Python CLI 只读取 `session.v4.jsonl` 和 `session.v4.jsonl.zstd`。旧原始日志需先由上游 DSH 迁移。当前文件损坏或存在高于 V4 的代数时，不会回退读取旧文件。
+本版要求 DSH `>=0.2.2-rc.1`，拒绝更旧宿主；输入格式仍为 V4（rc.1 宿主保留了扩展后的 V4 事件词汇，格式号未变——与 rc.5 相同的 62 个事件类型）。原生分析读取宿主恢复后的 V4 快照；可选 Python CLI 只读取 `session.v4.jsonl` 和 `session.v4.jsonl.zstd`。旧原始日志需先由上游 DSH 迁移。当前文件损坏或存在高于 V4 的代数时，不会回退读取旧文件。
 
-0.6.1 创建的 run 仍可 resume：输入身份与语义 schema 未变。更早版本的确定性 CLI 缓存被自动忽略，运行会从源重新解析。已经输出的 HTML、JSON 和 Markdown 报告保留。单独安装的 CLI/Skill 需从同一版本更新；安装 Bundle 不会更新它们。
+0.8.0 分析器把输入身份重定到 `0.2.2-rc.1`（`v4-dsh022rc1.1`），早期产品版本创建的 semantic run 不再恢复：用创建它的版本完成，或在本版本新建 run。更早版本的确定性 CLI 缓存自动失效，运行会从源重新解析。已经输出的 HTML、JSON 和 Markdown 报告按原文件保留。单独安装的 CLI/Skill 需从同一版本更新；安装 Bundle 不会更新它们。
 
-工具工作量包含日志记录的程序化工具调用（PTC）内层调用。JSON 的 `tool_execution` 分别记录外层运输调用、内层执行、失败和未结束调用；每个失败调用结果计一次。若内层调用和外层程序都失败，则保留两个结果，不据此推断它们是否源于同一个原因。权限拒绝不算验证命令执行失败。developer 工具注册消息和定时注入不计人工请求。
+工具工作量包含日志记录的程序化工具调用（PTC）内层调用。JSON 的 `tool_execution` 分别记录外层运输调用、内层执行、失败、未结束调用和调用者取消；每个失败调用结果计一次。若内层调用和外层程序都失败，则保留两个结果，不据此推断它们是否源于同一个原因。权限拒绝不算验证命令执行失败。developer 工具注册消息和定时注入不计人工请求。
 
 DSH 把定时消息写为 user role、`source.kind=schedule` 的消息；DSH 0.2.0-rc.2 新增异步问答回复，`source.kind=user-question-reply`。两者都不算用户工作：都单独计入注入上下文、不进入对话证据、纠正/验收信号与完成推断，也不能构成任何授权。只有 `source.kind=user` 的人类消息才贡献正文证据。官方恢复结果使用结构化错误码 `TOOL_OUTCOME_UNKNOWN` 和 `TOOL_NOT_STARTED`，与确认失败分开统计：`tool_recovery` 按 `{outcome_unknown, not_started}` 在每个会话和总量中单独计数。`TOOL_OUTCOME_UNKNOWN` 表示已记录的调用没有持久化的最终结果，工具可能已产生副作用；`TOOL_NOT_STARTED` 表示日志中没有该调用开始的记录。两者都不计入工具失败或验证失败，也不证明工具执行过或没有执行。仅正文提到恢复码的文本仍按一般结果规则分类。重试可能改变数据的操作前，应先核实外部状态。
+
+调用者取消是独立的已结算结局，仅按 rc.1 工具管线记录的结构化错误码 `ABORTED` 与 `ABORTED_BEFORE_DISPATCH`（位于 `error.code` 或 `error.info.code`）分类，按会话和总量计入 `tool_execution.outer_cancelled` / `inner_cancelled`。被取消的调用绝不是成功、绝不是执行失败、也绝不是审批拒绝；取消本身不证明该调用是否运行过——执行体在结局变为 `ABORTED` 前会运行到静止，副作用仍可能已发生，保留的证据会如实标注，不会宣称调用"没有执行"。真实执行失败、审批拒绝、官方恢复记录与调用者取消始终保持相互可区分。
 
 DSH 0.2.1-rc.2 仍使用会话格式 4，但新增了必需的 `job/registered`、`job/settled` 与 `working-directory/change` 记录。读取器接受这些记录，并把注册表结算仅视为生产者/注册表结果：它不证明用户任务完成、交付产出或资源已释放。已注册但未结算的 job 记为 pending（包括父轮已结束而子工作仍在运行）；注册缺失的结算按完整性异常计数，而不是让整个会话不可读。Team 名册/任务快照与入站 relay 作为委派证据计数，不算 Lead 的任务完成，也不当作用户提示。工作目录变化形成带标签的轨迹，而不可变的 header cwd 仍是会话来源项目，用于筛选与恢复；跨项目活动会显式呈现，原始路径不进入 redacted/metrics 报告。第三方 `plugin:` 记录只保留不透明类型/数量覆盖，不进入用户意图、模型上下文或完成证据。`web_search` 与 `web_fetch` 按记录的工具调用计数；一次搜索返回多个来源仍只算一次调用。Token 原始分桶为记录值；`input_tokens` 与 `total_tokens` 是由记录值派生的和，并已标注。
 
@@ -260,14 +262,11 @@ DSH 0.2.1-rc.2 仍使用会话格式 4，但新增了必需的 `job/registered`�
 ```bash
 python3 -m pip install -e '.[dev]'
 npm ci --ignore-scripts
-# rc.2 兼容 runtime（声明下限）：
+# 唯一的当前 rc.1 runtime（声明下限与验收宿主）：
 npm ci --prefix tests/dsh-runtime --ignore-scripts
-DSH_RUNTIME="$PWD/tests/dsh-runtime" python3 -m unittest discover -s tests -v
-# rc.5 主验收 runtime：
-npm ci --prefix tests/dsh-runtime-rc5 --ignore-scripts
-DSH_RUNTIME="$PWD/tests/dsh-runtime-rc5" DSH_EXPECTED_VERSION=0.2.1-rc.5 \
+DSH_RUNTIME="$PWD/tests/dsh-runtime" DSH_EXPECTED_VERSION=0.2.2-rc.1 \
   python3 -m unittest discover -s tests -v
-DSH_RUNTIME="$PWD/tests/dsh-runtime-rc5" DSH_EXPECTED_VERSION=0.2.1-rc.5 npm test
+DSH_RUNTIME="$PWD/tests/dsh-runtime" DSH_EXPECTED_VERSION=0.2.2-rc.1 npm test
 python3 scripts/build_native_rules.py --check
 python3 scripts/build_fixture.py --check
 python3 scripts/audit_public_tree.py --root .

@@ -17,15 +17,17 @@ export const digest = value => createHash('sha256').update(value).digest('hex')
 
 // The single map of acceptance host targets. `primary` is the release
 // acceptance host; `compatibility` hosts keep their source/contract coverage.
+// The 0.8.0 line supports DSH >=0.2.2-rc.1 only: one exact test target, no
+// historical-host forward-support queue.
 export const HOST_TARGETS = Object.freeze({
-  primary: '0.2.1-rc.5',
-  compatibility: Object.freeze(['0.2.1-rc.2']),
+  primary: '0.2.2-rc.1',
+  compatibility: Object.freeze([]),
 })
 // Back-compat export for tools not yet parameterized (tests, one-off checks):
 // the primary acceptance target.
 export const TARGET = HOST_TARGETS.primary
-export const MINIMUM_DSH_RANGE = '>=0.2.1-rc.2'
-export const PRODUCT_VERSION = '0.7.0'
+export const MINIMUM_DSH_RANGE = '>=0.2.2-rc.1'
+export const PRODUCT_VERSION = '0.8.0'
 
 export async function fileManifest(root) {
   const files = []
@@ -44,8 +46,8 @@ export async function fileManifest(root) {
 
 // Walk the runtime's actual DSH/Cordis closure and assert every member's
 // published identity equals `expectedVersion`. The expected version is an
-// argument, not a constant: the same helper verifies the rc.5 primary runtime
-// and the rc.2 compatibility runtime without reordering anything.
+// argument, not a constant: the same helper verifies any exact target runtime
+// without reordering anything.
 export async function inspectRuntime(root, expectedVersion = TARGET) {
   const anchor = join(resolve(root), 'package.json')
   const manifest = JSON.parse(await readFile(anchor, 'utf8'))
@@ -69,7 +71,7 @@ export async function inspectRuntime(root, expectedVersion = TARGET) {
     seen.add(packagePath)
     if ((name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-')) && metadata.version !== expectedVersion)
       throw new Error(`mixed DSH runtime closure: ${name}@${metadata.version} at ${packagePath} (expected ${expectedVersion})`)
-    if (name === '@deepseek-ai/cordis' && metadata.version !== '4.0.5') throw new Error('unexpected Cordis runtime')
+    if (name === '@deepseek-ai/cordis' && metadata.version !== '4.1.0') throw new Error('unexpected Cordis runtime')
     identities.push({name, version: metadata.version, files: await fileManifest(dir)})
     for (const dependency of Object.keys({...metadata.dependencies, ...metadata.peerDependencies})) {
       if (!dependency.startsWith('@deepseek-ai/dsh-') && dependency !== '@deepseek-ai/cordis') continue

@@ -34,10 +34,50 @@ test('PTC pairs subcalls, counts pending work and retains both outer and inner f
  for (const id of ['a','b','c']) add(s,'tool/ptc-dispatch-start',{rootCallId:'fixture-call-1',parentCallId:'fixture-call-1',subCallId:id,name:'bash',arguments:'npm test'})
  for (const id of ['b','a']) add(s,'tool/ptc-dispatch',{rootCallId:'fixture-call-1',parentCallId:'fixture-call-1',subCallId:id,name:'bash',arguments:'npm test',isError:id==='b',content:[{type:'text',text:'Tests complete'}]})
  const r=report(s);assert.equal(r.totals.tool_calls,4)
- assert.deepEqual(r.session_summaries[0].tool_execution,{outer_calls:1,inner_calls:3,outer_failures:0,inner_failures:1,inner_incomplete:1})
+ assert.deepEqual(r.session_summaries[0].tool_execution,{outer_calls:1,inner_calls:3,outer_failures:0,inner_failures:1,inner_incomplete:1,outer_cancelled:0,inner_cancelled:0})
  assert.equal(r.totals.tool_failures,1)
  const outer=s.events.splice(5,1)[0];outer.data.message.isError=true;s.events.push(outer);s.events.forEach((e,i)=>e.seq=i)
  const failed=report(s);assert.equal(failed.totals.tool_failures,2);assert.equal(failed.session_summaries[0].tool_execution.outer_failures,1)
+})
+test('rc.1 caller cancellation is settled evidence, distinct from failure, rejection and unknown outcomes',()=>{
+ // error.code ABORTED (post-dispatch caller cancellation): settled, never a
+ // failure, never a success; side effects stay possible.
+ const aborted=snapshot();aborted.events[5].data.message.isError=true
+ aborted.events[5].data.error={code:'ABORTED',message:'caller cancelled'}
+ aborted.events[5].data.message.content=[{type:'text',text:'Command completed successfully'}]
+ const a=buildReport([aborted],options)
+ assert.deepEqual(a.report.session_summaries[0].tool_execution,{outer_calls:1,inner_calls:0,outer_failures:0,inner_failures:0,inner_incomplete:0,outer_cancelled:1,inner_cancelled:0})
+ assert.equal(a.report.totals.tool_failures,0)
+ assert.equal(a.report.session_summaries[0].verification.successes,0,'cancelled output text must not classify as success')
+ const evidence=a.sessions[0].messages.filter(m=>m.tool_facts?.outcome==='cancelled')
+ assert.equal(evidence.length,1)
+ assert.equal(evidence[0].tool_facts.cancelled,'ABORTED')
+ assert.match(evidence[0].text,/side effects possible/)
+ // error.info.code ABORTED_BEFORE_DISPATCH: the pipeline aborted the call
+ // before dispatch; the same cancellation classification applies.
+ const pre=snapshot();pre.events[5].data.message.isError=true
+ pre.events[5].data.error={message:'tool call aborted before dispatch',info:{name:'AbortError',code:'ABORTED_BEFORE_DISPATCH'}}
+ const p=report(pre)
+ assert.equal(p.session_summaries[0].tool_execution.outer_cancelled,1)
+ assert.equal(p.totals.tool_failures,0)
+ // Same tool cancelled in a later turn: a distinct settled scope keeps its
+ // own evidence record.
+ const twice=snapshot();twice.events[5].data.message.isError=true
+ twice.events[5].data.error={code:'ABORTED',message:'caller cancelled'}
+ add(twice,'tool/result',{turn:2,step:1,message:{id:'result-x',role:'tool',source:{kind:'tool',callId:'fixture-call-1'},toolCallId:'fixture-call-1',isError:true,content:[{type:'text',text:'cancelled again'}]},error:{code:'ABORTED',message:'caller cancelled'}},{surfaceOp:'append'})
+ const t=buildReport([twice],options)
+ assert.equal(t.report.session_summaries[0].tool_execution.outer_cancelled,2)
+ assert.equal(t.sessions[0].messages.filter(m=>m.tool_facts?.outcome==='cancelled').length,2)
+ // A real execution failure still counts as a failure, not a cancellation.
+ const failed=snapshot();failed.events[5].data.message.isError=true
+ failed.events[5].data.error={code:'EXIT_1',message:'command failed'}
+ assert.equal(report(failed).session_summaries[0].tool_execution.outer_failures,1)
+ // Unknown outcomes stay official recovery records, not cancellations.
+ const unknown=snapshot();unknown.events[5].data.error={code:'TOOL_OUTCOME_UNKNOWN',message:'outcome not recorded'}
+ const u=report(unknown)
+ assert.equal(u.totals.tool_recovery.outcome_unknown,1)
+ assert.equal(u.session_summaries[0].tool_execution.outer_failures,0)
+ assert.equal(u.session_summaries[0].tool_execution.outer_cancelled,0)
 })
 test('Auto review final denial is permission blocked, never failed verification; text cannot change explicit success',()=>{
  const s=snapshot();s.events[5].data.message.isError=true;s.events[5].data.error={code:'AUTO_REVIEW_DENIED',message:'review denied'}

@@ -47,13 +47,13 @@ const rejectedWith=(fn,pattern)=>{
 const cleanReport={
   auditReportVersion:2,
   vulnerabilities:{},
-  metadata:{vulnerabilities:{info:0,low:0,moderate:0,high:0,critical:0,total:0},dependencies:{prod:37,total:38}},
+  metadata:{vulnerabilities:{info:0,low:0,moderate:0,high:0,critical:0,total:0},dependencies:{prod:36,total:37}},
 }
 
 
-test('exception path accepts the real 23-node report with one advisory under a cohort-bound policy',()=>{
+test('exception path accepts the real 18-node report with one advisory under a cohort-bound policy',()=>{
   const result=assess()
-  assert.equal(result.status,'accepted_known_risk');assert.equal(result.affected_packages,23);assert.equal(result.advisories,1)
+  assert.equal(result.status,'accepted_known_risk');assert.equal(result.affected_packages,18);assert.equal(result.advisories,1)
   assert.equal(result.graph_sha256,policy.report_graph_sha256)
 })
 
@@ -78,7 +78,7 @@ test('an empty lock inventory cannot masquerade as a clean pass',()=>{
 test('findings without an exception policy report unauthorized_findings with advisory detail',()=>{
   const result=assess(report,null,files)
   assert.equal(result.status,'unauthorized_findings')
-  assert.equal(result.affected_packages,23)
+  assert.equal(result.affected_packages,18)
   assert.deepEqual(result.direct_advisories,['https://github.com/advisories/GHSA-mrhx-c7xc-m3w5'])
   assert.equal(result.highest_severity,'high')
   assert.match(result.reason,/policy missing|expired/)
@@ -88,13 +88,6 @@ test('an expired policy never authorizes fresh findings',()=>{
   const result=assess(report,expired,files)
   assert.equal(result.status,'unauthorized_findings')
   assert.match(result.reason,/product/)
-})
-
-for(const scope of ['prod','full'])test('real npm10 CI '+scope+' report retains the exact accepted via graph despite omitted reverse effects',()=>{
-  const value=JSON.parse(readFileSync(new URL('../tests/fixtures/npm-audit-ci-'+scope+'.json',import.meta.url),'utf8'))
-  const result=assess(value)
-  assert.equal(result.graph_sha256,policy.report_graph_sha256)
-  assert.equal(result.affected_packages,23)
 })
 
 test('omitted reverse effects do not remove or broaden validated advisory chains',()=>{
@@ -130,7 +123,7 @@ for(const exitToLeaf of [false,true])test('cycles are refused even if an accepte
   // A controlled lock with this extra edge makes the cycle structurally
   // resolved; the cycle guard must still refuse it, independently of pinning.
   const changedLock=clone(lock)
-  changedLock.packages['node_modules/@deepseek-ai/dsh-tools'].peerDependencies['@deepseek-ai/dsh-tool-todo']='0.2.1-rc.5'
+  changedLock.packages['node_modules/@deepseek-ai/dsh-tools'].peerDependencies['@deepseek-ai/dsh-tool-todo']='0.2.2-rc.1'
   assert.throws(()=>inspectReport(smallCycle(exitToLeaf),changedLock),/cyclic advisory chain/)
 })
 
@@ -171,7 +164,7 @@ for(const path of COHORT_PATHS)test('exception expires when cohort file changes:
 test('host queue drift expires the exception independently of manifest hashes',()=>{
   // The policy keeps the originally accepted queue digest; only the workflow
   // file drifts, so the queue mismatch alone must void the exception.
-  const drift={...files,[workflow]:Buffer.from(String(files[workflow]).replace("dsh: '0.2.1-rc.5'","dsh: '0.2.1-rc.4'"))}
+  const drift={...files,[workflow]:Buffer.from(String(files[workflow]).replace("dsh: '0.2.2-rc.1'","dsh: '0.2.2-rc.0'"))}
   const result=assess(report,policy,drift)
   assert.equal(result.status,'unauthorized_findings');assert.match(result.reason,/host queue/)
 })
@@ -179,14 +172,14 @@ test('an updated hash cannot broaden the fixed package version or host family',(
   for(const [path,mutate,reason] of [
     ['package.json',p=>{p.version='9.9.9'},/project version/],
     ['package-lock.json',p=>{p.packages['node_modules/zod'].version='4.4.4'},/zod 4.4.3/],
-    ['tests/dsh-runtime-rc5/package.json',p=>{Object.keys(p.dependencies).forEach(k=>{p.dependencies[k]='0.2.1-rc.4'})},/host pins/],
+    ['tests/dsh-runtime/package.json',p=>{Object.keys(p.dependencies).forEach(k=>{p.dependencies[k]='0.2.2-rc.0'})},/host pins/],
   ]){
     const drift=changedFile(path,mutate),p=clone(policy);p.cohort.files[path]=digest(drift[path])
     rejectedWith(()=>assess(report,p,drift),reason)
   }
 })
 test('policy cannot silently expand to another CVE, version, patch, calendar expiry or missing host lock',()=>{
-  for(const mutate of [p=>{p.exception.cve='CVE-2099-0001'},p=>{p.exception.version='4.5.0'},p=>{p.exception.patched_version='9.9.9'},p=>{p.expiry.calendar_expiry='2099-01-01'},p=>{delete p.cohort.files['tests/dsh-host-rc5/package-lock.json']}]){
+  for(const mutate of [p=>{p.exception.cve='CVE-2099-0001'},p=>{p.exception.version='4.5.0'},p=>{p.exception.patched_version='9.9.9'},p=>{p.expiry.calendar_expiry='2099-01-01'},p=>{delete p.cohort.files['tests/dsh-host/package-lock.json']}]){
     const p=clone(policy);mutate(p);rejectedWith(()=>assess(report,p))
   }
 })
@@ -271,10 +264,19 @@ test('spawn exceptions still emit a failed scan receipt',()=>outputs(dir=>{
   assert.equal(JSON.parse(readFileSync(join(dir,'result.json'),'utf8')).status,'failed')
 }))
 
-// RV-05: the reviewer-side rc.5 production/full scans resolve 24 affected
-// entries — @deepseek-ai/dsh-typert-protocol declares `zod: ^4.4.3` and locks
-// 4.4.3, a satisfied range the exact-string check used to reject.
-const rangeReport=JSON.parse(readFileSync(new URL('../tests/fixtures/npm-audit-rc5-typert-range.json',import.meta.url),'utf8'))
+// Same-closure alternate enumeration: npm versions differ in whether a row
+// with a transitive zod path also lists the direct zod edge. Dropping the
+// redundant direct edge from @deepseek-ai/dsh-session-projection (which still
+// reaches zod via dsh-session -> dsh-llm) yields a second real-shaped graph
+// for the same reviewed closure.
+function variantReport(){
+  const value=clone(report)
+  const proj='@deepseek-ai/dsh-session-projection'
+  value.vulnerabilities[proj].via=value.vulnerabilities[proj].via.filter(n=>n!=='zod')
+  value.vulnerabilities.zod.effects=value.vulnerabilities.zod.effects.filter(n=>n!==proj)
+  return value
+}
+const rangeReport=variantReport()
 const rangePolicy=syntheticPolicy(rangeReport)
 function pairedPolicy(){
   const value=clone(policy)
@@ -284,8 +286,8 @@ function pairedPolicy(){
 test('the two explicitly reviewed graphs both pass under one bound policy',()=>{
   const accepted=pairedPolicy()
   for(const [value,expectedCount,expectedHash] of [
-    [report,23,policy.report_graph_sha256],
-    [rangeReport,24,rangePolicy.report_graph_sha256],
+    [report,18,policy.report_graph_sha256],
+    [rangeReport,18,rangePolicy.report_graph_sha256],
   ]){
     const result=assess(value,accepted)
     assert.equal(result.status,'accepted_known_risk')
@@ -305,7 +307,7 @@ test('two different reviewed graphs survive capture and summary without being ca
     const summary=verifyResults(dir,{prod:'success',full:'success',python:'success'},{root})
     assert.equal(summary.status,'passed_with_known_upstream_risk')
     assert.equal(summary.exception_fixed,false)
-    assert.deepEqual(summary.assessments.map(a=>a.affected_packages),[23,24])
+    assert.deepEqual(summary.assessments.map(a=>a.affected_packages),[18,18])
     assert.deepEqual(summary.assessments.map(a=>a.graph_sha256),[policy.report_graph_sha256,rangePolicy.report_graph_sha256])
   }finally{rmSync(root,{recursive:true,force:true})}
 }))
@@ -343,32 +345,42 @@ test('the paired policy still rejects a new advisory, critical severity and coho
   const drift={...files,'package-lock.json':Buffer.concat([files['package-lock.json'],Buffer.from('\n')])}
   rejectedWith(()=>assess(report,pairedPolicy(),drift),/cohort changed/)
 })
-test('the real 24-entry rc.5 graph with a ranged edge validates and binds to its cohort',()=>{
+test('the second reviewed 18-entry graph validates and binds to its cohort',()=>{
   const result=assess(rangeReport,rangePolicy)
   assert.equal(result.status,'accepted_known_risk')
-  assert.equal(result.affected_packages,24);assert.equal(result.advisories,1)
+  assert.equal(result.affected_packages,18);assert.equal(result.advisories,1)
   assert.equal(result.graph_sha256,rangePolicy.report_graph_sha256)
 })
+test('an edge declared as a lock-satisfied range validates',()=>{
+  // dsh-llm declares `zod: 4.4.3` and the lock holds 4.4.3; widening the
+  // declaration to a satisfied range must not change the outcome: the graph
+  // builder consults ranges, not declaration strings.
+  const changed=clone(lock)
+  changed.packages['node_modules/@deepseek-ai/dsh-llm'].dependencies.zod='^4.4.3'
+  assert.equal(inspectReport(report,changed).sha256,policy.report_graph_sha256)
+})
 test('an edge whose locked version leaves the declared range is rejected',()=>{
-  const value=clone(rangeReport),changed=clone(lock)
-  // dsh-typert-protocol declares `zod: ^4.4.3` and the lock holds 4.4.3.
-  // Narrow the declaration so the locked version no longer satisfies it: the
-  // graph builder must consult ranges, not compare declaration strings.
-  changed.packages['node_modules/@deepseek-ai/dsh-typert-protocol'].dependencies.zod='~4.3.0'
-  assert.throws(()=>inspectReport(value,changed),/not satisfied by the locked dependency/)
+  const changed=clone(lock)
+  // Narrow the declaration so the locked 4.4.3 no longer satisfies it.
+  changed.packages['node_modules/@deepseek-ai/dsh-llm'].dependencies.zod='~4.3.0'
+  assert.throws(()=>inspectReport(report,changed),/not satisfied by the locked dependency/)
 })
 test('a vulnerability on a nested or unreviewed path stays outside the accepted set',()=>{
-  const value=clone(rangeReport)
-  // typert-protocol has no inbound via reference, so this isolates the node
+  const value=clone(report)
+  // dsh-session-query has no inbound via reference, so this isolates the node
   // path constraint from the edge lookup on earlier rows.
-  value.vulnerabilities['@deepseek-ai/dsh-typert-protocol'].nodes=['node_modules/@deepseek-ai/dsh-agent/node_modules/@deepseek-ai/dsh-typert-protocol']
+  value.vulnerabilities['@deepseek-ai/dsh-session-query'].nodes=['node_modules/@deepseek-ai/dsh-agent/node_modules/@deepseek-ai/dsh-session-query']
   rejectedWith(()=>assess(value,rangePolicy),/reviewed root node paths/)
 })
 test('graph drift between the reviewed and reported sets cannot pass under a stale hash',()=>{
-  const value=clone(rangeReport)
-  delete value.vulnerabilities['@deepseek-ai/dsh-typert-protocol']
-  value.vulnerabilities.zod.effects=value.vulnerabilities.zod.effects.filter(n=>n!=='@deepseek-ai/dsh-typert-protocol')
-  value.metadata.vulnerabilities.high=23;value.metadata.vulnerabilities.total=23
+  const value=clone(report)
+  // dsh-session-query has no inbound via reference, so removing it (and the
+  // dangling effect references) yields a structurally valid 17-entry graph
+  // that is simply not the reviewed one.
+  delete value.vulnerabilities['@deepseek-ai/dsh-session-query']
+  for(const row of Object.values(value.vulnerabilities))
+    row.effects=row.effects.filter(n=>n!=='@deepseek-ai/dsh-session-query')
+  value.metadata.vulnerabilities.high=17;value.metadata.vulnerabilities.total=17
   rejectedWith(()=>assess(value,rangePolicy),/graph drifted/)
 })
 
@@ -428,7 +440,7 @@ test('an exception capture cannot be summarized after cohort drift',()=>outputs(
 function cleanFixtureManifest(){
   const lock=JSON.parse(files['package-lock.json']),semver={...lock.packages['node_modules/semver']}
   delete semver.dev;delete semver.peer
-  return Buffer.from(JSON.stringify({name:'dsh-session-insights',version:'0.7.0',private:true,dependencies:{semver:semver.version}},null,2)+'\n')
+  return Buffer.from(JSON.stringify({name:'dsh-session-insights',version:'0.8.0',private:true,dependencies:{semver:semver.version}},null,2)+'\n')
 }
 function cleanFixtureLock(){
   const manifest=JSON.parse(cleanFixtureManifest())

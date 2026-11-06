@@ -472,8 +472,10 @@ def validate_facet(facet: Any, candidate: dict[str, Any], privacy: str) -> list[
 
 def load_manifest(workdir: Path) -> dict[str, Any]:
     manifest = read_json(workdir / "manifest.json")
-    if manifest.get("semantic_schema_version") != SEMANTIC_SCHEMA_VERSION or any(manifest.get(k) != v for k, v in IDENTITY.items()):
+    if manifest.get("semantic_schema_version") != SEMANTIC_SCHEMA_VERSION:
         raise ValueError("semantic schema version 不匹配")
+    if any(manifest.get(k) != v for k, v in IDENTITY.items()):
+        raise ValueError("semantic 输入身份不匹配：该 run 由旧版本创建；用创建它的版本完成该 run，或在本版本新建 run")
     if (manifest.get("locale") or "zh-CN") not in engine.SUPPORTED_LOCALES:
         raise ValueError("unsupported locale")
     return manifest

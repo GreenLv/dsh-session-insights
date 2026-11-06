@@ -3,8 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createRequire } from "node:module";
 
-const expectedRange = ">=0.2.1-rc.2";
-const minimumAdmitted = "0.2.1-rc.2";
+const expectedRange = ">=0.2.2-rc.1";
+const minimumAdmitted = "0.2.2-rc.1";
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
 // The official app-boot/market consumer evaluates DSH peer ranges with
@@ -34,16 +34,21 @@ test("market-facing DSH metadata matches the declared target range", () => {
   assert.ok(evaluatePluginCompatibility(packageJson).compatible);
 });
 
-test("version vector: RC.2 floor refuses 0.2.0 and 0.2.1-rc.1, admits later releases", () => {
-  // Refused floors.
-  for (const version of ["0.2.0-rc.1", "0.2.0-rc.2", "0.2.0", "0.2.1-rc.1", "0.2.1-0", "0.2.1-alpha"])
+test("version vector: rc.1 floor refuses older lines and below-floor prereleases, admits later releases", () => {
+  // Refused floors: the whole 0.2.0/0.2.1 lines, and same-base prereleases
+  // below the exact floor tuple.
+  for (const version of [
+    "0.2.0-rc.1", "0.2.0-rc.2", "0.2.0", "0.2.1-rc.1", "0.2.1-rc.2", "0.2.1-rc.5",
+    "0.2.1", "0.2.2-0", "0.2.2-alpha", "0.2.2-alpha.2", "0.2.2-beta.1", "0.2.2-rc.0",
+  ])
     assert.ok(!admitted(version), version);
   // Admitted: the floor itself, later RCs, stable releases and far-future
   // majors; a future tuple prerelease must not be rejected by static tables.
   for (const version of [
     minimumAdmitted,
-    "0.2.1-rc.3",
-    "0.2.1",
+    "0.2.2-rc.2",
+    "0.2.2",
+    "0.2.3-rc.1",
     "0.3.0-rc.1",
     "0.3.0",
     "1.0.0",
@@ -51,16 +56,13 @@ test("version vector: RC.2 floor refuses 0.2.0 and 0.2.1-rc.1, admits later rele
   ])
     assert.ok(admitted(version), version);
   // Invalid metadata is not silently admitted.
-  // A prerelease below the exact floor is refused even inside the floor tuple.
-  for (const version of ["0.2.1-0", "0.2.1-alpha"]) assert.ok(!admitted(version), version);
-  assert.ok(!admitted("not-a-version"));
-  assert.ok(!admitted("0.2"));
+  for (const version of ["not-a-version", "0.2"]) assert.ok(!admitted(version), version);
 });
 
 test("official app-boot precedence: engines.dsh alone decides, peers are ignored", () => {
   // dsh-app-boot's unmetRequirements checks engines.dsh first and returns its
   // issues alone; peerDependencies are not consulted when engines.dsh exists.
-  const runtime = "0.2.1-rc.2";
+  const runtime = "0.2.2-rc.1";
   const manifest = {
     ...packageJson,
     peerDependencies: {...packageJson.peerDependencies, "@deepseek-ai/dsh-agent": "<0.0.1"},
@@ -97,12 +99,12 @@ test("both README support summaries match the market range", async () => {
     readFile(new URL("../README.md", import.meta.url), "utf8"),
     readFile(new URL("../README.zh-CN.md", import.meta.url), "utf8"),
   ]);
-  assert.match(english, /The package requires `>=0\.2\.1-rc\.2`/);
+  assert.match(english, /The package requires `>=0\.2\.2-rc\.1`/);
   assert.match(english, /Contract and service tests cover synthetic V4 input/);
   assert.match(english, /acceptance receipts attached to each exact release artifact/);
   assert.match(english, /docs\/acceptance\/v0\.6\.0-rc2\.1-candidate\.md/);
-  assert.match(chinese, /软件包要求 `>=0\.2\.1-rc\.2`/);
-  assert.match(chinese, /契约与服务测试覆盖合成 V4 输入/);
+  assert.match(chinese, /软件包要求 `>=0\.2\.2-rc\.1`/);
+  assert.match(chinese, /契约与服务测试在精确 rc\.1 runtime 上覆盖合成 V4 输入/);
   assert.match(chinese, /原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录/);
   assert.match(chinese, /docs\/acceptance\/v0\.6\.0-rc2\.1-candidate\.md/);
 });

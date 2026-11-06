@@ -379,7 +379,9 @@
               "inner_calls",
               "outer_failures",
               "inner_failures",
-              "inner_incomplete"
+              "inner_incomplete",
+              "outer_cancelled",
+              "inner_cancelled"
             ],
             "additionalProperties": false,
             "properties": {
@@ -400,6 +402,15 @@
                 "minimum": 0
               },
               "inner_incomplete": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "outer_cancelled": {
+                "type": "integer",
+                "description": "Calls settled with the structured caller-cancellation classification (ABORTED / ABORTED_BEFORE_DISPATCH). Never counted as success or execution failures; side effects remain possible.",
+                "minimum": 0
+              },
+              "inner_cancelled": {
                 "type": "integer",
                 "minimum": 0
               }

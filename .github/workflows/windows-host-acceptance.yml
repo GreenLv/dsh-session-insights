@@ -19,7 +19,7 @@ on:
       dsh_version:
         description: 'Official DSH host version to install for acceptance'
         required: false
-        default: '0.2.1-rc.5'
+        default: '0.2.2-rc.1'
         type: string
       commit:
         description: 'Exact candidate commit (full SHA) to check out in both modes'
@@ -60,7 +60,7 @@ jobs:
           ref: ${{ inputs.commit }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '22.19.0'
+          node-version: '24.9.0'
       - run: npm ci --ignore-scripts
       - run: node scripts/pack_candidate.mjs "$CANDIDATE_COMMIT" "$RUNNER_TEMP/candidate"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -85,7 +85,7 @@ jobs:
           ref: ${{ inputs.commit }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '22.19.0'
+          node-version: '24.9.0'
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
@@ -117,15 +117,15 @@ jobs:
       - name: Install the exact target runtime and host
         shell: pwsh
         run: |
-          # One target selection drives host, runtime, and verifier: rc.5 uses
-          # tests/dsh-runtime-rc5, rc.2 uses tests/dsh-runtime. Any other value
-          # is refused before the expensive host install.
-          $supported = @('0.2.1-rc.5', '0.2.1-rc.2')
+          # One target selection drives host, runtime, and verifier: the only
+          # supported target uses tests/dsh-runtime. Any other value is refused
+          # before the expensive host install.
+          $supported = @('0.2.2-rc.1')
           $target = '${{ inputs.dsh_version }}'
           # -not (a -contains b) parses as (-not a) -contains b because -not
           # binds tighter; use the explicit -notcontains operator.
           if ($supported -notcontains $target) { throw "unsupported dsh_version: $target (supported: $($supported -join ', '))" }
-          $runtime = if ($target -eq '0.2.1-rc.5') { 'tests/dsh-runtime-rc5' } else { 'tests/dsh-runtime' }
+          $runtime = 'tests/dsh-runtime'
           "runtime=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Append
           "dsh_target=$target" | Out-File -FilePath $env:GITHUB_ENV -Append
           npm ci --prefix $runtime --ignore-scripts

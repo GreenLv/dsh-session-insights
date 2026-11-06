@@ -499,6 +499,15 @@ const finiteNumber = (value) => typeof value === 'number' && Number.isFinite(val
 const JOB_TERMINAL_STATUSES = new Set(['completed', 'failed', 'killed'])
 const DELEGATION_TOOL_NAMES = new Set(['subagent', 'subagent_fork', 'workflow', 'spawn_teammate'])
 const JOB_SETTLE_CAUSES = new Set(['producer', 'kill', 'teardown'])
+// rc.1 tools pipeline settles a caller-cancelled call as a structured
+// ABORTED / ABORTED_BEFORE_DISPATCH error result (TOOL_ABORTED and
+// TOOL_ABORTED_BEFORE_DISPATCH in @deepseek-ai/dsh-tools; run_code caller
+// cancellation moved from CODE_RUN_FAILED to ABORTED in rc.1). Cancellation
+// is a settled outcome, never a success, never an execution failure and
+// never an approval rejection. The body reaches quiescence before the
+// outcome becomes ABORTED, so side effects remain possible and a cancelled
+// result must not be reported as "not executed".
+const CANCELLED_ERROR_CODES = new Set(['ABORTED', 'ABORTED_BEFORE_DISPATCH'])
 function jobRegistration(d) {
   const jobId = d.jobId, owner = d.owner, kind = d.kind, label = d.label,
     startedAt = d.startedAt, toolCall = d.toolCall
@@ -627,7 +636,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
     epoch: 0,
     session_header_records: 1,
     ptc: new Map(), children: new Set(), permissionSeen: new Set(), deniedDecisions: new Set(),
-    tool_execution: {outer_calls: 0, inner_calls: 0, outer_failures: 0, inner_failures: 0, inner_incomplete: 0},
+    tool_execution: {outer_calls: 0, inner_calls: 0, outer_failures: 0, inner_failures: 0, inner_incomplete: 0, outer_cancelled: 0, inner_cancelled: 0},
     // Official host recovery results (DSH >= 0.2.0-rc.2) are uncertainty records,
     // never confirmed failures; they are counted separately per status.
     tool_recovery: {outcome_unknown: 0, not_started: 0},
@@ -660,7 +669,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
       return
     const text = sanitize(raw, analysisPrivacy, role === 'tool' ? 700 : 12000)
     if (!text || text === '[code omitted]') return
-    const digest = hash(`${role}\0${facts?.recovery ? `${facts.record_identity}\0` : ''}${text}`)
+    const digest = hash(`${role}\0${facts?.recovery || facts?.cancelled ? `${facts.record_identity}\0` : ''}${text}`)
     if (!s.messages.some((m) => m.digest === digest))
       s.messages.push({
         role,
@@ -1038,6 +1047,44 @@ export function parseSnapshot(snapshot, opts, coverage) {
         continue
       }
       s.settled_calls.add(scope)
+      // Structured caller cancellation (rc.1 ABORTED classifications) is
+      // counted separately from execution failures before any failure,
+      // retry or verification attribution. The code lives at error.code or
+      // error.info.code depending on whether the pipeline aborted the call
+      // before or after dispatch.
+      const cancelledCode =
+        object(d.error) && typeof id === 'string' && id
+          ? (CANCELLED_ERROR_CODES.has(d.error.code) ? d.error.code
+            : object(d.error.info) && CANCELLED_ERROR_CODES.has(d.error.info.code) ? d.error.info.code
+            : null)
+          : null
+      if (cancelledCode) {
+        s.tool_execution[d.inner ? 'inner_cancelled' : 'outer_cancelled']++
+        const call = s.calls.get(id) || { tool: 'unknown' }
+        // A cancelled call settled: never a success, never an execution
+        // failure and never an approval rejection. Side effects remain
+        // possible, so the record never claims the call "did not run".
+        message(
+          'tool',
+          `Tool ${call.tool || 'unknown'}; caller cancelled (${cancelledCode}); side effects possible`,
+          seq,
+          {
+            tool: call.tool || 'unknown',
+            outcome: 'cancelled',
+            cancelled: cancelledCode,
+            record_identity: scope,
+            call_id: id,
+            turn: d.turn ?? null,
+            step: d.step ?? null,
+            exit_code: null,
+            cause: null,
+            verification: !!call.verification,
+            state_change: !!call.state_change,
+            git_commit: !!call.git_commit,
+          },
+        )
+        continue
+      }
       const call = s.calls.get(id) || { tool: 'unknown' },
         value = d.message || d
       if (DELEGATION_TOOL_NAMES.has(String(call.tool || ''))) {
@@ -2006,7 +2053,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.7.0-v4-dsh021rc2.5',
+    analyzer_version: '0.8.0-v4-dsh022rc1.1',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),

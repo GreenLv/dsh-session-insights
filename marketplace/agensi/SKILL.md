@@ -4,9 +4,9 @@ description: Review DeepSeek Harness session history and produce a local HTML wo
 license: MIT
 metadata:
   author: GreenLv
-  version: "0.5.2"
-  requires_dsh: ">=0.2.0-rc.2"
-  requires_node: "^22.19.0 || >=24.0.0"
+  version: "0.8.0"
+  requires_dsh: ">=0.2.2-rc.1"
+  requires_node: ">=24.9.0"
   docs_url: https://github.com/GreenLv/dsh-session-insights
 ---
 
@@ -16,16 +16,16 @@ Review how work proceeds in DeepSeek Harness: project and workflow patterns, too
 
 ## Required environment
 
-Requires DeepSeek Harness >=0.2.0-rc.2 with its commands, tools and sessionQuery services, and Node.js ^22.19.0 or >=24.0.0. Loading this file in another agent does not provide the DSH services.
+Requires DeepSeek Harness >=0.2.2-rc.1 with its commands, tools and sessionQuery services, and Node.js >=24.9.0. Loading this file in another agent does not provide the DSH services.
 
-This download contains the published 0.5.2 Bundle source plus this marketplace entry skill. It is free software under the included MIT license. Unzipping the skill into Claude, Cursor, Codex or another agent does not install DSH or make its session services available.
+This download contains the published 0.8.0 Bundle source plus this marketplace entry skill. It is free software under the included MIT license. Unzipping the skill into Claude, Cursor, Codex or another agent does not install DSH or make its session services available.
 
 Run the review inside DSH with the Bundle loaded. If the DSH session-insights tools are unavailable, explain the dependency and point to the installation instructions in [README.md](README.md). Do not substitute another agent's logs or scrape private session directories.
 
 For the DSH Web profile, the published installation route is:
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.5.2
+dsh plugin --profile web add dsh-session-insights@0.8.0
 dsh web
 ```
 

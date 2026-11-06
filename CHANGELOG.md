@@ -4,6 +4,28 @@
 
 Public releases are listed newest first.
 
+## 0.8.0 - 2026-11-06 (candidate, not yet published)
+
+### Changed
+
+- **Breaking:** the minimum DSH host is now `>=0.2.2-rc.1`. Older hosts — the whole 0.2.0/0.2.1 lines and `0.2.2` prereleases below `rc.1` — are refused, with no old-API fallback, no dual stack and no forward-support queue for retired hosts. `0.2.2-rc.1` is the single exact acceptance-test host; later releases stay admitted by the declared range without being tested.
+- The Node.js floor is now `>=24.9.0`, matching the rc.1 host's own runtime requirement; the Cordis peer follows the rc.1 release to `~4.1.0`. npm, Python and Skill identities move to 0.8.0 together, and the stale marketplace entry (0.5.2-era DSH/Node claims) is refreshed to the same floors.
+- Test and acceptance infrastructure converges on one current runtime: `tests/dsh-runtime` and `tests/dsh-host` now pin exact `0.2.2-rc.1`, the retired `tests/dsh-*-rc5` trees and their consumers (CI matrix, Windows workflow defaults, audit cohort, `.gitattributes`, README commands) are removed, and CI runs the Node 24.9.0 floor on all three OSes plus one Node 25 probe of the same host.
+- The rc.1 adaptation was verified against the real published packages: the V4 vocabulary is unchanged from rc.5 (62 known event types, zero additions or removals), official admission, session contract, repair-fixture and real Session/query/codec service checks run against exact rc.1.
+
+### Added
+
+- Structured caller cancellation is now its own settled outcome. The rc.1 tools pipeline classifies caller-cancelled calls with `ABORTED` / `ABORTED_BEFORE_DISPATCH` structured error codes (`run_code` caller cancellation moved off `CODE_RUN_FAILED` in rc.1); both analyzers count them in new `tool_execution.outer_cancelled` / `inner_cancelled` report fields, never as success, execution failure or approval rejection, with bounded evidence noting that side effects remain possible because the call body reaches quiescence before the outcome settles. Contrast vectors pin cancelled, real-failure, approval-rejection and unknown-outcome classifications as mutually distinct in both runtimes.
+
+### Security
+
+- The known upstream dependency gap remains unresolved: the rc.1 packages (`dsh-commands`, `dsh-llm`, `dsh-agent`) still pin `zod@4.4.3` exactly ([GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), patched in 4.6.6), so the peer closure, the contract runtime tree and the host tree's nested copies remain affected; the full host tree's top-level zod resolves to the patched 4.6.7. The 0.7.0 exception expired with its cohort and was not renewed. On 2026-11-06 the maintainer made a new, limited decision accepting this risk for 0.8.0 and the exact reviewed rc.1 cohort: 9 bound files, the host queue and the two reviewed 18-entry report graph variants. In local checks, fresh production and full npm scans each exited 1 with the single advisory and 18 affected entries; the policy-aware assessment classified both as `accepted_known_risk`. These are local results, not exact-commit CI results. New findings or cohort drift fail closed. See [Security Policy](SECURITY.md#known-upstream-dependency-gap).
+
+### Migration
+
+- The analyzer version string is `0.8.0-v4-dsh022rc1.1`; the input identity retargets to `0.2.2-rc.1`. Semantic runs recorded by 0.7.0 or earlier no longer resume under the 0.8.0 identity: finish them with the version that created them or start a new run; old runs and their evidence are retained, never rewritten. Deterministic CLI caches move to version 10 and older entries are ignored automatically (re-parsed from source; deleting them stays an optional manual cleanup via `dsh-session-insights cache`). Existing HTML/JSON/Markdown reports remain openable as files.
+- Upgrading a host below `0.2.2-rc.1` to at least `0.2.2-rc.1` is required before installing this candidate. Historical V4 session logs remain valid data input; keeping the retained rc.2-era fixtures does not mean older hosts are supported.
+
 ## 0.7.0 - 2026-11-03
 
 ### Added

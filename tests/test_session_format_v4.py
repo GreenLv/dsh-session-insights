@@ -16,6 +16,7 @@ Passing legacy fixtures does not establish any of this.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import subprocess
@@ -609,6 +610,97 @@ class SessionFormatV4Tests(unittest.TestCase):
             ):
                 self.assertEqual(file_report["totals"][key], snapshot_report["totals"][key], key)
 
+    def cancelled_events(self, error: dict | None):
+        events = v4_events()
+        for item in events:
+            if item["type"] == "tool/result":
+                item["data"]["message"]["isError"] = True
+                if error is not None:
+                    item["data"]["error"] = error
+                break
+        header = v4_header("session-v4-cancelled")
+        header.pop("type")
+        return {"session": header, "events": events}
+
+    def test_rc1_caller_cancellation_is_distinct_from_failure_and_unknown_outcomes(self):
+        """rc.1 structured cancellation vectors: cancelled, failed, rejected, unknown.
+
+        Cancellation (ABORTED / ABORTED_BEFORE_DISPATCH from the rc.1 tools
+        pipeline) is a settled outcome with possible side effects; it is never
+        a success, never an execution failure, never an approval rejection and
+        never an official recovery record.
+        """
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+
+            def outcome(snapshot):
+                report, sessions = analyzer.build_report(
+                    self.config(home, generated_at=datetime.fromtimestamp(
+                        (snapshot["session"]["createdAt"] + 86400000) / 1000, tz=timezone.utc)),
+                    session_snapshots=[snapshot], include_internal_sessions=True,
+                )
+                return report, report["session_summaries"][0], sessions[0]["semantic_messages"]
+
+            # error.code ABORTED: post-dispatch caller cancellation. Result
+            # text claiming success must not classify the call as success.
+            report, session, messages = outcome(
+                self.cancelled_events({"code": "ABORTED", "message": "caller cancelled"})
+            )
+            self.assertEqual(
+                session["tool_execution"],
+                {
+                    "outer_calls": 1, "inner_calls": 0, "outer_failures": 0,
+                    "inner_failures": 0, "inner_incomplete": 0,
+                    "outer_cancelled": 1, "inner_cancelled": 0,
+                },
+            )
+            self.assertEqual(report["totals"]["tool_failures"], 0)
+            self.assertEqual(session["verification"]["successes"], 0)
+            cancelled_messages = [
+                m for m in messages if m.get("tool_facts", {}).get("outcome") == "cancelled"
+            ]
+            self.assertEqual(len(cancelled_messages), 1)
+            self.assertEqual(cancelled_messages[0]["tool_facts"]["cancelled"], "ABORTED")
+            self.assertIn("可能已产生副作用", cancelled_messages[0]["text"])
+
+            # error.info.code ABORTED_BEFORE_DISPATCH: the pipeline aborted
+            # before dispatch; the same cancellation classification applies.
+            _, session, _ = outcome(
+                self.cancelled_events(
+                    {"message": "tool call aborted before dispatch",
+                     "info": {"name": "AbortError", "code": "ABORTED_BEFORE_DISPATCH"}}
+                )
+            )
+            self.assertEqual(session["tool_execution"]["outer_cancelled"], 1)
+            self.assertEqual(session["tool_execution"]["outer_failures"], 0)
+
+            # The same tool cancelled in a later turn is a distinct settled
+            # scope with its own evidence record.
+            snapshot = self.cancelled_events({"code": "ABORTED", "message": "caller cancelled"})
+            second = copy.deepcopy(snapshot["events"][7])
+            second["seq"] = len(snapshot["events"])
+            second["data"]["turn"] = 2
+            second["surfaceOp"] = "append"
+            snapshot["events"].append(second)
+            _, session, messages = outcome(snapshot)
+            self.assertEqual(session["tool_execution"]["outer_cancelled"], 2)
+            self.assertEqual(
+                len([m for m in messages if m.get("tool_facts", {}).get("outcome") == "cancelled"]), 2)
+
+            # A real execution failure still counts as a failure, never as a
+            # cancellation.
+            _, session, _ = outcome(self.cancelled_events({"code": "EXIT_1", "message": "command failed"}))
+            self.assertEqual(session["tool_execution"]["outer_failures"], 1)
+            self.assertEqual(session["tool_execution"]["outer_cancelled"], 0)
+
+            # Unknown outcomes stay official recovery records.
+            report, session, _ = outcome(
+                self.cancelled_events({"code": "TOOL_OUTCOME_UNKNOWN", "message": "outcome not recorded"})
+            )
+            self.assertEqual(report["totals"]["tool_recovery"]["outcome_unknown"], 1)
+            self.assertEqual(session["tool_execution"]["outer_failures"], 0)
+            self.assertEqual(session["tool_execution"]["outer_cancelled"], 0)
+
     def test_cache_is_keyed_to_the_selected_generation(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
@@ -631,7 +723,7 @@ class SessionFormatV4Tests(unittest.TestCase):
             self.assertEqual(fourth["totals"], third["totals"])
 
     def test_cache_version_reflects_generation_aware_parsing(self):
-        self.assertEqual(analyzer.DETERMINISTIC_CACHE_VERSION, 9)
+        self.assertEqual(analyzer.DETERMINISTIC_CACHE_VERSION, 10)
         self.assertEqual(analyzer.DSH_SESSION_FORMAT_VERSION, 4)
 
     def test_written_generations_satisfy_the_header_frame_contract(self):

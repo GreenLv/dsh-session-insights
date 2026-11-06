@@ -36,11 +36,13 @@ from .v4 import IDENTITY, validate_records
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.7.0-v4-dsh021rc2.5"
+ANALYZER_VERSION = "0.8.0-v4-dsh022rc1.1"
 FAILURE_RULE_VERSION = "5.1.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
-DETERMINISTIC_CACHE_VERSION = 9
+# 10: 0.8.0 retargets the input contract to DSH 0.2.2-rc.1 (v4-dsh022rc1.1),
+# so deterministic caches built by older analyzers must invalidate.
+DETERMINISTIC_CACHE_VERSION = 10
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
 
 # Session-log generations understood by this reader. Native V3 is the current
@@ -150,6 +152,15 @@ DSH_SURFACE_RECORD_TYPES = {"developer/message", "system/message", "user/message
 # released; `producerReported` records only the producer's acknowledgement.
 JOB_TERMINAL_STATUSES = frozenset({"completed", "failed", "killed"})
 JOB_SETTLE_CAUSES = frozenset({"producer", "kill", "teardown"})
+# rc.1 tools pipeline settles a caller-cancelled call as a structured
+# ABORTED / ABORTED_BEFORE_DISPATCH error result (TOOL_ABORTED and
+# TOOL_ABORTED_BEFORE_DISPATCH in @deepseek-ai/dsh-tools; run_code caller
+# cancellation moved from CODE_RUN_FAILED to ABORTED in rc.1). Cancellation is
+# a settled outcome, never a success, never an execution failure and never an
+# approval rejection. The body reaches quiescence before the outcome becomes
+# ABORTED, so side effects remain possible and a cancelled result must not be
+# reported as "not executed".
+DSH_CANCELLED_ERROR_CODES = frozenset({"ABORTED", "ABORTED_BEFORE_DISPATCH"})
 # Default tool names that dispatch work into another runtime unit. Job `kind`
 # stays opaque; these names are the producing side, not a job-kind allowlist.
 DELEGATION_TOOL_NAMES = frozenset({"subagent", "subagent_fork", "workflow", "spawn_teammate"})
@@ -1614,6 +1625,56 @@ def add_semantic_tool_evidence(
     )
 
 
+def add_cancelled_tool_evidence(
+    session: dict[str, Any],
+    config: AnalysisConfig,
+    summary: str,
+    call: dict[str, Any],
+    *,
+    cancelled: str,
+    record_identity: str,
+    seq: int | None = None,
+) -> None:
+    """Retain one structured caller-cancellation as bounded settled evidence."""
+    if (
+        not config.semantic_capture
+        or config.metrics_only
+        or analysis_privacy(config) == "metrics"
+        or config.analysis_depth != "evidence"
+    ):
+        return
+    if not summary:
+        return
+    digest = hashlib.sha256(f"tool\0{record_identity}\0{summary}".encode("utf-8")).hexdigest()
+    if digest in session["semantic_message_digests"]:
+        return
+    session["semantic_message_digests"].add(digest)
+    session["semantic_messages"].append(
+        {
+            "id": f"tool-{digest[:16]}",
+            "role": "tool",
+            "text": summary,
+            "record_identity": record_identity,
+            "seq": seq,
+            "digest": digest,
+            "tool_facts": {
+                "tool": call.get("tool", "unknown"),
+                "outcome": "cancelled",
+                "cancelled": cancelled,
+                "record_identity": record_identity,
+                "call_id": call.get("call_id"),
+                "turn": call.get("turn"),
+                "step": call.get("step"),
+                "exit_code": None,
+                "cause": None,
+                "verification": bool(call.get("verification")),
+                "state_change": bool(call.get("state_change")),
+                "git_commit": bool(call.get("git_commit")),
+            },
+        }
+    )
+
+
 def add_recovery_tool_evidence(
     session: dict[str, Any],
     config: AnalysisConfig,
@@ -2397,7 +2458,7 @@ def new_dsh_session(
     session["surface_seqs"] = []
     session["ptc"] = {}
     session["child_sessions"] = set()
-    session["tool_execution"] = dict(outer_calls=0, inner_calls=0, outer_failures=0, inner_failures=0, inner_incomplete=0)
+    session["tool_execution"] = dict(outer_calls=0, inner_calls=0, outer_failures=0, inner_failures=0, inner_incomplete=0, outer_cancelled=0, inner_cancelled=0)
     # Official host recovery results (DSH >= 0.2.0-rc.2) are uncertainty records,
     # never confirmed failures; they are counted separately per status.
     session["tool_recovery"] = {"outcome_unknown": 0, "not_started": 0}
@@ -2860,6 +2921,32 @@ def process_dsh_record(
             return
         session["settled_calls"].add(scope)
         error_present = isinstance(error_object, dict) and bool(error_object)
+        # Structured caller cancellation (rc.1 ABORTED classifications) is
+        # counted separately from execution failures before any failure,
+        # retry or verification attribution. The code lives at error.code or
+        # error.info.code depending on whether the pipeline aborted the call
+        # before or after dispatch.
+        cancelled_code = None
+        if error_present and isinstance(call_id, str) and call_id:
+            error_info = error_object.get("info")
+            if error_object.get("code") in DSH_CANCELLED_ERROR_CODES:
+                cancelled_code = error_object.get("code")
+            elif isinstance(error_info, dict) and error_info.get("code") in DSH_CANCELLED_ERROR_CODES:
+                cancelled_code = error_info.get("code")
+        if cancelled_code is not None:
+            session["tool_execution"]["inner_cancelled" if data.get("inner") else "outer_cancelled"] += 1
+            cancelled_call = {**session["scoped_calls"].get(scope, {}), "call_id": call_id,
+                              "turn": data.get("turn"), "step": data.get("step")}
+            cancelled_summary = analysis_text(
+                f"工具 {cancelled_call.get('tool', 'unknown')}；调用者取消（{cancelled_code}）；可能已产生副作用",
+                config,
+                700,
+            )
+            add_cancelled_tool_evidence(
+                session, config, cancelled_summary, cancelled_call,
+                cancelled=cancelled_code, record_identity=scope, seq=seq,
+            )
+            return
         if error_present or message.get("isError") is True:
             session["tool_execution"]["inner_failures" if data.get("inner") else "outer_failures"] += 1
         text = output_text(output_value)

@@ -51,7 +51,7 @@ test('service context is disposed if initialization fails before the session tre
     }
     for(const [name,source] of Object.entries(fake)) {
       const dir=join(modules,name);mkdirSync(dir,{recursive:true})
-      writeFileSync(join(dir,'package.json'),JSON.stringify({name:'@deepseek-ai/'+name,version:'0.2.1-rc.2',type:'module',main:'index.js'}))
+      writeFileSync(join(dir,'package.json'),JSON.stringify({name:'@deepseek-ai/'+name,version:'0.2.2-rc.1',type:'module',main:'index.js'}))
       writeFileSync(join(dir,'index.js'),source)
     }
     const marker=join(root,'disposed.txt')

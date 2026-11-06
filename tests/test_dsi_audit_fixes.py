@@ -218,7 +218,7 @@ class F2CacheBoundaryTests(unittest.TestCase):
                 self.assertNotIn(banned, session)
 
     def test_cache_version_is_bumped_and_old_entries_are_ignored(self):
-        self.assertEqual(analyzer.DETERMINISTIC_CACHE_VERSION, 9)
+        self.assertEqual(analyzer.DETERMINISTIC_CACHE_VERSION, 10)
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
             write_session(home)
@@ -237,14 +237,15 @@ class F2CacheBoundaryTests(unittest.TestCase):
             home = Path(temp)
             write_session(home)
             analyzer.build_report(config(home))
+            current = f"deterministic-{analyzer.DETERMINISTIC_CACHE_VERSION}"
             inventory = cli.cache_inventory(home)
-            self.assertIn("deterministic-9", inventory)
-            entry = inventory["deterministic-9"]
+            self.assertIn(current, inventory)
+            entry = inventory[current]
             self.assertEqual(entry["files"], 1)
             self.assertFalse(entry["refused"])
             result = cli.cache_cleanup(home)
-            self.assertEqual(result["removed"], ["deterministic-9"])
-            self.assertFalse((home / "insights" / "cache" / "deterministic-9").exists())
+            self.assertEqual(result["removed"], [current])
+            self.assertFalse((home / "insights" / "cache" / current).exists())
             # Non-cache content is untouched.
             self.assertTrue((home / "sessions").exists())
 

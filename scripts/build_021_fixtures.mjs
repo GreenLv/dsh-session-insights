@@ -1,5 +1,6 @@
-// Build synthetic fixtures with the exact target DSH (0.2.1-rc.2) Session
-// writer, then persist the same events through the released V4 codec and
+// Build synthetic fixtures with the exact target DSH Session writer (the
+// historical rc21 fixture name is retained as a data-contract corpus), then
+// persist the same events through the released V4 codec and
 // restore them with the official strict catalog. No model, no private data.
 //
 // Outputs, for each case:

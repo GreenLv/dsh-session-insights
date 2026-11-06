@@ -1,11 +1,11 @@
 {
   "schema": "dsi-node-audit-exception/v1",
-  "product_version": "0.7.0",
+  "product_version": "0.8.0",
   "authorization": {
     "decision": "accepted",
-    "recorded_on": "2026-11-03",
+    "recorded_on": "2026-11-06",
     "authority": "Repository maintainer",
-    "scope": "Only this release, the exact reviewed rc.2/rc.5 cohort, and the two stated report graphs; not a security fix or low-probability assurance."
+    "scope": "Only this release, the exact reviewed rc.1 cohort (root peer closure plus the single runtime/host test trees), and the one stated report graph; not a security fix or low-probability assurance. The upstream Zod gap remains unfixed and is accepted as a known issue for this candidate."
   },
   "exception": {
     "advisory": "GHSA-mrhx-c7xc-m3w5",
@@ -16,29 +16,25 @@
     "range": "<4.6.6",
     "patched_version": "4.6.6"
   },
-  "audited_scope": "Root package-lock npm production and full scans only. The host/runtime trees bind the reviewed cohort; no exception for a new advisory, unreviewed graph or another dependency tree.",
-  "prerequisite": "Large invalid arrays can exhaust memory during affected schema validation. Reachability through a DSH entry point and ordinary-use likelihood are not established.",
+  "audited_scope": "Root package-lock npm production and full scans against the exact 0.8.0 peer closure (18 affected packages, one graph). The rc.1 runtime tree resolves a single top-level zod 4.4.3; the rc.1 host tree resolves top-level zod 4.6.7 (patched) alongside exact-pinned nested 4.4.3 copies declared by the upstream packages themselves. Neither tree is separately scanned by this gate; their locks bind the reviewed cohort. No exception for a new advisory, unreviewed graph or another dependency tree.",
+  "prerequisite": "Large invalid arrays can exhaust memory during affected schema validation. Reachability through a DSH entry point and ordinary-use likelihood are not established. The dependency path runs through @deepseek-ai/dsh-commands and @deepseek-ai/dsh-llm (and @deepseek-ai/dsh-agent), which pin zod 4.4.3 exactly; the fix must come from the upstream DSH release family.",
   "cohort": {
     "files": {
-      "package.json": "95b87185a9d8adf50a971e5293531d85a25d679941899b80121a6474008fa4e7",
-      "package-lock.json": "d62276cb62d27b67f64d5a99d285dec9b703afecede1e751a54497ef436f9fb0",
-      "pyproject.toml": "db82c6becada3236a627d0542d87d99c3cf77fa42a83ea5ee20221a4bf888c30",
-      "src/dsh_session_insights/__init__.py": "fae4f39e92d1df6553bfc34673af31b9e21cc6ffb0b1cf416b06d8c7da69ec01",
-      "tests/dsh-runtime/package.json": "65d30d2a7101433bdbb4c2fcaf960ca544d04d5fac0357f4a8168819868b95aa",
-      "tests/dsh-runtime/package-lock.json": "8b51fa9714452e72e43cb7b2d91588dfbc987a7bc6da30eac807e53eb47e3db6",
-      "tests/dsh-runtime-rc5/package.json": "20611b611c751de858268d7df58f771710fd6e5fa37088c9627f50eef6580828",
-      "tests/dsh-runtime-rc5/package-lock.json": "f0abfb959f06d597c76767ad571ce5d226777456966de24d20390e3c7b861fc9",
-      "tests/dsh-host/package.json": "418badd91175d5fd9eac2c77165da122db6ffae6bc3c415352725acaa194468d",
-      "tests/dsh-host/package-lock.json": "747f45d50de77174d93057a10606aaf9eca5340475184a3149b120fe99139b64",
-      "tests/dsh-host-rc5/package.json": "c10525d7ff0891980e3a74e257060e53f1869d943a7944fca11871d3f1f33cea",
-      "tests/dsh-host-rc5/package-lock.json": "dcdb6872337569de2720baf6f172f6627ae9b9d2447467028829fe52e4d336a4",
-      "scripts/acceptance_identity.mjs": "83105f57b72aa0054642f9373a3932adfc11793eaa4eb56c343977260fc9345f"
+      "package.json": "6f0e8f7586d189c3067c203918c33f63cd52baca09818f202179f30c799e6d80",
+      "package-lock.json": "5a4db92e4ecb68e8f52d62e03a03f4ff36a5b1804a586416d55c83aee0fdb28c",
+      "pyproject.toml": "3ed3e23a90850a68e807b680d339a4c12d1adee2acdedd079e4d4cbc93b64672",
+      "src/dsh_session_insights/__init__.py": "850e9e7615a2e40e86a122a12f637149775ae8441e0482171ff616d66f986581",
+      "tests/dsh-runtime/package.json": "e95ca901175c60914702222abb6287dd9451d739302aa591566928113713f264",
+      "tests/dsh-runtime/package-lock.json": "3ba6b7f35998347eb8498666f16712b9cfcd112c3053323ab6e322f1d7c5944a",
+      "tests/dsh-host/package.json": "9f0c59ce42008620a6eed29b1c554b42ce3b0021acb21ab99238b30180c28064",
+      "tests/dsh-host/package-lock.json": "87e2a2e038bd06dc44d752e00d76aff4e163cc451835a84b938b220297d8381a",
+      "scripts/acceptance_identity.mjs": "5729d54dd7e8040bfccbdb6503f030075a59d75684642d846a1b7423858538b0"
     },
-    "host_queue_sha256": "58926450dbd836652fcf3f9b16230bc7fd21b45ebd4c6c1bcd4f5b3f8886a96a"
+    "host_queue_sha256": "c9b986be5fcabb83cf17506d5f0624302b379765a06687bb083298a0fd3a7d2f"
   },
-  "report_graph_sha256": "b3b647f4af6be5146493b175889906c7884f749fb337281430e564af7daa5bac",
+  "report_graph_sha256": "b56c12167268a2dca8057b564069b6830db96a4aae82932ece985f354d0d53b5",
   "report_graph_sha256_variants": [
-    "fe0b1aa71eec3e33eb53859aa771281f61522230650bdfa09bc2b354cee7d466"
+    "4c0bfa1d184d962a431190369b1b1652966774b40ecb7eab77a795d169b19f1f"
   ],
   "expiry": {
     "kind": "event_bound",
@@ -46,7 +42,7 @@
       "product version change",
       "any bound manifest/lock/runtime/host identity change",
       "acceptance host queue change",
-      "any advisory change or vulnerability graph outside the two exact reviewed variants",
+      "any advisory change or vulnerability graph outside the exact reviewed graph",
       "patched dependency closure resolves cleanly"
     ],
     "required_action": "Remove this exception or obtain a new explicit maintainer decision when an expiry event occurs; never automatically carry it into a later version or cohort.",
@@ -55,7 +51,6 @@
   },
   "sources": [
     "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
-    "https://nvd.nist.gov/vuln/detail/CVE-2023-54404",
-    "https://github.com/deepseek-ai/deepseek-harness/discussions/10847"
+    "https://nvd.nist.gov/vuln/detail/CVE-2023-54404"
   ]
 }
