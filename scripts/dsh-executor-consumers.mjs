@@ -56,13 +56,16 @@ export function foreignSetRefusalProblem(batch, expectedCallId) {
   return null
 }
 
-// R3-CLEANUP: one child receipt verdict. A non-zero exit alone is NOT clean:
-// a child that exits 1 but leaks its scratch tree must fail this verdict.
+// R3/R4-CLEANUP: one child receipt verdict. A non-zero exit alone is NOT
+// clean: a child that exits 1 but leaks its scratch tree OR its staging root
+// must fail this verdict — each tracked resource is checked separately.
 export function selfTestVerdict(run) {
   if (run.exit !== 1)
     return 'child must exit 1 (got ' + run.exit + ')'
   if (run.scratchLeft)
     return 'child exited non-zero but leaked its scratch tree'
+  if (run.stagingLeft)
+    return 'child exited non-zero but leaked its staging root'
   return null
 }
 

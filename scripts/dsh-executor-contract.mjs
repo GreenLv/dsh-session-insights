@@ -93,8 +93,7 @@ const FAIL_STAGE=process.env.DSI_EXECUTOR_FAIL_STAGE||''
 // the no-space form for the ordinary-path control run.
 const scratchRootBase=join(tmpdir(),'dsi-executor-runner-')
 const stagingRootBase=join(runtime,'node_modules','.dsh-session-insights-under-test-')
-const stagedPluginPath=join(stagingRootBase,'plugin')
-let scratchRoot, stagingRoot
+let scratchRoot, stagingRoot, stagedRoot
 const previousHome=process.env.DSH_HOME
 let bootCtx,primaryFailure
 const cleanups=[]
@@ -116,7 +115,7 @@ try {
   // leak used by the self-test's negative control, which must fail the
   // cleanup verdict instead of being silently tolerated.
   cleanup('scratch tree',async()=>{
-    if (process.env.DSI_EXECUTOR_LEAK==='1')
+    if (process.env.DSI_EXECUTOR_LEAK==='scratch' || process.env.DSI_EXECUTOR_LEAK==='1')
       throw new Error('injected leak: scratch tree intentionally retained (DSI_EXECUTOR_LEAK)')
     await rm(scratchRoot,{recursive:true,force:true})
   })
@@ -127,9 +126,16 @@ try {
   // (same guarantees as scripts/dsh-services.mjs). The staging ROOT is the
   // acquired resource and the unit of cleanup; the plugin is its child path.
   stagingRoot=mkdtempSync(stagingRootBase)
-  cleanup('staging root removal',async()=>{await rm(stagingRoot,{recursive:true,force:true})})
-  const stagedRoot=stagedPluginPath
+  if (process.env.DSI_EXECUTOR_REPORT_SCRATCH==='1') console.error('RUNNER_STAGING='+stagingRoot)
+  cleanup('staging root removal',async()=>{
+    if (process.env.DSI_EXECUTOR_LEAK==='staging')
+      throw new Error('injected leak: staging root intentionally retained (DSI_EXECUTOR_LEAK=staging)')
+    await rm(stagingRoot,{recursive:true,force:true})
+  })
+  const stagedRoot=join(stagingRoot,'plugin')
+  if (FAIL_STAGE==='stage') throw new Error('injected staging-allocation failure')
   await mkdir(stagedRoot,{recursive:true})
+  if (FAIL_STAGE==='copy') throw new Error('injected staging-copy failure')
   await cp(join(packageRoot,'plugin'),stagedRoot,{recursive:true})
   assert.equal(await fileTreeDigest(stagedRoot),await fileTreeDigest(join(packageRoot,'plugin')),'staged plugin differs from the production plugin')
   const plugin=await import(pathToFileURL(join(stagedRoot,'lib/index.js')).href)
@@ -161,9 +167,12 @@ try {
   }
 
   bootCtx=await boot('dsh',compositionPath,[],()=>{},referrer)
-  // The official boot normalizes the process environment and drops DSH_HOME;
-  // the plugin's storage resolves its home from the live environment, so the
-  // runner home is restored right after boot returns.
+  // Defensive restore: the plugin's storage resolves its home from the live
+  // environment at prepare time. (An earlier round attributed a lost
+  // DSH_HOME to boot(); that root cause was NOT reproduced — an independent
+  // probe shows boot preserves the variable — and the actual cause was a
+  // lost assignment in an uncommitted working-tree iteration. The restore
+  // stays as cheap insurance for the resource-identity assertions below.)
   process.env.DSH_HOME=home
   cleanup('booted context',async()=>{await bootCtx.fiber.dispose()})
 
@@ -570,50 +579,103 @@ function spawnBoundRunner(stageEnv,taskRoot,extraEnv={}){
     env:{...process.env,...stageEnv,...extraEnv,TMPDIR:taskRoot,TMP:taskRoot,TEMP:taskRoot,
       DSI_EXECUTOR_REPORT_SCRATCH:'1'}})
   const reported=[...r.stderr.matchAll(/RUNNER_SCRATCH=(.+)/g)].map(m=>m[1])
+  const reportedStaging=[...r.stderr.matchAll(/RUNNER_STAGING=(.+)/g)].map(m=>m[1])
   const leaked=readdirSync(taskRoot).filter(n=>n.startsWith('dsi-executor-runner-'))
-  return {exit:r.status,stderr:r.stderr,reportedScratch:reported,scratchLeft:leaked.length>0,
-    leakedNames:leaked,childStdout:r.stdout}
+  // The staging root lives under the runtime closure, not the task root; its
+  // leak state is checked against the exact identity the child reported.
+  const stagingLeft=reportedStaging.some(p=>existsSync(p))
+  return {exit:r.status,stderr:r.stderr,reportedScratch:reported,reportedStaging,
+    scratchLeft:leaked.length>0,stagingLeft,leakedNames:leaked,childStdout:r.stdout}
 }
 async function selfTest() {
   const runs=[]
-  // Negative control FIRST: a real child that exits 1 but deliberately leaks
-  // its scratch tree must FAIL the cleanup verdict. A non-zero exit alone is
-  // never accepted as clean.
+  const stageLeft=run=>({
+    exit:run.exit, scratchLeft:run.scratchLeft, stagingLeft:run.stagingLeft })
+  // Negative controls FIRST: real children that exit 1 but deliberately leak
+  // must FAIL the cleanup verdict. A non-zero exit alone is never accepted as
+  // clean, and every tracked resource (scratch AND staging) is checked.
   {
     const leakRoot=mkdtempSync(join(tmpdir(),'dsi-executor-selftest-'))
     try {
-      const leak=spawnBoundRunner({DSI_EXECUTOR_FAIL_STAGE:'boot',DSI_EXECUTOR_LEAK:'1'},leakRoot)
-      const leakVerdict=selfTestVerdict({stage:'leak',exit:leak.exit,scratchLeft:leak.scratchLeft})
-      runs.push({stage:'leak-negative-control',exit:leak.exit,scratchLeft:leak.scratchLeft,
-        reportedScratch:leak.reportedScratch,verdictMustFail:true,verdict:leakVerdict})
-      assert.ok(leak.exit===1,'the leak-injected child must exit 1 (cleanup failed), got '+leak.exit)
-      assert.ok(leak.scratchLeft,'the leak-injected child must really leave its scratch tree behind')
-      assert.ok(leakVerdict!==null,'negative control failed: the cleanup verdict accepted a leaking child')
+      const leak=spawnBoundRunner({DSI_EXECUTOR_FAIL_STAGE:'boot',DSI_EXECUTOR_LEAK:'scratch'},leakRoot)
+      const leakVerdict=selfTestVerdict({stage:'leak-scratch',...stageLeft(leak)})
+      runs.push({stage:'leak-scratch-negative-control',...stageLeft(leak),
+        reportedScratch:leak.reportedScratch,reportedStaging:leak.reportedStaging,verdict:leakVerdict})
+      assert.ok(leak.exit===1,'the scratch-leak child must exit 1 (cleanup failed), got '+leak.exit)
+      assert.ok(leak.scratchLeft,'the scratch-leak child must really leave its scratch tree behind')
+      assert.ok(leakVerdict!==null,'negative control failed: the verdict accepted a scratch-leaking child')
     } finally {
       rmSync(leakRoot,{recursive:true,force:true})
     }
   }
-  // The three injected-failure stages: each child exits 1 AND cleans the
-  // scratch root it actually used (verified via its reported identity).
-  for (const stage of ['boot','init','cleanup']) {
+  {
+    // Staging leak: the home scratch IS cleaned, the child exits 1, but the
+    // staging root stays behind inside the runtime closure — the verdict must
+    // refuse this shape too, and the parent removes the leaked staging root
+    // it owns before finishing.
+    const stagingRoot=mkdtempSync(join(tmpdir(),'dsi-executor-selftest-'))
+    try {
+      const leak=spawnBoundRunner({DSI_EXECUTOR_FAIL_STAGE:'boot',DSI_EXECUTOR_LEAK:'staging'},stagingRoot)
+      const leakVerdict=selfTestVerdict({stage:'leak-staging',...stageLeft(leak)})
+      runs.push({stage:'leak-staging-negative-control',...stageLeft(leak),
+        reportedScratch:leak.reportedScratch,reportedStaging:leak.reportedStaging,verdict:leakVerdict})
+      assert.ok(leak.exit===1,'the staging-leak child must exit 1 (cleanup failed), got '+leak.exit)
+      assert.ok(!leak.scratchLeft,'the staging-leak child must still clean its scratch tree')
+      assert.ok(leak.stagingLeft,'the staging-leak child must really leave its staging root behind')
+      assert.ok(leakVerdict!==null,'negative control failed: the verdict accepted a staging-leaking child')
+      assert.ok(leak.reportedStaging.length===1,'the staging-leak child must report its staging root')
+      for (const leaked of leak.reportedStaging) await rm(leaked,{recursive:true,force:true})
+    } finally {
+      rmSync(stagingRoot,{recursive:true,force:true})
+    }
+  }
+  // The injected-failure stages: each child exits 1 AND cleans both tracked
+  // resources (verified via the identities the child actually reported).
+  for (const stage of ['boot','init','stage','copy','cleanup']) {
     const taskRoot=mkdtempSync(join(tmpdir(),'dsi-executor-selftest-'))
     try {
       const run=spawnBoundRunner({DSI_EXECUTOR_FAIL_STAGE:stage},taskRoot)
-      const verdict=selfTestVerdict({stage,exit:run.exit,scratchLeft:run.scratchLeft})
-      runs.push({stage,exit:run.exit,scratchLeft:run.scratchLeft,
-        reportedScratch:run.reportedScratch,verdict})
+      const verdict=selfTestVerdict({stage,...stageLeft(run)})
+      runs.push({stage,...stageLeft(run),
+        reportedScratch:run.reportedScratch,reportedStaging:run.reportedStaging,verdict})
       assert.equal(verdict,null,'injected stage '+stage+' failed the cleanup verdict: '+verdict
         +' (stderr tail: '+run.stderr.slice(-200)+')')
       assert.ok(run.reportedScratch.length===1,
         'the child must report its actual scratch root: '+JSON.stringify(run.reportedScratch))
       assert.ok(run.reportedScratch[0].startsWith(taskRoot),
         'the child scratch must live inside the shared task root: '+run.reportedScratch[0])
+      assert.ok(existsSync(run.reportedScratch[0])===false,
+        'the reported scratch must be gone after the child exits')
+    } finally {
+      rmSync(taskRoot,{recursive:true,force:true})
+    }
+  }
+  // Consecutive runs must not reuse or inherit each other's staging: two
+  // real boot-failure children report distinct staging roots, both exit 1,
+  // and neither leaves its staging behind.
+  {
+    const taskRoot=mkdtempSync(join(tmpdir(),'dsi-executor-selftest-'))
+    try {
+      const first=spawnBoundRunner({DSI_EXECUTOR_FAIL_STAGE:'boot'},taskRoot)
+      const second=spawnBoundRunner({DSI_EXECUTOR_FAIL_STAGE:'boot'},taskRoot)
+      for (const [label,run] of [['first',first],['second',second]]) {
+        const verdict=selfTestVerdict({stage:label,...stageLeft(run)})
+        assert.equal(verdict,null,'consecutive run '+label+' failed the cleanup verdict: '+verdict)
+        assert.ok(run.reportedStaging.length===1,'the child must report its staging root')
+      }
+      assert.notEqual(first.reportedStaging[0],second.reportedStaging[0],
+        'consecutive runs must allocate distinct staging roots')
+      assert.ok(!existsSync(first.reportedStaging[0]) && !existsSync(second.reportedStaging[0]),
+        'neither consecutive run may leave its staging behind')
+      runs.push({stage:'double-boot-consecutive',exit:first.exit,scratchLeft:false,
+        stagingLeft:false,reportedScratch:[first.reportedScratch[0],second.reportedScratch[0]],
+        reportedStaging:[first.reportedStaging[0],second.reportedStaging[0]],verdict:null})
     } finally {
       rmSync(taskRoot,{recursive:true,force:true})
     }
   }
   console.log(JSON.stringify({self_test:'pass',
     runs:runs.map(r=>({stage:r.stage,exit:r.exit,scratchLeft:r.scratchLeft,
-      verdict:r.verdict===null?'clean':r.verdict.slice(0,80)}))}))
+      stagingLeft:r.stagingLeft,verdict:r.verdict===null?'clean':r.verdict.slice(0,80)}))}))
 }
 if (runSelfTest) await selfTest()

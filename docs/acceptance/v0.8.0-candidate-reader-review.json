@@ -10,13 +10,13 @@
       "path": "CHANGELOG.md",
       "role": "changelog",
       "language": "en",
-      "sha256": "f78c5109731aa2a9c454d4e98f4569963bdfd89136486a270ef744f75e13bcd7"
+      "sha256": "2e6c75044d4fceab563ab76434e110d1f3b804afbe2328cad3ebae15bc9afce8"
     },
     {
       "path": "CHANGELOG.zh-CN.md",
       "role": "changelog",
       "language": "zh-CN",
-      "sha256": "4ac93bcc497006852d05055561eb34d7b64acdcdbcaa7c9d9e82eb1b7bf6b28c"
+      "sha256": "ed6bee653d57c9ecabc51faaaaecf0714f215b47cec06a04e3460072d6f1b8ee"
     },
     {
       "path": "README.md",
@@ -46,7 +46,7 @@
       "path": "docs/acceptance/v0.8.0-candidate.md",
       "role": "release_notes",
       "language": "en",
-      "sha256": "d79e511eee15894e4301d76bf5dae701a939619e4fcfcb995b6e1a7a5efa6d49"
+      "sha256": "467bd935091e80647998ce4e2929441e2942d318f35d8371603f9c2c9a21b83d"
     },
     {
       "path": "docs/releases/v0.8.0.md",
@@ -55,7 +55,7 @@
       "sha256": "07a3c7350026c58eaf4a271b7350e407b548d55da6ff1587dbff799eb46c929e"
     }
   ],
-  "document_set_sha256": "d4c0b8be701f7847f875452a2889022bf4245340dae35383b508e23a2126b2dc",
+  "document_set_sha256": "d665b6b4b5e24560495beab8cb9e925265ab18834f9031043a9adc94ede9521d",
   "method": {
     "kind": "cold_read",
     "implementation_context_used": false,
@@ -157,6 +157,6 @@
     "This receipt binds reader comprehension of the listed bytes only; it does not establish factual correctness beyond the recorded evidence, native acceptance, exact-commit CI, publication or human preference.",
     "The candidate is unpublished: README registry commands describe a future published state and are marked as such; readers testing the candidate must use a reviewed tarball or source revision.",
     "A Russian changelog edition remains a coverage gap carried over from 0.7.0; the Russian README is independently readable and links the English changelog.",
-    "Regenerated after the 2026-11-07 third repair round: the changelog editions and the candidate acceptance record were re-read cold with the R3-RESULT/R3-ISOLATION/R3-CLEANUP closures, the corrected cancellation/dispose outcome shapes (ABORTED / CODE_RUN_FAILED error batches), and the disclosed operator-home contamination cleanup; README, SECURITY and release-draft bytes are unchanged from the previously reviewed set."
+    "Regenerated after the 2026-11-07 fourth repair round: changelog editions and the candidate acceptance record re-read cold with the R4 closures (corrected contamination attribution, retracted boot() root-cause claim, cleanup marked executed-but-not-independently-verifiable, staging-ownership fixes); README, SECURITY and release-draft bytes unchanged from the previously reviewed set."
   ]
 }

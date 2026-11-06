@@ -96,17 +96,26 @@ test('the refusal assertion rejects unrelated errors and shape drift', () => {
 
 // --- selfTestVerdict --------------------------------------------------------
 
-test('a child that exits 1 and cleans its scratch tree passes the cleanup verdict', () => {
-  assert.equal(selfTestVerdict({stage: 'boot', exit: 1, scratchLeft: false}), null)
+test('a child that exits 1 and cleans every tracked resource passes the verdict', () => {
+  assert.equal(selfTestVerdict({stage: 'boot', exit: 1, scratchLeft: false, stagingLeft: false}), null)
 })
 
 test('negative control: a child that exits 1 but leaks its scratch tree FAILS the verdict', () => {
-  const verdict = selfTestVerdict({stage: 'boot', exit: 1, scratchLeft: true})
+  const verdict = selfTestVerdict({stage: 'boot', exit: 1, scratchLeft: true, stagingLeft: false})
   assert.ok(verdict !== null)
   assert.match(verdict, /leaked/)
 })
 
+test('negative control: a child that exits 1 but leaks its staging root FAILS the verdict', () => {
+  // The staging root lives inside the runtime closure, outside the task root
+  // the parent hands the child — exactly the shape the review proved the old
+  // verdict could not see.
+  const verdict = selfTestVerdict({stage: 'boot', exit: 1, scratchLeft: false, stagingLeft: true})
+  assert.ok(verdict !== null)
+  assert.match(verdict, /staging root/)
+})
+
 test('a child that exits 0 fails the verdict — success is not the injected outcome', () => {
-  assert.match(selfTestVerdict({stage: 'init', exit: 0, scratchLeft: false}), /exit 1/)
-  assert.match(selfTestVerdict({stage: 'cleanup', exit: null, scratchLeft: false}), /exit 1/)
+  assert.match(selfTestVerdict({stage: 'init', exit: 0, scratchLeft: false, stagingLeft: false}), /exit 1/)
+  assert.match(selfTestVerdict({stage: 'cleanup', exit: null, scratchLeft: false, stagingLeft: false}), /exit 1/)
 })
