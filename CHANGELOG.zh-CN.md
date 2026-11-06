@@ -15,7 +15,7 @@
 
 ### 新增
 
-- 结构化调用者取消成为独立的已结算结局。rc.1 工具管线以 `ABORTED` / `ABORTED_BEFORE_DISPATCH` 结构化错误码分类调用者取消（rc.1 中 `run_code` 的调用者取消不再落入 `CODE_RUN_FAILED`）；两侧分析器把这类调用计入新的 `tool_execution.outer_cancelled` / `inner_cancelled` 报告字段，绝不计为成功、执行失败或审批拒绝，并保留有界证据说明"执行体在结局结算前会运行到静止，副作用仍可能已发生"。对照向量把取消、真实失败、审批拒绝与未知结局四类判定固定为相互可区分，两侧 runtime 一致。
+- 结构化调用者取消成为独立的已结算结局。rc.1 工具管线以 `ABORTED` / `ABORTED_BEFORE_DISPATCH` 结构化错误码分类调用者取消（rc.1 中 `run_code` 的调用者取消不再落入 `CODE_RUN_FAILED`）；两侧分析器把这类调用计入新的 `tool_execution.outer_cancelled` / `inner_cancelled` 报告字段，绝不计为成功、执行失败或审批拒绝，并保留有界证据说明"执行体在结局结算前会运行到静止，副作用仍可能已发生"。继承前缀中的调用在切断后仍保留其作用域身份，两侧 runtime 的最终取消事实完全一致。最终 semantic 批次的证据 ID 在 facet 之外还编码记录会话、事件位置与调用作用域，不同取消永远不共享同一引用；对照向量把取消、真实失败、审批拒绝与未知结局四类判定固定为相互可区分，两侧 runtime 一致。真实执行器集成检查（`scripts/dsh-executor-contract.mjs`）经官方 rc.1 PTC（`run_code` → 生成 SDK）与 native 执行器、在官方组合上分派本插件。
 
 ### 安全
 

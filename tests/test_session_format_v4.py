@@ -675,17 +675,47 @@ class SessionFormatV4Tests(unittest.TestCase):
             self.assertEqual(session["tool_execution"]["outer_failures"], 0)
 
             # The same tool cancelled in a later turn is a distinct settled
-            # scope with its own evidence record.
+            # scope with its own evidence record. The second turn is a
+            # complete, admissible continuation (open turn/step, fresh call,
+            # cancelled result, closed turn), not an isolated copied result.
             snapshot = self.cancelled_events({"code": "ABORTED", "message": "caller cancelled"})
-            second = copy.deepcopy(snapshot["events"][7])
-            second["seq"] = len(snapshot["events"])
-            second["data"]["turn"] = 2
-            second["surfaceOp"] = "append"
-            snapshot["events"].append(second)
+            base_seq = len(snapshot["events"])
+
+            def next_event(record_type, data, **extra):
+                event = {"type": record_type, "seq": len(snapshot["events"]), "time": STAMP + len(snapshot["events"]) * 1000, "data": data}
+                event.update(extra)
+                snapshot["events"].append(event)
+
+            next_event("turn/start", {"turn": 2})
+            next_event("step/start", {"turn": 2, "step": 1})
+            next_event("assistant/message", {
+                "turn": 2, "step": 1, "stream": [],
+                "message": message("msg-assistant-t2", "assistant",
+                                   {"kind": "model", "provider": "synthetic-provider", "model": "synthetic-model"},
+                                   "Second attempt.",
+                                   extra_blocks=[tool_call_block("call-2", TOOL_NAME, TOOL_ARGUMENTS)]),
+            }, surfaceOp="append")
+            next_event("tool/call", {"turn": 2, "step": 1, "callId": "call-2", "name": TOOL_NAME, "arguments": TOOL_ARGUMENTS})
+            next_event("tool/result", {
+                "turn": 2, "step": 1,
+                "message": {"id": "msg-tool-t2", "role": "tool",
+                            "source": {"kind": "tool", "callId": "call-2"},
+                            "toolCallId": "call-2", "isError": True,
+                            "content": [text_block("caller cancelled")]},
+                "error": {"code": "ABORTED", "message": "caller cancelled"},
+            }, surfaceOp="append")
+            next_event("step/end", {"turn": 2, "step": 1})
+            next_event("turn/end", {"turn": 2, "reason": {"kind": "completed"}})
+            from dsh_session_insights.v4 import validate_records
+
+            validate_records([{"type": "session", **snapshot["session"]}, *snapshot["events"]],
+                             analyzer.DSH_KNOWN_RECORD_TYPES)
             _, session, messages = outcome(snapshot)
             self.assertEqual(session["tool_execution"]["outer_cancelled"], 2)
-            self.assertEqual(
-                len([m for m in messages if m.get("tool_facts", {}).get("outcome") == "cancelled"]), 2)
+            cancelled_messages = [m for m in messages if m.get("tool_facts", {}).get("outcome") == "cancelled"]
+            self.assertEqual(len(cancelled_messages), 2)
+            self.assertEqual(cancelled_messages[1]["tool_facts"]["call_id"], "call-2")
+            self.assertEqual(cancelled_messages[1]["tool_facts"]["turn"], 2)
 
             # A real execution failure still counts as a failure, never as a
             # cancellation.

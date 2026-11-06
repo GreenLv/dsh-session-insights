@@ -105,7 +105,16 @@ function candidate(family, sessions, options) {
         family.task_family_id,
     )
     .sort((a, b) => a.time - b.time || a.rawId.localeCompare(b.rawId))
-    .flatMap((s) => s.messages.map((m) => ({ ...m, rollout_role: s.role })))
+    .flatMap((s) =>
+      s.messages.map((m) => ({
+        ...m,
+        rollout_role: s.role,
+        // The stable session reference joins the evidence identity: the same
+        // call scope in two sessions of one family must stay two addressable
+        // facts.
+        session_ref: analysisInternals.identifier(s.rawId, options, 'rollout'),
+      })),
+    )
   const required = [
     0,
     ...messages
@@ -152,9 +161,24 @@ function candidate(family, sessions, options) {
   const evidence = [...chosen]
     .sort((a, b) => a[0] - b[0])
     .map(([, m]) => ({
+      // Evidence IDs must address one fact, not one wording: the canonical
+      // identity covers the family, the recording session, the event position
+      // and the stable call-scope source identity alongside the role and
+      // text. Both runtimes build this object with the same canonical JSON
+      // encoding (sorted keys, no ASCII escaping), so the same facts get the
+      // same ID and different facts cannot collide.
       id:
         'evidence-' +
-        hash(`${family.task_family_id}\0${m.role}\0${m.text}`).slice(0, 18),
+        hash(
+          analysisInternals.canonical({
+            family: family.task_family_id,
+            role: m.role,
+            session: m.session_ref ?? null,
+            seq: m.seq ?? null,
+            source: m.record_identity || null,
+            text: m.text,
+          }),
+        ).slice(0, 18),
       task_family_id: family.task_family_id,
       role: m.role,
       evidence_type: m.role === 'tool' ? 'tool_fact' : 'conversation',

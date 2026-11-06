@@ -60,14 +60,28 @@ test('rc.1 caller cancellation is settled evidence, distinct from failure, rejec
  const p=report(pre)
  assert.equal(p.session_summaries[0].tool_execution.outer_cancelled,1)
  assert.equal(p.totals.tool_failures,0)
- // Same tool cancelled in a later turn: a distinct settled scope keeps its
- // own evidence record.
+ // Same tool cancelled in a later turn: a complete, strict-admissible second
+ // turn (open turn/step, fresh call, cancelled result) keeps its own settled
+ // scope and evidence record.
  const twice=snapshot();twice.events[5].data.message.isError=true
  twice.events[5].data.error={code:'ABORTED',message:'caller cancelled'}
- add(twice,'tool/result',{turn:2,step:1,message:{id:'result-x',role:'tool',source:{kind:'tool',callId:'fixture-call-1'},toolCallId:'fixture-call-1',isError:true,content:[{type:'text',text:'cancelled again'}]},error:{code:'ABORTED',message:'caller cancelled'}},{surfaceOp:'append'})
+ const t0=options.now-100
+ ;[
+  {type:'turn/start',data:{turn:2}},
+  {type:'step/start',data:{turn:2,step:1}},
+  {type:'assistant/message',surfaceOp:'append',data:{turn:2,step:1,stream:[],message:{id:'assistant-t2',role:'assistant',source:{kind:'model',provider:'synthetic-provider',model:'synthetic-model'},content:[{type:'text',text:'Second attempt.'},{type:'tool-call',id:'fixture-call-2',name:'bash',arguments:'npm test'}]}}},
+  {type:'tool/call',data:{turn:2,step:1,callId:'fixture-call-2',name:'bash',arguments:'npm test'}},
+  {type:'tool/result',surfaceOp:'append',data:{turn:2,step:1,message:{id:'result-fixture-call-2',role:'tool',source:{kind:'tool',callId:'fixture-call-2'},toolCallId:'fixture-call-2',isError:true,content:[{type:'text',text:'caller cancelled'}]},error:{code:'ABORTED',message:'caller cancelled'}}},
+  {type:'step/end',data:{turn:2,step:1}},
+  {type:'turn/end',data:{turn:2,reason:{kind:'completed'}}},
+ ].forEach((event,index)=>twice.events.push({...event,seq:twice.events.length,time:t0+index}))
+ validateV4(twice)
  const t=buildReport([twice],options)
  assert.equal(t.report.session_summaries[0].tool_execution.outer_cancelled,2)
- assert.equal(t.sessions[0].messages.filter(m=>m.tool_facts?.outcome==='cancelled').length,2)
+ const twiceFacts=t.sessions[0].messages.filter(m=>m.tool_facts?.outcome==='cancelled')
+ assert.equal(twiceFacts.length,2)
+ assert.equal(twiceFacts[1].tool_facts.call_id,'fixture-call-2')
+ assert.equal(twiceFacts[1].tool_facts.turn,2)
  // A real execution failure still counts as a failure, not a cancellation.
  const failed=snapshot();failed.events[5].data.message.isError=true
  failed.events[5].data.error={code:'EXIT_1',message:'command failed'}

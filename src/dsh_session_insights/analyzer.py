@@ -161,6 +161,14 @@ JOB_SETTLE_CAUSES = frozenset({"producer", "kill", "teardown"})
 # ABORTED, so side effects remain possible and a cancelled result must not be
 # reported as "not executed".
 DSH_CANCELLED_ERROR_CODES = frozenset({"ABORTED", "ABORTED_BEFORE_DISPATCH"})
+
+
+def scope_key(call_id: Any, turn: Any, step: Any) -> str:
+    """Canonical cross-runtime call-scope identity: a JSON array with null for
+    absent parts. The native analyzer derives the identical string, so scoped
+    lookups, recovery/cancellation record identities and evidence IDs agree
+    across implementations instead of mixing language-specific repr forms."""
+    return json.dumps([call_id, turn, step], ensure_ascii=False, separators=(",", ":"))
 # Default tool names that dispatch work into another runtime unit. Job `kind`
 # stays opaque; these names are the producing side, not a job-kind allowlist.
 DELEGATION_TOOL_NAMES = frozenset({"subagent", "subagent_fork", "workflow", "spawn_teammate"})
@@ -2872,7 +2880,7 @@ def process_dsh_record(
         process_call(session, payload, canonical_name=canonical_dsh_tool_name(name))
         call = session["calls"].get(call_id)
         if isinstance(call, dict):
-            session["scoped_calls"][repr((call_id, data.get("turn"), data.get("step")))] = call
+            session["scoped_calls"][scope_key(call_id, data.get("turn"), data.get("step"))] = call
         if isinstance(call, dict) and call_id in session["rejected_approval_call_ids"]:
             call["approval_rejected"] = True
         lowered = name.casefold()
@@ -2889,8 +2897,10 @@ def process_dsh_record(
         # Official host recovery results are identified only by their structured
         # error code and a valid call identity; message text never classifies.
         # Settlement scope follows the official recoverer: (callId, turn, step),
-        # so the same id in a later turn is a distinct pending request.
-        scope = repr((call_id, data.get("turn"), data.get("step")))
+        # so the same id in a later turn is a distinct pending request. The
+        # scope string is the canonical cross-runtime JSON array form shared
+        # with the native analyzer.
+        scope = scope_key(call_id, data.get("turn"), data.get("step"))
         recovery_kind = (
             isinstance(error_object, dict)
             and isinstance(call_id, str)
@@ -2911,7 +2921,8 @@ def process_dsh_record(
                 if scoped_call.get("fingerprint"):
                     session["last_failed_calls"].pop(scoped_call["fingerprint"], None)
                 call = {**scoped_call, "call_id": call_id,
-                        "turn": data.get("turn"), "step": data.get("step")}
+                        "turn": data.get("turn") if data.get("turn") is not None else scoped_call.get("turn"),
+                        "step": data.get("step") if data.get("step") is not None else scoped_call.get("step")}
                 recovery_summary = analysis_text(
                     f"工具 {call.get('tool', 'unknown')}；恢复 {recovery_kind}；未记录到最终结果；可能有副作用；重试前先核实外部状态",
                     config,
@@ -2935,8 +2946,13 @@ def process_dsh_record(
                 cancelled_code = error_info.get("code")
         if cancelled_code is not None:
             session["tool_execution"]["inner_cancelled" if data.get("inner") else "outer_cancelled"] += 1
-            cancelled_call = {**session["scoped_calls"].get(scope, {}), "call_id": call_id,
-                              "turn": data.get("turn"), "step": data.get("step")}
+            scoped_call = session["scoped_calls"].get(scope, {})
+            # A cancelled result without its own turn/step (a PTC settlement,
+            # for example) keeps the recorded scope's position instead of
+            # reporting a fabricated null position for a call we do know.
+            cancelled_call = {**scoped_call, "call_id": call_id,
+                              "turn": data.get("turn") if data.get("turn") is not None else scoped_call.get("turn"),
+                              "step": data.get("step") if data.get("step") is not None else scoped_call.get("step")}
             cancelled_summary = analysis_text(
                 f"工具 {cancelled_call.get('tool', 'unknown')}；调用者取消（{cancelled_code}）；可能已产生副作用",
                 config,
@@ -3393,7 +3409,12 @@ def parse_dsh_session_records(
                 process_dsh_record(prefix_state, record_type, data, config, record_timestamp, seq=record_seq)
             continue
         if not prefix_transferred and prefix_state is not None:
-            for key in ("calls", "approval_requests", "ptc", "rejected_approval_call_ids"): session[key].update(prefix_state[key])
+            # Scoped call identity travels with the prefix: a settlement or
+            # recovery recorded after the inherited cut must still resolve the
+            # tool identity, verification facts and position of the call that
+            # started inside the prefix. Unknown stays unknown only when no
+            # matching scope exists at all.
+            for key in ("calls", "approval_requests", "ptc", "rejected_approval_call_ids", "scoped_calls", "settled_calls", "recovery_seen"): session[key].update(prefix_state[key])
             for entry in session["ptc"].values(): entry["inherited"] = True
             # Inherited job history is retained for identity and outcome
             # continuity but never counted as the child's own work.

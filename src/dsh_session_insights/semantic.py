@@ -177,7 +177,10 @@ def family_messages(
     messages: list[dict[str, Any]] = []
     for session in family_sessions:
         for message in session.get("semantic_messages", []):
-            messages.append({**message, "rollout_role": session["role"]})
+            # The stable session reference joins the evidence identity: the
+            # same call scope in two sessions of one family must stay two
+            # addressable facts.
+            messages.append({**message, "rollout_role": session["role"], "session_ref": session["rollout_id"]})
     if not messages:
         return [], False
 
@@ -229,8 +232,22 @@ def family_messages(
     evidence: list[dict[str, Any]] = []
     for index in chosen:
         item = messages[index]
+        # Evidence IDs must address one fact, not one wording: the canonical
+        # identity covers the family, the recording session, the event
+        # position and the stable call-scope source identity alongside the
+        # role and text. Both runtimes build this object with the same
+        # canonical JSON encoding (sorted keys, no ASCII escaping), so the
+        # same facts get the same ID and different facts cannot collide.
+        identity_source = {
+            "family": family["task_family_id"],
+            "role": item["role"],
+            "session": item.get("session_ref") or None,
+            "seq": item.get("seq"),
+            "source": item.get("record_identity") or None,
+            "text": item["text"],
+        }
         digest = hashlib.sha256(
-            f"{family['task_family_id']}\0{item['role']}\0{item['text']}".encode("utf-8")
+            json.dumps(identity_source, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()[:18]
         evidence_item = {
                 "id": f"evidence-{digest}",

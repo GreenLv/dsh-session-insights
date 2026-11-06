@@ -10,13 +10,13 @@
       "path": "CHANGELOG.md",
       "role": "changelog",
       "language": "en",
-      "sha256": "de89eefc29258c0f2746d93e9cdd37330c901be6bec7955a61a63eface3272af"
+      "sha256": "50f1ee5568758be6e330e11c917a484b7f25542addc7c49fd8081d149187405c"
     },
     {
       "path": "CHANGELOG.zh-CN.md",
       "role": "changelog",
       "language": "zh-CN",
-      "sha256": "78f04b0a7c8cc1b612ecfab0edc3da2026e48c8baee770573eca7b74448d49e7"
+      "sha256": "a44c01445d20353de1c3bd43b6fee95d7524386352c19f963cd98c66cc718a7c"
     },
     {
       "path": "README.md",
@@ -46,7 +46,7 @@
       "path": "docs/acceptance/v0.8.0-candidate.md",
       "role": "release_notes",
       "language": "en",
-      "sha256": "4972964676ae380c86ce605c62a2cca926c68272b58cc754ffcab791f6dbe662"
+      "sha256": "5671e50f764fad75cc31ca8a3ef4436f0c0405535fe3f89ebc404a660f1122df"
     },
     {
       "path": "docs/releases/v0.8.0.md",
@@ -55,7 +55,7 @@
       "sha256": "07a3c7350026c58eaf4a271b7350e407b548d55da6ff1587dbff799eb46c929e"
     }
   ],
-  "document_set_sha256": "861c239deb478e35d9e1a9d05298fdd198e0be10aa0192e01461ffa65bc569a4",
+  "document_set_sha256": "458d2190af638b0c72411cbcfbb00eabad401c5161d99e1034723d2cdadd0ab5",
   "method": {
     "kind": "cold_read",
     "implementation_context_used": false,
@@ -156,6 +156,7 @@
   "limitations": [
     "This receipt binds reader comprehension of the listed bytes only; it does not establish factual correctness beyond the recorded evidence, native acceptance, exact-commit CI, publication or human preference.",
     "The candidate is unpublished: README registry commands describe a future published state and are marked as such; readers testing the candidate must use a reviewed tarball or source revision.",
-    "A Russian changelog edition remains a coverage gap carried over from 0.7.0; the Russian README is independently readable and links the English changelog."
+    "A Russian changelog edition remains a coverage gap carried over from 0.7.0; the Russian README is independently readable and links the English changelog.",
+    "Regenerated after the 2026-11-06 repair round: the changelog editions and the candidate acceptance record were re-read cold with the F1/F2/G1 closure content; the README, SECURITY and release-draft bytes are unchanged from the previously reviewed set."
   ]
 }

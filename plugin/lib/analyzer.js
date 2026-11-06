@@ -760,7 +760,11 @@ export function parseSnapshot(snapshot, opts, coverage) {
         const inner = type === 'tool/ptc-dispatch-start', id = inner ? d.subCallId : d.callId
         const argumentText = typeof d.arguments === 'string' ? d.arguments : canonical(d.arguments)
         const tool = sanitize(d.name, 'redacted', 100)
-        s.calls.set(id, {tool, verification:test('VERIFICATION_COMMAND_RE',argumentText), diagnostic:test('DIAGNOSTIC_COMMAND_RE',argumentText), content_dump:test('CONTENT_DUMP_COMMAND_RE',argumentText), state_change:test('STATE_CHANGE_COMMAND_RE',argumentText), git_commit:/(?:^|\s)git\s+commit/.test(argumentText)})
+        const call = {tool, verification:test('VERIFICATION_COMMAND_RE',argumentText), diagnostic:test('DIAGNOSTIC_COMMAND_RE',argumentText), content_dump:test('CONTENT_DUMP_COMMAND_RE',argumentText), state_change:test('STATE_CHANGE_COMMAND_RE',argumentText), git_commit:/(?:^|\s)git\s+commit/.test(argumentText)}
+        s.calls.set(id, call)
+        // Scoped identity travels with the prefix: a settlement or recovery
+        // recorded after the inherited cut must still resolve this call.
+        s.scoped_calls.set(JSON.stringify([String(id), d.turn ?? null, d.step ?? null]), call)
         if (inner) s.ptc.set(d.subCallId,{...d,settled:false,inherited:true})
       }
       if (type === 'tool/ptc-dispatch' && s.ptc.has(d.subCallId)) s.ptc.get(d.subCallId).settled=true
@@ -1060,7 +1064,10 @@ export function parseSnapshot(snapshot, opts, coverage) {
           : null
       if (cancelledCode) {
         s.tool_execution[d.inner ? 'inner_cancelled' : 'outer_cancelled']++
-        const call = s.calls.get(id) || { tool: 'unknown' }
+        // Scoped lookup only: a same-callId call in another turn/step must
+        // never impersonate this settlement's metadata; without a matching
+        // scope the record stays unknown.
+        const call = s.scoped_calls.get(scope) || { tool: 'unknown' }
         // A cancelled call settled: never a success, never an execution
         // failure and never an approval rejection. Side effects remain
         // possible, so the record never claims the call "did not run".
@@ -1074,8 +1081,8 @@ export function parseSnapshot(snapshot, opts, coverage) {
             cancelled: cancelledCode,
             record_identity: scope,
             call_id: id,
-            turn: d.turn ?? null,
-            step: d.step ?? null,
+            turn: d.turn ?? call.turn ?? null,
+            step: d.step ?? call.step ?? null,
             exit_code: null,
             cause: null,
             verification: !!call.verification,
