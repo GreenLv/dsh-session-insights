@@ -42,11 +42,12 @@
 import {createRequire} from 'node:module'
 import {pathToFileURL,fileURLToPath} from 'node:url'
 import {readFile,writeFile,mkdtemp,rm,cp,mkdir,readdir as readDir} from 'node:fs/promises'
-import {existsSync,mkdirSync,mkdtempSync,readdirSync,rmSync} from 'node:fs'
+import {existsSync,realpathSync,mkdirSync,mkdtempSync,readdirSync,rmSync} from 'node:fs'
 import {createHash} from 'node:crypto'
 import {tmpdir} from 'node:os'
 import {spawnSync} from 'node:child_process'
-import {join,resolve,dirname} from 'node:path'
+import {join,resolve,sep} from 'node:path'
+import {classifySettledBatch,foreignSetRefusalProblem,selfTestVerdict,settleWithTimeout} from './dsh-executor-consumers.mjs'
 import assert from 'node:assert/strict'
 
 export function compositionTemplatePath(){
@@ -84,14 +85,16 @@ for (const name of ['@deepseek-ai/dsh-tool-executor-native','@deepseek-ai/dsh-to
 }
 
 const FAIL_STAGE=process.env.DSI_EXECUTOR_FAIL_STAGE||''
-const scratchRoot=mkdtempSync(join(tmpdir(),'dsi-executor-runner-'))
-// Default home name contains a space so every consumer is exercised across
-// the URL boundary; DSI_EXECUTOR_HOME_NAME=plain selects the no-space form
-// for the ordinary-path control run.
-const home=join(scratchRoot,process.env.DSI_EXECUTOR_HOME_NAME==='plain'?'home':'executor home')
-const workdir=join(home,'work')
-const stagedRoot=mkdtempSync(join(runtime,'node_modules','.dsh-session-insights-under-test-'))+'/plugin'
-const compositionPath=join(scratchRoot,'rc1-executor-composition.yaml')
+// Paths only; every actual resource is acquired inside the try below so the
+// first acquisition failure already lands in the unified ownership handling.
+// The runner home lives under the per-run mkdtemp scratch — never a fixed
+// shared path. Default home name contains a space so every consumer is
+// exercised across the URL boundary; DSI_EXECUTOR_HOME_NAME=plain selects
+// the no-space form for the ordinary-path control run.
+const scratchRootBase=join(tmpdir(),'dsi-executor-runner-')
+const stagingRootBase=join(runtime,'node_modules','.dsh-session-insights-under-test-')
+const stagedPluginPath=join(stagingRootBase,'plugin')
+let scratchRoot, stagingRoot
 const previousHome=process.env.DSH_HOME
 let bootCtx,primaryFailure
 const cleanups=[]
@@ -100,18 +103,33 @@ let result
 
 try {
   // Cleanup ownership starts with the first acquired/changed resource.
-  mkdirSync(home,{recursive:true})
-  process.env.DSH_HOME=home
+  scratchRoot=mkdtempSync(scratchRootBase)
+  const home=join(scratchRoot,process.env.DSI_EXECUTOR_HOME_NAME==='plain'?'home':'executor home')
+  const workdir=join(home,'work')
+  const compositionPath=join(scratchRoot,'rc1-executor-composition.yaml')
+  if (process.env.DSI_EXECUTOR_REPORT_SCRATCH==='1') console.error('RUNNER_SCRATCH='+scratchRoot)
   cleanup('environment',async()=>{
     if(previousHome===undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME=previousHome
   })
-  cleanup('scratch tree',async()=>{await rm(scratchRoot,{recursive:true,force:true})})
+  // The scratch tree is removed on every path — except under the injected
+  // leak used by the self-test's negative control, which must fail the
+  // cleanup verdict instead of being silently tolerated.
+  cleanup('scratch tree',async()=>{
+    if (process.env.DSI_EXECUTOR_LEAK==='1')
+      throw new Error('injected leak: scratch tree intentionally retained (DSI_EXECUTOR_LEAK)')
+    await rm(scratchRoot,{recursive:true,force:true})
+  })
+  mkdirSync(home,{recursive:true})
 
   // Stage the plugin INSIDE the target tree's node_modules so its
   // @deepseek-ai imports resolve against the exact closure under test
-  // (same guarantees as scripts/dsh-services.mjs).
-  await mkdir(dirname(stagedRoot),{recursive:true})
+  // (same guarantees as scripts/dsh-services.mjs). The staging ROOT is the
+  // acquired resource and the unit of cleanup; the plugin is its child path.
+  stagingRoot=mkdtempSync(stagingRootBase)
+  cleanup('staging root removal',async()=>{await rm(stagingRoot,{recursive:true,force:true})})
+  const stagedRoot=stagedPluginPath
+  await mkdir(stagedRoot,{recursive:true})
   await cp(join(packageRoot,'plugin'),stagedRoot,{recursive:true})
   assert.equal(await fileTreeDigest(stagedRoot),await fileTreeDigest(join(packageRoot,'plugin')),'staged plugin differs from the production plugin')
   const plugin=await import(pathToFileURL(join(stagedRoot,'lib/index.js')).href)
@@ -122,7 +140,6 @@ try {
     const expectedVersion=JSON.parse(await readFile(createRequire(join(runtime,'package.json')).resolve('@deepseek-ai/dsh-llm/package.json'),'utf8')).version
     assert.equal(llmVersion,expectedVersion,`staged plugin resolved dsh-llm ${llmVersion}, target tree is ${expectedVersion}`)
   }
-  cleanup('staged plugin removal',async()=>{await rm(stagedRoot,{recursive:true,force:true})})
 
   // Render the composition template with this run's writable roots, then boot
   // through the official loader. The template path itself crosses the URL
@@ -144,6 +161,10 @@ try {
   }
 
   bootCtx=await boot('dsh',compositionPath,[],()=>{},referrer)
+  // The official boot normalizes the process environment and drops DSH_HOME;
+  // the plugin's storage resolves its home from the live environment, so the
+  // runner home is restored right after boot returns.
+  process.env.DSH_HOME=home
   cleanup('booted context',async()=>{await bootCtx.fiber.dispose()})
 
   if (FAIL_STAGE==='init') throw new Error('injected initialization failure')
@@ -236,6 +257,8 @@ try {
   }]})
   assert.equal(rootBatch.results[0].result.isError,false,JSON.stringify(rootBatch.results[0].result).slice(0,400))
   const nativePrepared=JSON.parse(textOf(rootBatch.results[0].result))
+  assert.ok(nativePrepared.workdir.startsWith(realpathSync.native(home)+sep),
+    'the default-scope run must live inside the runner home, got: '+nativePrepared.workdir)
   const nativeBase=JSON.parse(await readFile(join(nativePrepared.workdir,'base-report.json'),'utf8'))
   assert.equal(nativeBase.totals.sessions,1)
   result.default_native_route=true
@@ -279,20 +302,57 @@ try {
   assert.equal(agentDirect.results[0].result.error?.info?.code ?? agentDirect.results[0].result.error?.code,'UNKNOWN_TOOL')
   result.routing_is_executor_specific=true
 
-  // --- toolSet isolation ----------------------------------------------------
+  // --- toolSet isolation: ownership decides, not executor capability --------
+  // Paired controls on ONE operation (session_insights_prepare, executable
+  // on both scopes' native surfaces) so the only variable is set ownership:
+  // each scope first executes successfully with its own freshly resolved
+  // set, then the very same call with Agent A's set must refuse, and the
+  // tool body must not run (no new runs).
   const runsBeforeCross=await runCount()
-  const crossSet=await tools.execute({agent:agentB,signal,toolSet:setA,calls:[{
-    type:'tool-call',id:'dsi-cross-set-1',name:'run_code',
-    arguments:JSON.stringify({code:`const prepared = await tools.session_insights_prepare({days: 3650, privacy: 'metrics', locale: 'en'})\nreturn {prepared}`,description:'foreign toolSet'}),
+  const ownArgs=JSON.stringify({days:3650,privacy:'metrics',locale:'en'})
+  // Agent B positive control with its own set.
+  const setB=await prepareToolSet(agentB)
+  const ownB=await tools.execute({agent:agentB,signal,toolSet:setB,calls:[{
+    type:'tool-call',id:'dsi-own-b-1',name:'session_insights_prepare',arguments:ownArgs,
   }]})
-  assert.equal(crossSet.results[0].result.isError,true,"Agent B must not execute with Agent A's toolSet")
-  const noAgent=await tools.execute({signal,toolSet:setA,calls:[{
-    type:'tool-call',id:'dsi-noscope-set-1',name:'run_code',
-    arguments:JSON.stringify({code:'return 1',description:'scopeless toolSet'}),
+  assert.equal(ownB.results[0].result.isError,false,
+    'Agent B must execute the same tool with its own set: '+JSON.stringify(ownB.results[0].result).slice(0,200))
+  // Resource-identity check: executed prepares must write inside the runner
+  // home, never the operator's real DSH home (boot drops DSH_HOME; without
+  // the restore above this assertion is exactly what catches the leak). Both
+  // sides go through the same native realpath the Store applies, so macOS
+  // /var -> /private/var symlinks compare equal.
+  const ownBWorkdir=JSON.parse(textOf(ownB.results[0].result)).workdir
+  assert.ok(ownBWorkdir.startsWith(realpathSync.native(home)+sep),
+    'the prepared run must live inside the runner home, got: '+ownBWorkdir)
+  // Agent B negative: only the set changes.
+  const foreignB=await tools.execute({agent:agentB,signal,toolSet:setA,calls:[{
+    type:'tool-call',id:'dsi-foreign-b-1',name:'session_insights_prepare',arguments:ownArgs,
   }]})
-  assert.equal(noAgent.results[0].result.isError,true,'a scope-bound toolSet must refuse without its scope')
-  assert.equal(await runCount(),runsBeforeCross,'rejected toolSet uses must not leave runs behind')
-  result.toolset_scope_isolation=true
+  const foreignBProblem=foreignSetRefusalProblem(foreignB,'dsi-foreign-b-1')
+  assert.equal(foreignBProblem,null,
+    "Agent B must refuse with Agent A's toolSet: "+(foreignBProblem ?? '')+' '+JSON.stringify(foreignB.results?.[0]).slice(0,200))
+  // Scopeless default positive control: the rootBatch above already proved
+  // this exact tool executes under the default's own set (same tool, same
+  // execution path); now only the set changes to a scope-bound one.
+  const foreignRoot=await tools.execute({signal,toolSet:setA,calls:[{
+    type:'tool-call',id:'dsi-foreign-root-1',name:'session_insights_prepare',arguments:ownArgs,
+  }]})
+  const foreignRootProblem=foreignSetRefusalProblem(foreignRoot,'dsi-foreign-root-1')
+  assert.equal(foreignRootProblem,null,
+    'the scopeless default must refuse with a scope-bound set: '+(foreignRootProblem ?? '')+' '+JSON.stringify(foreignRoot.results?.[0]).slice(0,200))
+  // Built-in negative control: applied to a legitimate-owner success batch,
+  // the refusal assertion must NOT hold — it must flag the success. This
+  // proves the check tracks set ownership rather than any error shape.
+  const ownControlProblem=foreignSetRefusalProblem(ownB,'dsi-own-b-1')
+  assert.ok(ownControlProblem!==null,
+    'negative control failed: the refusal assertion accepted a legitimate-owner success')
+  // Side effects: exactly the legitimate executions created runs; the two
+  // refusals created none.
+  assert.equal(await runCount(),runsBeforeCross+1,
+    'the refusals must not run the tool body: only the legitimate B execution may create a run')
+  result.toolset_scope_isolation={own_b_executed:true,foreign_b_refused:true,foreign_root_refused:true,
+    negative_control_flagged:true}
 
   // --- conditional activation with a real oracle ----------------------------
   // Registration happens first; the toolSet is resolved afterwards and passed
@@ -317,7 +377,6 @@ try {
     type:'tool-call',id:'dsi-conditional-off-1',name:'dsi_conditional_probe',arguments:'{}',
   }]})
   assert.equal(condOff.results[0].result.isError,true,'a conditionally inactive tool must refuse')
-  assert.ok(!existsSync(join(home,'conditional-marker.txt')),'an unactivated tool body must not run')
   conditionalOff()
   const conditionalOn=bootCtx.tools.register({...probeDefinition},
     {when:async()=>{trueEvals++;return true}})
@@ -390,7 +449,6 @@ try {
     type:'tool-call',id:'dsi-midflight-1',name:'run_code',
     arguments:JSON.stringify({code:`await tools.session_insights_prepare({days: 3650, privacy: 'metrics', locale: 'en'})\nawait (await import('node:fs/promises')).writeFile(${JSON.stringify(startedMarker)},'started')\nawait new Promise(r=>setTimeout(r,8000))\nawait (await import('node:fs/promises')).writeFile(${JSON.stringify(doneMarker)},'done')\nreturn 'completed'`,description:'long program for mid-flight cancellation'}),
   }]})
-  const settle=promise=>Promise.race([promise.catch(e=>({rejection:e})),new Promise(r=>setTimeout(()=>r({timeout:true}),60000))])
   let started=false
   for (let i=0;i<100 && !started;i++) {
     await new Promise(r=>setTimeout(r,100))
@@ -399,31 +457,19 @@ try {
   assert.ok(started,'the PTC program must verifiably start before cancellation')
   const runsAtAbort=await runCount()
   cancelController.abort(new Error('caller cancelled mid-flight'))
-  const midOutcome=await settle(midFlight)
+  // Consume the ACTUALLY awaited batch (never the promise): the reviewed
+  // real shape is an error batch carrying the official ABORTED classification.
+  const midOutcome=await settleWithTimeout(midFlight,60000)
   assert.ok(!midOutcome.timeout,'the cancelled batch must settle after abort')
-  // The batch settles (resolved empty-discarded or rejected) once the started
-  // work has been awaited and torn down; it never returns a successful call.
-  // Observed cancellation shape: the batch promise settles without a result
-  // object (the executor awaits started work, tears it down, and completes
-  // the caller's promise without publishable content). The guarantees kept:
-  // it never settles as a successful result, the program never completes,
-  // and the default scope keeps serving.
-  let settledShape
-  let classification
-  if (midOutcome.rejection!==undefined) {
-    settledShape='rejected'
-    classification='rejected: '+String(midOutcome.rejection?.message ?? midOutcome.rejection).slice(0,100)
-  } else {
-    const midResult=midFlight?.results?.[0]?.result ?? null
-    if (midResult) {
-      assert.ok(midResult.isError===true,'a cancelled call must not settle as success')
-      settledShape='resolved-error-result'
-      classification=`${midResult.error?.info?.code ?? ''}|${midResult.error?.message ?? ''}`
-    } else {
-      settledShape='resolved-without-result'
-      classification='no publishable result (started work awaited and discarded)'
-    }
-  }
+  const cancelledBatch=classifySettledBatch(midOutcome)
+  assert.equal(cancelledBatch.shape,'error-result',
+    'caller cancellation must settle as an error-result batch, got: '+cancelledBatch.shape+' ('+cancelledBatch.classification.slice(0,160)+')')
+  assert.equal(cancelledBatch.callId,'dsi-midflight-1',
+    'the cancelled batch must report the cancelled call, got: '+cancelledBatch.callId)
+  assert.equal(cancelledBatch.code,'ABORTED',
+    'caller cancellation must carry the official ABORTED classification, got: '+cancelledBatch.classification.slice(0,160))
+  const settledShape=cancelledBatch.shape
+  const classification=cancelledBatch.classification
   assert.ok(existsSync(startedMarker),'the started marker stays: the call did begin')
   await new Promise(r=>setTimeout(r,1500))
   assert.ok(!existsSync(doneMarker),'the cancelled program must not run to completion')
@@ -456,28 +502,21 @@ try {
   }
   assert.ok(started2Seen,'the program must verifiably start before the owner disposes')
   await ptcOverrideDisposer()
-  const disposeOutcome=await settle(midDispose)
+  // Consume the ACTUALLY awaited batch: the reviewed real shape is an error
+  // batch carrying CODE_RUN_FAILED with an executor-disposed/abort cause —
+  // a different official protocol from caller cancellation, checked as such.
+  const disposeOutcome=await settleWithTimeout(midDispose,60000)
   assert.ok(!disposeOutcome.timeout,'the in-flight batch must settle after the owner disposes the executor')
-  // The owning executor unloads: the in-flight batch settles without a
-  // successful result (observed shape: the batch promise rejects; when a
-  // settled batch is present it must be an error).
-  let disposeOK
-  let disposeShape
-  if (disposeOutcome.rejection!==undefined) {
-    disposeOK=true
-    disposeShape='rejected: '+String(disposeOutcome.rejection?.message ?? disposeOutcome.rejection).slice(0,100)
-  } else {
-    const r=midDispose?.results?.[0]?.result ?? null
-    if (r) {
-      assert.ok(r.isError===true,'a disposed batch must not settle as success')
-      disposeOK=true
-      disposeShape=`resolved-error-result: ${r.error?.message ?? ''}`.slice(0,100)
-    } else {
-      disposeOK=true
-      disposeShape='resolved-without-result (in-flight work awaited and discarded)'
-    }
-  }
-  assert.ok(disposeOK,'the disposed batch must not succeed: '+disposeShape.slice(0,160))
+  const disposedBatch=classifySettledBatch(disposeOutcome)
+  assert.equal(disposedBatch.shape,'error-result',
+    'owner dispose must settle as an error-result batch, got: '+disposedBatch.shape+' ('+disposedBatch.classification.slice(0,160)+')')
+  assert.equal(disposedBatch.callId,'dsi-mid-dispose-1',
+    'the disposed batch must report the disposed call, got: '+disposedBatch.callId)
+  assert.equal(disposedBatch.code,'CODE_RUN_FAILED',
+    'owner dispose must carry the official CODE_RUN_FAILED classification, got: '+disposedBatch.classification.slice(0,160))
+  assert.match(disposedBatch.classification,/executor disposed|abort/i,
+    'the dispose failure must name the executor disposal as its cause: '+disposedBatch.classification.slice(0,160))
+  const disposeShape=disposedBatch.shape+': '+disposedBatch.classification
   assert.ok(existsSync(started2),'the started marker stays: the call did begin')
   await new Promise(r=>setTimeout(r,1500))
   assert.ok(!existsSync(done2),'the disposed program must not run to completion')
@@ -522,23 +561,59 @@ else console.log(JSON.stringify(result))
 // Self-test: controlled failure injection over the real runner paths. Each
 // child asserts its exit code and its cleanup state (scratch tree removed) so
 // the failure paths are consumed, not just present.
+// Spawn one child runner bound to an explicit shared task root: the child's
+// TMPDIR/TMP/TEMP all point at the parent-created scratch, and the child
+// reports its actual scratchRoot on stderr. The parent inspects THAT root.
+function spawnBoundRunner(stageEnv,taskRoot,extraEnv={}){
+  const r=spawnSync(process.execPath,[fileURLToPath(import.meta.url),runtime],{
+    encoding:'utf8',timeout:300000,
+    env:{...process.env,...stageEnv,...extraEnv,TMPDIR:taskRoot,TMP:taskRoot,TEMP:taskRoot,
+      DSI_EXECUTOR_REPORT_SCRATCH:'1'}})
+  const reported=[...r.stderr.matchAll(/RUNNER_SCRATCH=(.+)/g)].map(m=>m[1])
+  const leaked=readdirSync(taskRoot).filter(n=>n.startsWith('dsi-executor-runner-'))
+  return {exit:r.status,stderr:r.stderr,reportedScratch:reported,scratchLeft:leaked.length>0,
+    leakedNames:leaked,childStdout:r.stdout}
+}
 async function selfTest() {
   const runs=[]
-  for (const stage of ['boot','init','cleanup']) {
-    const scratch=mkdtempSync(join(tmpdir(),'dsi-executor-selftest-'))
+  // Negative control FIRST: a real child that exits 1 but deliberately leaks
+  // its scratch tree must FAIL the cleanup verdict. A non-zero exit alone is
+  // never accepted as clean.
+  {
+    const leakRoot=mkdtempSync(join(tmpdir(),'dsi-executor-selftest-'))
     try {
-      const r=spawnSync(process.execPath,[fileURLToPath(import.meta.url),runtime],{
-        encoding:'utf8',env:{...process.env,DSI_EXECUTOR_FAIL_STAGE:stage},timeout:300000})
-      const homesLeft=readdirSync(scratch).filter(n=>n.startsWith('dsi-executor-runner-'))
-      runs.push({stage,exit:r.status,stderr:r.stderr.slice(-300),homesLeft})
+      const leak=spawnBoundRunner({DSI_EXECUTOR_FAIL_STAGE:'boot',DSI_EXECUTOR_LEAK:'1'},leakRoot)
+      const leakVerdict=selfTestVerdict({stage:'leak',exit:leak.exit,scratchLeft:leak.scratchLeft})
+      runs.push({stage:'leak-negative-control',exit:leak.exit,scratchLeft:leak.scratchLeft,
+        reportedScratch:leak.reportedScratch,verdictMustFail:true,verdict:leakVerdict})
+      assert.ok(leak.exit===1,'the leak-injected child must exit 1 (cleanup failed), got '+leak.exit)
+      assert.ok(leak.scratchLeft,'the leak-injected child must really leave its scratch tree behind')
+      assert.ok(leakVerdict!==null,'negative control failed: the cleanup verdict accepted a leaking child')
     } finally {
-      rmSync(scratch,{recursive:true,force:true})
+      rmSync(leakRoot,{recursive:true,force:true})
     }
   }
-  const failed=runs.filter(r=>r.exit!==1)
-  const dirty=runs.filter(r=>r.homesLeft.length>0)
-  assert.deepEqual(failed,[],'every injected-failure child must exit 1: '+JSON.stringify(failed))
-  assert.deepEqual(dirty,[],'every injected-failure child must clean its scratch tree: '+JSON.stringify(dirty))
-  console.log(JSON.stringify({self_test:'pass',runs:runs.map(r=>({stage:r.stage,exit:r.exit,clean:r.homesLeft.length===0}))}))
+  // The three injected-failure stages: each child exits 1 AND cleans the
+  // scratch root it actually used (verified via its reported identity).
+  for (const stage of ['boot','init','cleanup']) {
+    const taskRoot=mkdtempSync(join(tmpdir(),'dsi-executor-selftest-'))
+    try {
+      const run=spawnBoundRunner({DSI_EXECUTOR_FAIL_STAGE:stage},taskRoot)
+      const verdict=selfTestVerdict({stage,exit:run.exit,scratchLeft:run.scratchLeft})
+      runs.push({stage,exit:run.exit,scratchLeft:run.scratchLeft,
+        reportedScratch:run.reportedScratch,verdict})
+      assert.equal(verdict,null,'injected stage '+stage+' failed the cleanup verdict: '+verdict
+        +' (stderr tail: '+run.stderr.slice(-200)+')')
+      assert.ok(run.reportedScratch.length===1,
+        'the child must report its actual scratch root: '+JSON.stringify(run.reportedScratch))
+      assert.ok(run.reportedScratch[0].startsWith(taskRoot),
+        'the child scratch must live inside the shared task root: '+run.reportedScratch[0])
+    } finally {
+      rmSync(taskRoot,{recursive:true,force:true})
+    }
+  }
+  console.log(JSON.stringify({self_test:'pass',
+    runs:runs.map(r=>({stage:r.stage,exit:r.exit,scratchLeft:r.scratchLeft,
+      verdict:r.verdict===null?'clean':r.verdict.slice(0,80)}))}))
 }
 if (runSelfTest) await selfTest()

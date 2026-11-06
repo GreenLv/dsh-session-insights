@@ -15,7 +15,7 @@
 
 ### 新增
 
-- 结构化调用者取消成为独立的已结算结局。rc.1 工具管线以 `ABORTED` / `ABORTED_BEFORE_DISPATCH` 结构化错误码分类调用者取消（rc.1 中 `run_code` 的调用者取消不再落入 `CODE_RUN_FAILED`）；两侧分析器把这类调用计入新的 `tool_execution.outer_cancelled` / `inner_cancelled` 报告字段，绝不计为成功、执行失败或审批拒绝，并保留有界证据说明"执行体在结局结算前会运行到静止，副作用仍可能已发生"。继承前缀中的调用在切断后仍保留其作用域身份，两侧 runtime 的最终取消事实完全一致。最终 semantic 批次的证据 ID 在 facet 之外还编码记录会话、事件位置与调用作用域，不同取消永远不共享同一引用；对照向量把取消、真实失败、审批拒绝与未知结局四类判定固定为相互可区分，两侧 runtime 一致。真实执行器集成检查（`scripts/dsh-executor-contract.mjs`）经官方 rc.1 PTC（`run_code` → 生成 SDK）与 native 执行器、在官方 loader 组合上分派本插件：使用受支持的 Agent 作用域，同一 freshly resolved toolSet 贯穿声明 → 准入 → 执行；拒绝均带正向控制（条件激活 oracle、移除与释放正控、撤换不回退）；覆盖运行中调用者取消与插件卸载的收尾；清理所有权在注入 boot/init/cleanup 失败时依然成立。所有路径经 `fileURLToPath` 跨越 URL 边界，runner 默认 home 目录名含空格，使带空格路径行为在每个平台都被实际演练。
+- 结构化调用者取消成为独立的已结算结局。rc.1 工具管线以 `ABORTED` / `ABORTED_BEFORE_DISPATCH` 结构化错误码分类调用者取消（rc.1 中 `run_code` 的调用者取消不再落入 `CODE_RUN_FAILED`）；两侧分析器把这类调用计入新的 `tool_execution.outer_cancelled` / `inner_cancelled` 报告字段，绝不计为成功、执行失败或审批拒绝，并保留有界证据说明"执行体在结局结算前会运行到静止，副作用仍可能已发生"。继承前缀中的调用在切断后仍保留其作用域身份，两侧 runtime 的最终取消事实完全一致。最终 semantic 批次的证据 ID 在 facet 之外还编码记录会话、事件位置与调用作用域，不同取消永远不共享同一引用；对照向量把取消、真实失败、审批拒绝与未知结局四类判定固定为相互可区分，两侧 runtime 一致。真实执行器集成检查（`scripts/dsh-executor-contract.mjs`）经官方 rc.1 PTC（`run_code` → 生成 SDK）与 native 执行器、在官方 loader 组合上分派本插件：使用受支持的 Agent 作用域，同一 freshly resolved toolSet 贯穿声明 → 准入 → 执行；拒绝均带正向控制（条件激活 oracle、移除与释放正控、撤换不回退）；运行中调用者取消与插件卸载的收尾按真实结算形态消费——校验等待后的结果条目、调用 ID 与官方分类（调用者取消为 `ABORTED`，插件卸载为 `CODE_RUN_FAILED` 且原因指向执行器已释放），意外成功、无关拒绝、缺字段与超时都会被消费者拒绝；跨 scope 拒绝用同一操作的正反成对控制证明（合法集合先成功、换入外来集合即拒绝），并内建负对照；清理验收针对子进程实际使用的 scratch，泄漏子进程必须使判定失败。消费者逻辑在 `tests-js/executor-contract-consumers.test.js` 表驱动测试。所有路径经 `fileURLToPath` 跨越 URL 边界，runner home 位于每次运行的临时目录下，其名称含空格，使带空格路径行为在每个平台都被实际演练。
 
 ### 安全
 
