@@ -8,7 +8,140 @@
 // consumers, never silently accepted.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {classifySettledBatch, foreignSetRefusalProblem, selfTestVerdict} from '../scripts/dsh-executor-consumers.mjs'
+import {classifySettledBatch, foreignSetRefusalProblem, readSuccessfulToolValue,
+  readDsiPrepareValue, readPtcProgramResult, selfTestVerdict} from '../scripts/dsh-executor-consumers.mjs'
+
+// Live canonical success values are distinct from model-facing content.
+// Windows partial enforcement, runtime logs and denial guidance can all add
+// text around the rendered business value, so content is deliberately varied.
+const preparePayload = {workdir: 'C:\\isolated home\\run-1', metrics_semantic_skipped: true}
+const prepareValue = {text: JSON.stringify(preparePayload)}
+const sandbox = {mode: 'workspace-write', enforcement: 'partial', denied: false}
+const canonicalBatch = (callId, value, content = [{type: 'text', text: 'presentation'}]) => ({
+  results: [{callId, result: {isError: false, value, content}}],
+})
+const ptcValue = (overrides = {}) => ({logs: [], sandbox, result: {prepared: prepareValue}, ...overrides})
+
+test('native prepare consumes canonical value regardless of its presentation', () => {
+  const presentations = [
+    [{type: 'text', text: JSON.stringify(preparePayload)}],
+    [{type: 'text', text: 'a presentation, not JSON'}],
+    [{type: 'text', text: JSON.stringify({workdir: 'forged'})}, {type: 'text', text: 'more text'}],
+  ]
+  for (const content of presentations) {
+    const value = readSuccessfulToolValue(canonicalBatch('native', prepareValue, content), 'native')
+    assert.deepEqual(readDsiPrepareValue(value), preparePayload)
+  }
+})
+
+test('PTC prepare keeps canonical result with full, partial, logs and multi-block presentation', () => {
+  const cases = [
+    {label: 'full', value: ptcValue({sandbox: {...sandbox, enforcement: 'full'}}),
+      content: [{type: 'text', text: JSON.stringify({prepared: prepareValue})}]},
+    {label: 'partial', value: ptcValue(),
+      content: [{type: 'text', text: JSON.stringify({prepared: prepareValue})+'\nFile sandbox enforcement is partial on this host.'}]},
+    {label: 'logs and blocks', value: ptcValue({logs: ['first log', 'second log']}),
+      content: [{type: 'text', text: 'first log\nsecond log'}, {type: 'text', text: 'not the business result'}]},
+    {label: 'conflicting content', value: ptcValue(),
+      content: [{type: 'text', text: JSON.stringify({prepared: {text: '{"workdir":"forged"}'}})}]},
+  ]
+  for (const {label, value, content} of cases) {
+    const decoded = readPtcProgramResult(canonicalBatch('ptc', value, content), 'ptc', {requireWorkspaceWrite: true})
+    assert.deepEqual(readDsiPrepareValue(decoded.program.prepared), preparePayload, label)
+    assert.deepEqual(decoded.sandbox, value.sandbox, label)
+    assert.deepEqual(decoded.logs, value.logs, label)
+  }
+})
+
+test('Windows rc.1 observed partial footer leaves the canonical prepared value intact', () => {
+  // Shape from the Windows native run: a single text block contains the
+  // formatted program result followed by this exact partial-enforcement line.
+  // The workdir is synthetic; the outer and nested value structure is retained.
+  const value = ptcValue()
+  const displayed = JSON.stringify(value.result, null, 2)+'\nFile sandbox enforcement is partial on this host.'
+  const batch = canonicalBatch('ptc', value, [{type: 'text', text: displayed}])
+  assert.equal(batch.results[0].result.content.length, 1)
+  assert.equal(Object.hasOwn(batch.results[0].result, 'structuredContent'), false)
+  assert.throws(() => JSON.parse(displayed), SyntaxError)
+  const decoded = readPtcProgramResult(batch, 'ptc', {requireWorkspaceWrite: true})
+  assert.deepEqual(readDsiPrepareValue(decoded.program.prepared), preparePayload)
+  assert.deepEqual(decoded.sandbox, {mode: 'workspace-write', enforcement: 'partial', denied: false})
+})
+
+test('PTC intentionally denied boundary consumes program facts and preserves sandbox facts', () => {
+  const program = {inside: 'written', outside: {status: 'refused', code: 'EACCES', path: 'C:\\isolated home\\outside'}}
+  for (const denied of [false, true]) {
+    const value = {logs: ['diagnostic log'], sandbox: {...sandbox, denied}, result: program}
+    const presentation = [{type: 'text', text: '{"inside":"forged"}\nFile sandbox enforcement is partial on this host.\nThe sandbox denied an operation.'}]
+    const decoded = readPtcProgramResult(canonicalBatch('fs', value, presentation), 'fs',
+      {requireWorkspaceWrite: true, allowDenied: true})
+    assert.deepEqual(decoded.program, program)
+    assert.equal(decoded.sandbox.denied, denied)
+    assert.equal(decoded.sandbox.enforcement, 'partial')
+  }
+  const unexpected = {logs: [], sandbox: {...sandbox, denied: true}, result: program}
+  assert.throws(() => readPtcProgramResult(canonicalBatch('fs', unexpected), 'fs',
+    {requireWorkspaceWrite: true}), /unexpected sandbox denial/)
+})
+
+test('single-call canonical consumer rejects wrong identity, errors, absent values and ambiguous batches', () => {
+  const invalid = [
+    {label: 'no batch', batch: undefined},
+    {label: 'array batch', batch: Object.assign([], {results: [{callId: 'id', result: {isError: false, value: prepareValue}}]})},
+    {label: 'no rows', batch: {results: []}},
+    {label: 'duplicate rows', batch: {results: [{callId:'id'}, {callId:'id'}]}},
+    {label: 'wrong call', batch: canonicalBatch('other', prepareValue)},
+    {label: 'error with forged value', batch: {results: [{callId: 'id', result: {isError: true, value: prepareValue}}]}},
+    {label: 'success with an error', batch: {results: [{callId: 'id', result: {isError: false, value: prepareValue, error: {message: 'failure'}}}]}},
+    {label: 'success with undefined error', batch: {results: [{callId: 'id', result: {isError: false, value: prepareValue, error: undefined}}]}},
+    {label: 'missing boolean', batch: {results: [{callId: 'id', result: {value: prepareValue}}]}},
+    {label: 'missing value with valid content', batch: {results: [{callId: 'id', result: {isError: false, content: [{type: 'text', text: prepareValue.text}]}}]}},
+    {label: 'undefined value', batch: canonicalBatch('id', undefined)},
+  ]
+  for (const {label, batch} of invalid)
+    assert.throws(() => readSuccessfulToolValue(batch, 'id'), undefined, label)
+  const failure = {results: [{callId: 'id', result: {isError: true,
+    error: {message: 'sandbox unavailable', info: {code: 'CODE_RUN_FAILED'}}}}]}
+  assert.throws(() => readSuccessfulToolValue(failure, 'id'), /CODE_RUN_FAILED.*sandbox unavailable/)
+})
+
+test('DSI prepare accepts one whole JSON object and refuses malformed, tailed or wrong-type data', () => {
+  const invalid = [undefined, null, 'not an object', {}, {text: 12}, {...prepareValue, extra: true},
+    {text: ''}, {text: '{broken'}, {text: prepareValue.text+'\ntrailing'},
+    {text: prepareValue.text+'{}'}, {text: 'null'}, {text: '[]'}, {text: '12'},
+    {text: '{}'}, {text: '{"workdir":42}'}, {text: '{"workdir":""}'},
+    {text: '{"workdir":"x"}'}, {text: '{"workdir":"x","metrics_semantic_skipped":"true"}'}]
+  for (const value of invalid)
+    assert.throws(() => readDsiPrepareValue(value), undefined, JSON.stringify(value))
+})
+
+test('PTC consumer rejects missing or malformed canonical program and log shapes', () => {
+  const invalid = [null, 'rendered only', {}, {logs: null, result: {}},
+    {logs: [3], result: {}}, {logs: [], result: null}, {logs: [], result: []},
+    {logs: [], result: 'rendered object'}, {logs: []}, {logs: [], result: {}, extra: true}]
+  for (const value of invalid)
+    assert.throws(() => readPtcProgramResult(canonicalBatch('ptc', value), 'ptc'), undefined, JSON.stringify(value))
+  const preparedAsString = readPtcProgramResult(canonicalBatch('ptc', ptcValue({result: {prepared: prepareValue.text}})), 'ptc')
+  assert.throws(() => readDsiPrepareValue(preparedAsString.program.prepared), /must contain text/)
+})
+
+test('PTC consumer validates sandbox facts and the real Agent workspace policy', () => {
+  // Sandbox is optional in the general official value schema, but required
+  // with reported enforcement for this runner's confined Agent checks.
+  assert.equal(readPtcProgramResult(canonicalBatch('ptc', {logs: [], result: {prepared: prepareValue}}), 'ptc').sandbox, null)
+  const invalid = [undefined, null, {}, {mode: 'wrong', denied: false, enforcement: 'partial'},
+    {mode: 'workspace-write', denied: 'false', enforcement: 'partial'},
+    {mode: 'workspace-write', denied: false, enforcement: 'unknown'},
+    {mode: 'workspace-write', denied: false, enforcement: 'partial', extra: true},
+    {mode: 'workspace-write', denied: false},
+    {mode: 'read-only', denied: false, enforcement: 'partial'},
+    {mode: 'danger-full-access', denied: false, enforcement: 'full'}]
+  for (const facts of invalid) {
+    const value = ptcValue({sandbox: facts})
+    assert.throws(() => readPtcProgramResult(canonicalBatch('ptc', value), 'ptc',
+      {requireWorkspaceWrite: true}), undefined, JSON.stringify(facts))
+  }
+})
 
 // --- classifySettledBatch --------------------------------------------------
 

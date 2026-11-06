@@ -47,7 +47,7 @@ import {createHash} from 'node:crypto'
 import {tmpdir} from 'node:os'
 import {spawnSync} from 'node:child_process'
 import {join,resolve,sep} from 'node:path'
-import {classifySettledBatch,foreignSetRefusalProblem,selfTestVerdict,settleWithTimeout} from './dsh-executor-consumers.mjs'
+import {classifySettledBatch,foreignSetRefusalProblem,readSuccessfulToolValue,readDsiPrepareValue,readPtcProgramResult,selfTestVerdict,settleWithTimeout} from './dsh-executor-consumers.mjs'
 import assert from 'node:assert/strict'
 
 export function compositionTemplatePath(){
@@ -250,7 +250,6 @@ try {
     const dir=join(home,'insights','runs')
     return (await readDir(dir).catch(()=>[])).length
   }
-  const textOf=r=>Array.isArray(r.content)?r.content.filter(x=>x.type==='text').map(x=>x.text).join('\n'):String(r.content ?? '')
   const prepareToolSet=async(agent)=>tools.resolve({...(agent?{agent}:{}),signal,modelSelection})
 
   // --- routing: each scope serves its calls with its own executor -----------
@@ -264,8 +263,8 @@ try {
     type:'tool-call',id:'dsi-native-prepare-1',name:'session_insights_prepare',
     arguments:JSON.stringify({days:3650,privacy:'metrics',locale:'en'}),
   }]})
-  assert.equal(rootBatch.results[0].result.isError,false,JSON.stringify(rootBatch.results[0].result).slice(0,400))
-  const nativePrepared=JSON.parse(textOf(rootBatch.results[0].result))
+  const nativePrepared=readDsiPrepareValue(readSuccessfulToolValue(rootBatch,'dsi-native-prepare-1'))
+  assert.equal(nativePrepared.metrics_semantic_skipped,true,'native metrics preparation must skip semantic work')
   assert.ok(nativePrepared.workdir.startsWith(realpathSync.native(home)+sep),
     'the default-scope run must live inside the runner home, got: '+nativePrepared.workdir)
   const nativeBase=JSON.parse(await readFile(join(nativePrepared.workdir,'base-report.json'),'utf8'))
@@ -285,15 +284,17 @@ try {
     type:'tool-call',id:'dsi-ptc-prepare-1',name:'run_code',
     arguments:JSON.stringify({code:`const prepared = await tools.session_insights_prepare({days: 3650, privacy: 'metrics', locale: 'en'})\nreturn {prepared}`,description:'call session insights prepare through the SDK'}),
   }]})
-  assert.equal(ptcBatch.results[0].result.isError,false,JSON.stringify(ptcBatch.results[0].result).slice(0,400))
-  const ptcParsed=JSON.parse(textOf(ptcBatch.results[0].result))
-  const ptcPayload=typeof ptcParsed.prepared==='string'?JSON.parse(ptcParsed.prepared)
-    :ptcParsed.prepared?.text!==undefined?JSON.parse(ptcParsed.prepared.text)
-    :ptcParsed.prepared
-  assert.equal(ptcPayload.metrics_semantic_skipped,true,'prepare payload shape: '+textOf(ptcBatch.results[0].result).slice(0,200))
+  const ptcRun=readPtcProgramResult(ptcBatch,'dsi-ptc-prepare-1',{requireWorkspaceWrite:true})
+  const ptcPayload=readDsiPrepareValue(ptcRun.program.prepared)
+  assert.equal(ptcPayload.metrics_semantic_skipped,true,'prepare payload shape: '+JSON.stringify(ptcRun.program).slice(0,200))
+  assert.ok(ptcPayload.workdir.startsWith(realpathSync.native(home)+sep),
+    'the PTC prepare run must live inside the runner home, got: '+ptcPayload.workdir)
   const ptcBase=JSON.parse(await readFile(join(ptcPayload.workdir,'base-report.json'),'utf8'))
   assert.equal(ptcBase.totals.sessions,1)
   result.agent_ptc_route=true
+  // Windows' official ACL backend reports partial enforcement; preserve the
+  // actual fact instead of treating its rendered notice as JSON or failure.
+  result.agent_ptc_sandbox=ptcRun.sandbox
 
   // A program's direct fs calls run in the confined PTC child. SDK tool
   // callbacks (including the probes below and DSI storage) run in the host,
@@ -313,10 +314,12 @@ try {
       type:'tool-call',id:'dsi-ptc-direct-fs-1',name:'run_code',
       arguments:JSON.stringify({code:`const fs = await import('node:fs/promises')\nawait fs.writeFile(${JSON.stringify(insideMarker)}, 'child-inside', {flag: 'wx'})\ntry {\n  await fs.writeFile(${JSON.stringify(outsideMarker)}, 'child-outside', {flag: 'wx'})\n  return {inside: 'written', outside: {status: 'unexpected-success'}}\n} catch (error) {\n  return {inside: 'written', outside: {status: 'refused', code: error?.code ?? '', path: error?.path ?? ''}}\n}`,description:'check direct PTC filesystem write boundaries'}),
     }]})
-    assert.equal(fsBoundaryBatch.results[0].callId,'dsi-ptc-direct-fs-1','the boundary batch must report its own call')
-    assert.equal(fsBoundaryBatch.results[0].result.isError,false,
-      'the direct-fs boundary program must settle successfully: '+JSON.stringify(fsBoundaryBatch.results[0].result).slice(0,400))
-    const fsBoundary=JSON.parse(textOf(fsBoundaryBatch.results[0].result))
+    // This program deliberately tests a refused child write, so a reported
+    // sandbox denial is permitted here; errno, path and side effects below
+    // still have to prove the intended boundary rather than an arbitrary error.
+    const fsBoundaryRun=readPtcProgramResult(fsBoundaryBatch,'dsi-ptc-direct-fs-1',
+      {requireWorkspaceWrite:true,allowDenied:true})
+    const fsBoundary=fsBoundaryRun.program
     assert.equal(fsBoundary.inside,'written','the PTC child must reach the inside write')
     assert.equal(await readFile(insideMarker,'utf8'),'child-inside','the PTC child must actually write inside the Agent workspace')
     assert.equal(fsBoundary.outside?.status,'refused','the PTC child must refuse the host-writable home path outside the workspace')
@@ -326,7 +329,8 @@ try {
       'the permission error must identify the actual outside probe path')
     assert.ok(!existsSync(outsideMarker),'the refused outside write must not create a file')
     result.ptc_direct_fs_boundary={platform:'win32',inside_workspace_written:true,
-      outside_host_control:true,outside_workspace_refused:true,denial_code:fsBoundary.outside.code}
+      outside_host_control:true,outside_workspace_refused:true,denial_code:fsBoundary.outside.code,
+      sandbox:fsBoundaryRun.sandbox}
   } else {
     // In particular, macOS permits the system temp tree under workspace-write;
     // this Windows-only home-parent refusal is not a macOS policy assertion.
@@ -362,14 +366,13 @@ try {
   const ownB=await tools.execute({agent:agentB,signal,toolSet:setB,calls:[{
     type:'tool-call',id:'dsi-own-b-1',name:'session_insights_prepare',arguments:ownArgs,
   }]})
-  assert.equal(ownB.results[0].result.isError,false,
-    'Agent B must execute the same tool with its own set: '+JSON.stringify(ownB.results[0].result).slice(0,200))
+  const ownBPrepared=readDsiPrepareValue(readSuccessfulToolValue(ownB,'dsi-own-b-1'))
+  assert.equal(ownBPrepared.metrics_semantic_skipped,true,'Agent B metrics preparation must skip semantic work')
   // Resource-identity check: executed prepares must write inside the runner
-  // home, never the operator's real DSH home (boot drops DSH_HOME; without
-  // the restore above this assertion is exactly what catches the leak). Both
-  // sides go through the same native realpath the Store applies, so macOS
+  // home, never the operator's real DSH home. Both sides go through the same
+  // native realpath the Store applies, so macOS
   // /var -> /private/var symlinks compare equal.
-  const ownBWorkdir=JSON.parse(textOf(ownB.results[0].result)).workdir
+  const ownBWorkdir=ownBPrepared.workdir
   assert.ok(ownBWorkdir.startsWith(realpathSync.native(home)+sep),
     'the prepared run must live inside the runner home, got: '+ownBWorkdir)
   // Agent B negative: only the set changes.

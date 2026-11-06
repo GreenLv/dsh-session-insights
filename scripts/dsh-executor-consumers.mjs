@@ -12,6 +12,84 @@
 // Unknown shapes, unexpected successes and missing payloads are rejected —
 // they never silently pass.
 
+const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value)
+
+// Live tools.execute() returns one canonical ToolExecutionResult per call.
+// content is a model-facing projection and can include logs or sandbox
+// notices; only the execution-local value is the successful body output.
+// This consumer is not for durable Session events, which omit that value.
+export function readSuccessfulToolValue(batch, expectedCallId) {
+  if (typeof expectedCallId !== 'string' || !expectedCallId)
+    throw new TypeError('expected callId must be a non-empty string')
+  if (!isRecord(batch) || !Array.isArray(batch.results) || batch.results.length !== 1)
+    throw new TypeError('expected exactly one live tool result')
+  const row = batch.results[0]
+  if (!isRecord(row) || row.callId !== expectedCallId)
+    throw new TypeError(`tool result callId mismatch: expected ${expectedCallId}`)
+  const result = row.result
+  if (!isRecord(result))
+    throw new TypeError('expected a successful live tool result')
+  if (result.isError === true) {
+    const code = result.error?.info?.code ?? result.error?.code ?? 'UNKNOWN'
+    const message = result.error?.message ?? 'missing failure message'
+    throw new Error(`tool ${expectedCallId} failed (${code}): ${message}`)
+  }
+  if (result.isError !== false)
+    throw new TypeError('expected a successful live tool result')
+  if (Object.hasOwn(result, 'error'))
+    throw new TypeError('successful live tool result must not contain an error')
+  if (!Object.hasOwn(result, 'value') || result.value === undefined)
+    throw new TypeError('successful live tool result is missing value')
+  return result.value
+}
+
+// session_insights_prepare's declared canonical output is exactly an object
+// with a text string containing one JSON value. Parse that string as a whole:
+// extra bytes and malformed/wrong-type business payloads are failures.
+export function readDsiPrepareValue(value) {
+  if (!isRecord(value) || Object.keys(value).length !== 1 || !Object.hasOwn(value, 'text')
+    || typeof value.text !== 'string')
+    throw new TypeError('DSI prepare value must contain text')
+  const payload = JSON.parse(value.text)
+  if (!isRecord(payload) || typeof payload.workdir !== 'string' || !payload.workdir.trim()
+    || typeof payload.metrics_semantic_skipped !== 'boolean')
+    throw new TypeError('DSI prepare payload must contain workdir and metrics_semantic_skipped')
+  return payload
+}
+
+// run_code's canonical value contains captured logs, optional sandbox facts,
+// and these runner programs' object return values. Keep the sandbox facts
+// instead of parsing content, where partial/denied notices can be appended.
+// requireWorkspaceWrite is used for the real Agent PTC checks; allowDenied
+// is reserved for programs intentionally testing a denied operation.
+export function readPtcProgramResult(batch, expectedCallId,
+  {requireWorkspaceWrite = false, allowDenied = false} = {}) {
+  const value = readSuccessfulToolValue(batch, expectedCallId)
+  if (!isRecord(value) || Object.keys(value).some(key => !['logs','sandbox','result'].includes(key))
+    || !Object.hasOwn(value, 'logs') || !Array.isArray(value.logs)
+    || !value.logs.every(item => typeof item === 'string'))
+    throw new TypeError('PTC value must contain a logs string array')
+  const sandbox = value.sandbox
+  if (Object.hasOwn(value, 'sandbox') && sandbox === undefined)
+    throw new TypeError('PTC value has malformed sandbox facts')
+  if (sandbox !== undefined) {
+    if (!isRecord(sandbox) || !['read-only','workspace-write','danger-full-access'].includes(sandbox.mode)
+      || Object.keys(sandbox).some(key => !['mode','denied','enforcement'].includes(key))
+      || typeof sandbox.denied !== 'boolean'
+      || (Object.hasOwn(sandbox, 'enforcement') && sandbox.enforcement === undefined)
+      || (sandbox.enforcement !== undefined && !['full','partial'].includes(sandbox.enforcement)))
+      throw new TypeError('PTC value has malformed sandbox facts')
+    if (sandbox.denied && !allowDenied)
+      throw new TypeError('PTC reported an unexpected sandbox denial')
+  }
+  if (requireWorkspaceWrite && (!sandbox || sandbox.mode !== 'workspace-write'
+    || !['full','partial'].includes(sandbox.enforcement)))
+    throw new TypeError('PTC must report workspace-write and its enforcement')
+  if (!Object.hasOwn(value, 'result') || !isRecord(value.result))
+    throw new TypeError('PTC value must contain an object result')
+  return {program: value.result, sandbox: sandbox ?? null, logs: value.logs}
+}
+
 export function classifySettledBatch(settled) {
   if (settled && settled.timeout === true)
     return {shape: 'timeout', ok: false, classification: 'timeout'}
