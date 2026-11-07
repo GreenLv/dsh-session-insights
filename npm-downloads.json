@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
   "renderer_version": 3,
-  "generated_at": "2026-11-06T12:23:13.203Z",
-  "data_through": "2026-11-05",
+  "generated_at": "2026-11-07T11:16:06.114Z",
+  "data_through": "2026-11-06",
   "period": {
     "start": "2026-08-22",
-    "end": "2026-11-05"
+    "end": "2026-11-06"
   },
   "title": "dsh-session-insights npm download history",
   "project": "dsh-session-insights",
@@ -16,7 +16,7 @@
       "label": "dsh-session-insights",
       "color": "#2563eb",
       "start": "2026-08-22",
-      "total": 5620,
+      "total": 5820,
       "downloads": [
         {
           "day": "2026-08-22",
@@ -280,123 +280,128 @@
         },
         {
           "day": "2026-10-13",
-          "downloads": 0,
-          "cumulative": 3455
+          "downloads": 109,
+          "cumulative": 3564
         },
         {
           "day": "2026-10-14",
           "downloads": 0,
-          "cumulative": 3455
+          "cumulative": 3564
         },
         {
           "day": "2026-10-15",
           "downloads": 0,
-          "cumulative": 3455
+          "cumulative": 3564
         },
         {
           "day": "2026-10-16",
           "downloads": 62,
-          "cumulative": 3517
+          "cumulative": 3626
         },
         {
           "day": "2026-10-17",
           "downloads": 73,
-          "cumulative": 3590
+          "cumulative": 3699
         },
         {
           "day": "2026-10-18",
           "downloads": 336,
-          "cumulative": 3926
+          "cumulative": 4035
         },
         {
           "day": "2026-10-19",
           "downloads": 0,
-          "cumulative": 3926
+          "cumulative": 4035
         },
         {
           "day": "2026-10-20",
           "downloads": 0,
-          "cumulative": 3926
+          "cumulative": 4035
         },
         {
           "day": "2026-10-21",
           "downloads": 0,
-          "cumulative": 3926
+          "cumulative": 4035
         },
         {
           "day": "2026-10-22",
           "downloads": 127,
-          "cumulative": 4053
+          "cumulative": 4162
         },
         {
           "day": "2026-10-23",
           "downloads": 74,
-          "cumulative": 4127
+          "cumulative": 4236
         },
         {
           "day": "2026-10-24",
           "downloads": 81,
-          "cumulative": 4208
+          "cumulative": 4317
         },
         {
           "day": "2026-10-25",
           "downloads": 252,
-          "cumulative": 4460
+          "cumulative": 4569
         },
         {
           "day": "2026-10-26",
           "downloads": 113,
-          "cumulative": 4573
+          "cumulative": 4682
         },
         {
           "day": "2026-10-27",
           "downloads": 113,
-          "cumulative": 4686
+          "cumulative": 4795
         },
         {
           "day": "2026-10-28",
           "downloads": 117,
-          "cumulative": 4803
+          "cumulative": 4912
         },
         {
           "day": "2026-10-29",
           "downloads": 82,
-          "cumulative": 4885
+          "cumulative": 4994
         },
         {
           "day": "2026-10-30",
           "downloads": 71,
-          "cumulative": 4956
+          "cumulative": 5065
         },
         {
           "day": "2026-10-31",
           "downloads": 100,
-          "cumulative": 5056
+          "cumulative": 5165
         },
         {
           "day": "2026-11-01",
           "downloads": 80,
-          "cumulative": 5136
+          "cumulative": 5245
         },
         {
           "day": "2026-11-02",
           "downloads": 69,
-          "cumulative": 5205
+          "cumulative": 5314
         },
         {
           "day": "2026-11-03",
           "downloads": 226,
-          "cumulative": 5431
+          "cumulative": 5540
         },
         {
           "day": "2026-11-04",
           "downloads": 106,
-          "cumulative": 5537
+          "cumulative": 5646
         },
         {
           "day": "2026-11-05",
           "downloads": 83,
-          "cumulative": 5620
+          "cumulative": 5729
+        },
+        {
+          "day": "2026-11-06",
+          "downloads": 91,
+          "cumulative": 5820
         }
       ]
     }
@@ -664,139 +669,144 @@
     },
     {
       "day": "2026-10-13",
-      "downloads": 0,
-      "cumulative": 3455
+      "downloads": 109,
+      "cumulative": 3564
     },
     {
       "day": "2026-10-14",
       "downloads": 0,
-      "cumulative": 3455
+      "cumulative": 3564
     },
     {
       "day": "2026-10-15",
       "downloads": 0,
-      "cumulative": 3455
+      "cumulative": 3564
     },
     {
       "day": "2026-10-16",
       "downloads": 62,
-      "cumulative": 3517
+      "cumulative": 3626
     },
     {
       "day": "2026-10-17",
       "downloads": 73,
-      "cumulative": 3590
+      "cumulative": 3699
     },
     {
       "day": "2026-10-18",
       "downloads": 336,
-      "cumulative": 3926
+      "cumulative": 4035
     },
     {
       "day": "2026-10-19",
       "downloads": 0,
-      "cumulative": 3926
+      "cumulative": 4035
     },
     {
       "day": "2026-10-20",
       "downloads": 0,
-      "cumulative": 3926
+      "cumulative": 4035
     },
     {
       "day": "2026-10-21",
       "downloads": 0,
-      "cumulative": 3926
+      "cumulative": 4035
     },
     {
       "day": "2026-10-22",
       "downloads": 127,
-      "cumulative": 4053
+      "cumulative": 4162
     },
     {
       "day": "2026-10-23",
       "downloads": 74,
-      "cumulative": 4127
+      "cumulative": 4236
     },
     {
       "day": "2026-10-24",
       "downloads": 81,
-      "cumulative": 4208
+      "cumulative": 4317
     },
     {
       "day": "2026-10-25",
       "downloads": 252,
-      "cumulative": 4460
+      "cumulative": 4569
     },
     {
       "day": "2026-10-26",
       "downloads": 113,
-      "cumulative": 4573
+      "cumulative": 4682
     },
     {
       "day": "2026-10-27",
       "downloads": 113,
-      "cumulative": 4686
+      "cumulative": 4795
     },
     {
       "day": "2026-10-28",
       "downloads": 117,
-      "cumulative": 4803
+      "cumulative": 4912
     },
     {
       "day": "2026-10-29",
       "downloads": 82,
-      "cumulative": 4885
+      "cumulative": 4994
     },
     {
       "day": "2026-10-30",
       "downloads": 71,
-      "cumulative": 4956
+      "cumulative": 5065
     },
     {
       "day": "2026-10-31",
       "downloads": 100,
-      "cumulative": 5056
+      "cumulative": 5165
     },
     {
       "day": "2026-11-01",
       "downloads": 80,
-      "cumulative": 5136
+      "cumulative": 5245
     },
     {
       "day": "2026-11-02",
       "downloads": 69,
-      "cumulative": 5205
+      "cumulative": 5314
     },
     {
       "day": "2026-11-03",
       "downloads": 226,
-      "cumulative": 5431
+      "cumulative": 5540
     },
     {
       "day": "2026-11-04",
       "downloads": 106,
-      "cumulative": 5537
+      "cumulative": 5646
     },
     {
       "day": "2026-11-05",
       "downloads": 83,
-      "cumulative": 5620
+      "cumulative": 5729
+    },
+    {
+      "day": "2026-11-06",
+      "downloads": 91,
+      "cumulative": 5820
     }
   ],
   "sources": [
     {
       "package": "dsh-session-insights",
       "start": "2026-08-22",
-      "end": "2026-11-05",
-      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-11-05/dsh-session-insights",
-      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-11-05/dsh-session-insights"
+      "end": "2026-11-06",
+      "range": "https://api.npmjs.org/downloads/range/2026-08-22:2026-11-06/dsh-session-insights",
+      "point": "https://api.npmjs.org/downloads/point/2026-08-22:2026-11-06/dsh-session-insights"
     }
   ],
-  "observation_through": "2026-11-05",
+  "observation_through": "2026-11-06",
   "settlement": {
     "mode": "latest-available-day",
     "latest_day_status": "provisional",
-    "stable_through": "2026-09-02",
+    "stable_through": "2026-10-12",
     "minimum_age_days": 2,
     "minimum_observation_span_hours": 12
   },
