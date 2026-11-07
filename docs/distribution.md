@@ -1,14 +1,16 @@
 # Distribution status
 
-## Candidate 0.8.0 (development candidate, not published)
+## Published 0.8.0 (2026-11-07)
 
-0.8.0 is a development candidate returned for integration and dual-platform native acceptance. Nothing is published: no tag, no npm version, no GitHub Release and no candidate artifact digest exist yet. The candidate raises the support floor to DSH `>=0.2.2-rc.1` / Node `>=24.9.0` and re-binds the known upstream Zod risk decision to the reviewed rc.1 cohort (2026-11-06 maintainer decision). Facts: [candidate acceptance record](acceptance/v0.8.0-candidate.md), [bilingual candidate notes](releases/v0.8.0.md). Publication and marketplace readback will be recorded here only after the release gates pass.
+[npm 0.8.0](https://www.npmjs.com/package/dsh-session-insights/v/0.8.0) and the [GitHub Release](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.8.0) publish the same artifact. npm `latest` resolved to 0.8.0 at publication. The annotated tag points to `ae4ecb39e8a609a90bf1ead03e288e9a5fa1de45`. The tarball has 29 files, is 233,965 bytes, and has SHA-256 `92cfbc43570c055c211e0e6d2a9a33775aedb4e88a92e893a48938f165eed625`. See the [public release receipt](acceptance/v0.8.0-release-receipt.json), [bilingual release notes](releases/v0.8.0.md), and [historical candidate record](acceptance/v0.8.0-candidate.md).
+
+The [candidate CI](https://github.com/GreenLv/dsh-session-insights/actions/runs/42379286996) and [main CI](https://github.com/GreenLv/dsh-session-insights/actions/runs/42382347326) each passed 14 jobs. macOS and Windows each passed official installation, real-model semantic reporting, and native Desktop command acceptance with the published artifact in isolated profiles on DSH `0.2.2-rc.1`. The CI audit retained the [known upstream Zod risk](../SECURITY.md#known-upstream-dependency-gap) within the reviewed dependency inputs.
 
 ## Published 0.7.0 (2026-11-03)
 
-[npm 0.7.0](https://www.npmjs.com/package/dsh-session-insights/v/0.7.0) and the [GitHub Release](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.7.0) publish the same artifact; npm `latest` resolves to 0.7.0. Tag `v0.7.0` points to `639405384235eb9fe13c55c17d08b30395088de4`. The verified tarball contains 29 files, is 229,194 bytes, and has SHA-256 `ae39d835997de06e6e64f7e369862fb711fe9ef199a2d8256d575fc2ab383a94`. See the [public release receipt](acceptance/v0.7.0-release-receipt.json), [published bilingual notes](releases/v0.7.0.md) and [historical candidate record](acceptance/v0.7.0-candidate.md).
+[npm 0.7.0](https://www.npmjs.com/package/dsh-session-insights/v/0.7.0) and the [GitHub Release](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.7.0) publish the same artifact; npm `latest` resolved to 0.7.0 at publication. Tag `v0.7.0` points to `639405384235eb9fe13c55c17d08b30395088de4`. The verified tarball contains 29 files, is 229,194 bytes, and has SHA-256 `ae39d835997de06e6e64f7e369862fb711fe9ef199a2d8256d575fc2ab383a94`. See the [public release receipt](acceptance/v0.7.0-release-receipt.json), [published bilingual notes](releases/v0.7.0.md) and [historical candidate record](acceptance/v0.7.0-candidate.md).
 
-Candidate and main CI each passed 16/16 jobs. The published artifact was installed and its identity verified in isolated macOS and Windows profiles; daily installation remains pending. The upstream Zod risk remains under the limited decision described in the release notes. Community listings have not been freshly revalidated; publication does not establish marketplace ingestion or approval.
+Candidate and main CI each passed 16/16 jobs. The published artifact was installed and its identity verified in isolated macOS and Windows profiles; daily installation was outside that acceptance. The upstream Zod risk remains under the limited decision described in the release notes. Community listings have not been freshly revalidated; publication does not establish marketplace ingestion or approval.
 
 ## Published 0.6.1 (2026-10-26)
 

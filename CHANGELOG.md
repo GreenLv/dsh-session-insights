@@ -4,7 +4,7 @@
 
 Public releases are listed newest first.
 
-## 0.8.0 - 2026-11-06 (candidate, not yet published)
+## 0.8.0 - 2026-11-07
 
 ### Changed
 
