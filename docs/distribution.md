@@ -1,5 +1,7 @@
 # Distribution status
 
+Release entries record what was verified at each publication date. The community listing observations at the end include their readback dates and have not been revalidated for every release.
+
 ## Published 0.8.0 (2026-11-07)
 
 [npm 0.8.0](https://www.npmjs.com/package/dsh-session-insights/v/0.8.0) and the [GitHub Release](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.8.0) publish the same artifact. npm `latest` resolved to 0.8.0 at publication. The annotated tag points to `ae4ecb39e8a609a90bf1ead03e288e9a5fa1de45`. The tarball has 29 files, is 233,965 bytes, and has SHA-256 `92cfbc43570c055c211e0e6d2a9a33775aedb4e88a92e893a48938f165eed625`. See the [public release receipt](acceptance/v0.8.0-release-receipt.json), [bilingual release notes](releases/v0.8.0.md), and [historical candidate record](acceptance/v0.8.0-candidate.md).
@@ -37,17 +39,17 @@ See the [release acceptance](acceptance/v0.5.0-release.md) and [public receipt](
 
 Read back on 2026-09-20:
 
-- [npm 0.4.0](https://www.npmjs.com/package/dsh-session-insights/v/0.4.0) is public and `latest` resolves to `0.4.0`.
+- [npm 0.4.0](https://www.npmjs.com/package/dsh-session-insights/v/0.4.0) was public and `latest` resolved to `0.4.0` at readback.
 - [GitHub Release v0.4.0](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.4.0) and its annotated tag point to `395bb4c308f053c494074e252950c63599fa4fce`. The bilingual notes and all three downloaded assets match the frozen release files.
 - The npm and GitHub tarballs match byte for byte: SHA-256 `a95c79096ffafdd3acdf9ad161c98a69f1ac39485e96b3c1641ac2635672b34a`.
-- A [Chinese update](https://github.com/AI-Scarlett/DSH-Store/issues/965#issuecomment-5750277537) describes the runtime changes in STORE issue #965. STORE recheck and real DSH host acceptance remain pending.
+- A [Chinese update](https://github.com/AI-Scarlett/DSH-Store/issues/965#issuecomment-5750277537) describes the runtime changes in STORE issue #965. STORE recheck and real DSH host acceptance were pending at that readback.
 
 The [release receipt](acceptance/v0.4.0-release-receipt.json) records the public identities. This entry was added after publication; it does not change the released package. Earlier sections describe their named release dates.
 
 ## Published v0.3.0 destinations
 
 1. [GitHub Release `v0.3.0`](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.3.0) is published as a non-draft, non-prerelease release (read back 2026-08-25); the tag points at commit `d6065402`.
-2. [`dsh-session-insights@0.3.0` on npm](https://www.npmjs.com/package/dsh-session-insights) is published, and `latest` resolves to `0.3.0`. Registry `dist.shasum` = `7d89604458ff9a15bc3f50d0ab4ef40c3a299d3f`, matching the local release-commit `npm pack --dry-run` shasum.
+2. [`dsh-session-insights@0.3.0` on npm](https://www.npmjs.com/package/dsh-session-insights/v/0.3.0) was published, and `latest` resolved to `0.3.0` at the release readback. Registry `dist.shasum` = `7d89604458ff9a15bc3f50d0ab4ef40c3a299d3f`, matching the local release-commit `npm pack --dry-run` shasum.
 3. Community indexes and dsh.pub resolve the npm/`latest` entry or the `main`-branch screenshot URLs, so screenshots refresh automatically; no community-index PR is expected for this release.
 4. The sibling cross-machine skill-sync consumer index pins this release at its own `dsh-session-insights.json` (`v0.3.0` / `d6065402`).
 
@@ -55,13 +57,13 @@ Validation: local pytest (37) and node --test (11) pass; CI matrix (ubuntu/macos
 
 ## Published v0.2.0 destinations
 
-The following `v0.2.0` destinations have been published and independently read back:
+The following `v0.2.0` destinations were published and independently read back at the time:
 
-1. [`dsh-session-insights@0.2.0` on npm](https://www.npmjs.com/package/dsh-session-insights) is published, and `latest` resolves to `0.2.0`. The registry tarball matches the accepted release artifact.
+1. [`dsh-session-insights@0.2.0` on npm](https://www.npmjs.com/package/dsh-session-insights/v/0.2.0) was published, and `latest` resolved to `0.2.0` at readback. The registry tarball matched the accepted release artifact.
 2. [GitHub Release `v0.2.0`](https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.2.0) is published as a non-draft, non-prerelease release. Its annotated tag and downloadable assets match the accepted release identity.
 3. [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/) has a public plugin entry. Its [submission PR #29](https://github.com/dsh-pub/dsh-pub/pull/29) was merged and the directory deployment completed successfully.
 
-The repository `package.json` declares `dsh.engines.dsh` (`>=0.1.0-rc.8`); the published `0.2.0` tarball predates that declaration, which takes effect on the next npm release.
+The repository `package.json` at that time declared `dsh.engines.dsh` (`>=0.1.0-rc.8`). The published `0.2.0` tarball predates that declaration. The current package declares its own minimum in [`package.json`](../package.json).
 
 Exact package, checksum, tag, Release, CI, and native-platform evidence remains recorded in the [v0.2.0 acceptance record](acceptance/v0.2.0-candidate.md).
 

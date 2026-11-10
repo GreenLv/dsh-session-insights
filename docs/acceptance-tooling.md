@@ -12,7 +12,7 @@ alone is not evidence of the runtime actually used.
 The dependency audit distinguishes three outcomes: a clean scan passes only
 with a valid, non-empty dependency inventory; a finding passes only under the
 exact single-release, cohort-bound exception recorded in
-`config/dependency-audit-exceptions.json` (for the 0.8.0 candidate: the
+`config/dependency-audit-exceptions.json` (for the 0.8.0 release: the
 maintainer's 2026-11-06 decision, bound to the rc.1 cohort and the two
 reviewed 18-entry report graph variants); anything else — network failure,
 invalid JSON, a missing step, cancellation, or a new high/critical finding —
@@ -36,3 +36,11 @@ cannot be confirmed stopped, the tool retains the potentially active tree.
 Inspect the recorded result and cleanup status before starting a new batch.
 Source checks, exact packaged-artifact tests, real host loading and platform
 GUI/model acceptance remain separate evidence.
+
+Validate a historical reader-review receipt against the checkout it names or
+the commit recorded by its release, since each receipt binds the exact
+document bytes. Use the current README and changelog on `main` for updated
+reader guidance.
+
+Use the release receipt and its named tarball to verify a published npm package.
+A local pack from `main` reflects the checkout's current files.

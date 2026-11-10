@@ -94,17 +94,11 @@ test("official app-boot precedence: engines.dsh alone decides, peers are ignored
   }
 });
 
-test("both README support summaries match the market range", async () => {
-  const [english, chinese] = await Promise.all([
-    readFile(new URL("../README.md", import.meta.url), "utf8"),
-    readFile(new URL("../README.zh-CN.md", import.meta.url), "utf8"),
-  ]);
-  assert.match(english, /The package requires `>=0\.2\.2-rc\.1`/);
-  assert.match(english, /Contract and service tests cover synthetic V4 input/);
-  assert.match(english, /acceptance receipts attached to each exact release artifact/);
-  assert.match(english, /docs\/acceptance\/v0\.6\.0-rc2\.1-candidate\.md/);
-  assert.match(chinese, /软件包要求 `>=0\.2\.2-rc\.1`/);
-  assert.match(chinese, /契约与服务测试在精确 rc\.1 runtime 上覆盖合成 V4 输入/);
-  assert.match(chinese, /原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录/);
-  assert.match(chinese, /docs\/acceptance\/v0\.6\.0-rc2\.1-candidate\.md/);
+test("each README states the market range before the Web install command", async () => {
+  for (const file of ["README.md", "README.zh-CN.md", "README.ru-RU.md"]) {
+    const document = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
+    const install = document.indexOf("dsh plugin --profile web add dsh-session-insights@");
+    assert.ok(install >= 0, file);
+    assert.ok(document.slice(0, install).includes(`DSH \`${expectedRange}\``), file);
+  }
 });

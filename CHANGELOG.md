@@ -4,152 +4,138 @@
 
 Public releases are listed newest first.
 
+## Release guide
+
+- **0.8.x** counts cancelled tool calls separately and requires DSH 0.2.2-rc.1 or later. Existing semantic runs need to be finished with their original version or restarted.
+- **0.7.x** adds Russian reports and documentation while retaining 0.6.1 run compatibility.
+- **0.6.x** expands coverage of background jobs, delegation and working directories, then strengthens report, privacy and cleanup boundaries.
+- **0.5.x** adapts to V4 session logs and later host releases, with safer recovery and bounded analysis.
+- **0.4.x and earlier** introduce native reports and cleanup, the dashboard, and the original Python CLI.
+
 ## 0.8.0 - 2026-11-07
+
+Reports now count tool calls cancelled by their caller separately from failures, approval rejections and unknown outcomes. This includes `run_code` and its nested calls. A call that has already started may leave side effects. Separate cancellations, including those inherited from another session, retain distinct evidence for semantic reports.
 
 ### Changed
 
-- **Breaking:** the minimum DSH host is now `>=0.2.2-rc.1`. Older hosts — the whole 0.2.0/0.2.1 lines and `0.2.2` prereleases below `rc.1` — are refused, with no old-API fallback, no dual stack and no forward-support queue for retired hosts. `0.2.2-rc.1` is the single exact acceptance-test host; later releases stay admitted by the declared range without being tested.
-- The Node.js floor is now `>=24.9.0`, matching the rc.1 host's own runtime requirement; the Cordis peer follows the rc.1 release to `~4.1.0`. npm, Python and Skill identities move to 0.8.0 together, and the stale marketplace entry (0.5.2-era DSH/Node claims) is refreshed to the same floors.
-- Test and acceptance infrastructure converges on one current runtime: `tests/dsh-runtime` and `tests/dsh-host` now pin exact `0.2.2-rc.1`, the retired `tests/dsh-*-rc5` trees and their consumers (CI matrix, Windows workflow defaults, audit cohort, `.gitattributes`, README commands) are removed, and CI runs the Node 24.9.0 floor on all three OSes plus one Node 25 probe of the same host.
-- The rc.1 adaptation was verified against the real published packages: the V4 vocabulary is unchanged from rc.5 (62 known event types, zero additions or removals), official admission, session contract, repair-fixture and real Session/query/codec service checks run against exact rc.1.
-
-### Added
-
-- Structured caller cancellation is now its own settled outcome. The rc.1 tools pipeline classifies caller-cancelled calls with `ABORTED` / `ABORTED_BEFORE_DISPATCH` structured error codes (`run_code` caller cancellation moved off `CODE_RUN_FAILED` in rc.1); both analyzers count them in new `tool_execution.outer_cancelled` / `inner_cancelled` report fields, never as success, execution failure or approval rejection, with bounded evidence noting that side effects remain possible because the call body reaches quiescence before the outcome settles. Inherited calls keep their scoped identity across the inherited cut, and the two runtimes' final cancellation facts compare exactly equal. Final semantic batch evidence IDs encode the recording session, event position and call scope alongside the facet, so different cancellations can never share one reference; contrast vectors pin cancelled, real-failure, approval-rejection and unknown-outcome classifications as mutually distinct in both runtimes. The real-executor integration check (`scripts/dsh-executor-contract.mjs`) dispatches this plugin through the official rc.1 PTC (`run_code` → generated SDK) and native executors over the official loader composition, with supported Agent scopes, one freshly resolved toolSet carried through declaration → admission → execution, positive-controlled refusals (conditional activation oracle, removal and release controls, no-fallback withdrawal), mid-flight caller cancellation and owner-dispose teardown whose settled batches are consumed as they actually settle — the awaited result row, call and official classification (`ABORTED` for caller cancellation, `CODE_RUN_FAILED` with an executor-disposed cause for owner dispose), with unexpected successes, unrelated rejections, malformed payloads and timeouts rejected by the consumer; cross-scope refusals proven by paired controls on one operation (legitimate-owner success, then foreign-set refusal) with a built-in negative control; and cleanup ownership verified against the child's actually used scratch — including a real leaking child that must fail the verdict. The consumers are table-tested in `tests-js/executor-contract-consumers.test.js`. All paths cross the URL boundary through `fileURLToPath`, the runner home and staged plugin both live under per-run allocated directories verified by the cleanup self-test (including a real staging-leak negative control), and the home's name contains a space so the spaced-path behavior is exercised on every platform.
-
-### Security
-
-- The known upstream dependency gap remains unresolved: the rc.1 packages (`dsh-commands`, `dsh-llm`, `dsh-agent`) still pin `zod@4.4.3` exactly ([GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), patched in 4.6.6), so the peer closure, the contract runtime tree and the host tree's nested copies remain affected; the full host tree's top-level zod resolves to the patched 4.6.7. The 0.7.0 exception expired with its cohort and was not renewed. On 2026-11-06 the maintainer made a new, limited decision accepting this risk for 0.8.0 and the exact reviewed rc.1 cohort: 9 bound files, the host queue and the two reviewed 18-entry report graph variants. In local checks, fresh production and full npm scans each exited 1 with the single advisory and 18 affected entries; the policy-aware assessment classified both as `accepted_known_risk`. These are local results, not exact-commit CI results. New findings or cohort drift fail closed. See [Security Policy](SECURITY.md#known-upstream-dependency-gap).
+- The minimum DSH host is `0.2.2-rc.1`. Upgrade older hosts before installing 0.8.0. The declared range admits later versions, but `0.2.2-rc.1` is the exact host tested for this release.
+- Node.js `>=24.9.0` is required and the Cordis peer range is `~4.1.0`. Update separately installed Python CLI and Skill copies through their managed installer.
+- The report adds `tool_execution.outer_cancelled` and `tool_execution.inner_cancelled` counters. Cancellation is identified from the host's structured outcome.
 
 ### Migration
 
-- The analyzer version string is `0.8.0-v4-dsh022rc1.1`; the input identity retargets to `0.2.2-rc.1`. Semantic runs recorded by 0.7.0 or earlier no longer resume under the 0.8.0 identity: finish them with the version that created them or start a new run; old runs and their evidence are retained, never rewritten. Deterministic CLI caches move to version 10 and older entries are ignored automatically (re-parsed from source; deleting them stays an optional manual cleanup via `dsh-session-insights cache`). Existing HTML/JSON/Markdown reports remain openable as files.
-- Upgrading a host below `0.2.2-rc.1` to at least `0.2.2-rc.1` is required before installing this candidate. Historical V4 session logs remain valid data input; keeping the retained rc.2-era fixtures does not mean older hosts are supported.
+- Finish semantic runs created by 0.7.0 or earlier with the version that created them, or start a new run. Existing runs, their evidence and saved HTML/JSON/Markdown reports remain available.
+- Historical V4 session logs remain valid input. Older deterministic CLI cache entries are ignored and rebuilt from source. To remove them, preview with `dsh-session-insights cache` and add `--delete` to confirm.
+
+### Security
+
+- Three DSH rc.1 packages still pin `zod@4.4.3`, affected by [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5). The upstream dependency remains unfixed in the reviewed cohort. The maintainer accepted the known risk for the reviewed 0.8.0 inputs on 2026-11-06. See the [security policy](SECURITY.md#known-upstream-dependency-gap) for the scope and conditions of that decision.
+
+The [0.8.0 release notes](docs/releases/v0.8.0.md) describe installation and the separate CI and native acceptance results. The [candidate record](docs/acceptance/v0.8.0-candidate.md) retains the implementation and test details.
 
 ## 0.7.0 - 2026-11-03
 
 ### Added
 
-- Russian (`ru`) is now a published locale, no longer source-only: the deterministic report, HTML dashboard, semantic prompts, native runtime and Python CLI all ship the full Russian catalog, and `README.ru-RU.md` documents the plugin in Russian. Message texts moved into keyed catalogs, so the semantic-prompt contract (untrusted-data notices and prompt rules) is written natively per locale instead of one English constant for every language. `ru` is accepted in the recorded run scope, resume validation and every entry that already accepted `en`/`zh-CN`. Russian localization by @xilec in [#2](https://github.com/GreenLv/dsh-session-insights/pull/2).
-- DSH `0.2.1-rc.5` is the primary acceptance host. The declared floor stays `>=0.2.1-rc.2`, and `0.2.1-rc.2` keeps compatibility coverage; the previous rc.3 host trees are no longer maintained, consistent with the contributing policy of not maintaining historical hosts.
+- Russian (`ru`) is available in the deterministic report, HTML dashboard, semantic prompts, native runtime and Python CLI. A Russian README accompanies the release. Russian localization by @xilec in [#2](https://github.com/GreenLv/dsh-session-insights/pull/2).
+- DSH `0.2.1-rc.5` became the primary acceptance host, with `0.2.1-rc.2` retained as the minimum and compatibility host for this release.
 
 ### Changed
 
-- Acceptance tooling tells the truth about failures and cleanup: failing steps and cleanup failures return their real exit status, an isolated result directory is never overwritten or silently reused, cleanup keeps the scene when the stop state is unclear, and public diagnostics no longer carry arbitrary exception text or machine paths. Fault probes are CRLF-portable.
-- Tests run the runtime they claim: every CI cell installs and names its exact DSH runtime (rc.5 primary, rc.2 compatibility), duplicate suites were reduced, and the candidate artifact is packed from the actual PR head instead of relabelling GitHub's merge checkout.
-
-### Security
-
-- The known upstream dependency gap remains unresolved: six official DSH rc.5 packages pin `zod@4.4.3` ([GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), patched in 4.6.6); nested pinned copies and this project’s peer closure remain vulnerable despite the host root resolving 4.6.7. The 0.6.1 exception expired and was not renewed. On 2026-11-03 the maintainer made a new, limited decision accepting this risk for 0.7.0 and the exact reviewed rc.2/rc.5 cohort: 13 bound files, the host queue and the reviewed 23- and 24-entry report graphs. In local checks, fresh production and full npm scans each exited 1 with the single advisory and 23 affected entries; the policy-aware assessment classified both as `accepted_known_risk`, and the reviewed 24-entry fixture was also accepted. These local checks are not a clean scan; [CI #92](https://github.com/GreenLv/dsh-session-insights/actions/runs/41559707449) separately recorded `accepted_known_risk` for both scopes. New findings or cohort drift fail closed. The published artifact and isolated installation identities were verified on macOS and Windows; candidate and main CI each passed 16/16 jobs. Daily installation remains pending. See [Security Policy](SECURITY.md#known-upstream-dependency-gap).
-- The audit gate now accepts a genuinely clean scan (with a valid, non-empty dependency inventory) without any exception file; network failures, invalid JSON, missing steps and new high/critical findings still fail closed.
+- Acceptance tools now report failed steps and cleanup failures, avoid silently reusing result directories, and retain the scene when cleanup cannot confirm that work has stopped. CI tests the exact named host runtimes and packages the actual PR head.
 
 ### Migration
 
-- The analyzer version string is `0.7.0-v4-dsh021rc2.5`; the input identity and semantic schema (`1.2.0`) are unchanged, so 0.6.1 native runs keep their recorded scope and stay resumable, and existing HTML/JSON/Markdown reports remain openable. Deterministic CLI caches written by 0.6.1 are ignored automatically and re-parsed from source; deleting them stays an optional manual cleanup via `dsh-session-insights cache`.
+- Semantic runs created by 0.6.1 remain resumable. Saved reports remain readable. Old deterministic CLI caches are ignored and rebuilt from source; to remove them, preview with `dsh-session-insights cache` and add `--delete` to confirm.
+
+### Security
+
+- DSH rc.5 packages still pinned vulnerable `zod@4.4.3`. The maintainer accepted the known risk for the reviewed 0.7.0 dependency cohort. The [0.7.0 release notes](docs/releases/v0.7.0.md) describe the affected packages, decision and validation limits.
 
 ## 0.6.1 - 2026-10-26
 
-Security and correctness patch for 0.6.0: closes the output-boundary, cache-minimization, privacy-projection, project-identity, timezone and aggregate-freshness defects listed below, adds trusted human approval for run deletion, and adds dependency auditing to CI. DSH `0.2.1-rc.3` is the primary acceptance target for this release; `0.2.1-rc.2` stays the minimum supported floor and keeps compatibility coverage. Source-level claims below were verified by synthetic regression on both runtimes; native hosts, models and UI acceptance remain separate gates. Session format stays V4 with DSH `>=0.2.1-rc.2`; start a new analysis run after upgrading; old caches are ignored automatically and deleting them is an optional, deliberate cleanup (see Migration).
+This security and correctness update requires DSH `>=0.2.1-rc.2` and tested `0.2.1-rc.3` as its primary host. Start a new analysis run after upgrading. Existing HTML and JSON reports remain readable, while old caches are ignored automatically.
 
 ### Security
 
-- Known upstream gap: DSH rc.2/rc.3 pins `zod@4.4.3`, affected by GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404 (memory exhaustion; patched in 4.6.6). The maintainer accepts only this risk for 0.6.1 on the current host dependency cohort; scans stay active and other high/critical findings still block. The exception expires on a release-version or DSH dependency-cohort change and must be reassessed at the next DSH upgrade. This is not a fix or a low-probability claim; see the [Security Policy as recorded at v0.6.1](https://github.com/GreenLv/dsh-session-insights/blob/v0.6.1/SECURITY.md#known-upstream-dependency-gap-in-061).
-
-- Derived CLI/bridge outputs (main file, HTML companion JSON, atomic temporaries) are boundary-checked before the first byte is written: targets inside the sessions source tree, pre-existing symlinks, hard links, non-regular files and NTFS alternate-data-stream names are refused with an actionable error, the previous report bytes stay untouched, and main/companion paths can never overwrite each other (`report --format html --output audit.json` writes `audit.data.json`).
-- The deterministic parse cache is minimized and scope-gated: a bounded header read decides window/project scope first, so out-of-scope logs are never parsed and never cached; persisted entries carry only a whitelisted, pre-projected session projection (no raw cwd, job registry, team roster, provider metadata or topic text), new POSIX cache directories/files use `0700`/`0600` regardless of umask (Windows uses ACLs, including private-parent inheritance and runtime-created private ACLs), and the cache schema moves to version 9 (version-8 entries are ignored, never auto-imported or auto-deleted). A new `cache` CLI subcommand previews per-root file counts and sizes and deletes listed roots only with an explicit `--delete`.
-- Python local-mode text now removes URL userinfo (and query/fragment credentials) exactly like the Node runtime; broken URLs collapse to a placeholder instead of failing the report.
-- Aggregate model input is re-projected under the run's analysis privacy — every free string, including object keys in summary sections, so a local-privacy base report can no longer widen a redacted analysis input.
-- Extension `source.kind` values in `injected_source_kinds` follow the shared category vocabulary: documented kinds stay readable, extensions are sanitized/pseudonymized per privacy mode, and credentials never persist even locally.
-- Model-output validation covers the input-sanitize contract (emails with plus tags, URL userinfo/query, identifiers, paths — values and object keys); invalid replacements keep the previous valid bytes, and an aggregate file placed outside the accepted submit path is untrusted input that finalize refuses. The aggregate response must echo a canonical `aggregate_input_identity` — exactly `identity_schema: 1` (integer; booleans refused) plus the 64-hex digest prepare-aggregate issued — and the same-named field anywhere else (nested items, facets) is ordinary content and scanned like model text.
-- Corrupt logs in provable out-of-scope projects are skipped after a bounded header read (never parsed, cached or blocking healthy projects); in-scope corruption still fails closed, now with a privacy-safe session locator and line number.
-- Native run deletion requires a human approval through the host approval service (`allowed-once` scoped to that exact call, executed with the caller's agent, call id and cancellation signal); a model-supplied `confirm=true` alone deletes nothing, no approval service means fail-closed, and the typed DSH command `/session-insights --cleanup <run> [--confirm]` is the direct human entry: it previews by default and, with `--confirm`, deletes exactly one named run without running any analysis.
+- Report writes refuse source-log targets, links, hard links and conflicting output paths before writing. The analyzer fully parses only sessions in scope, and its deterministic cache stores a smaller privacy-projected record. The `cache` command previews files and sizes; deletion requires an explicit `--delete`.
+- Model inputs and outputs receive additional privacy checks, including URL credentials and free text in object keys. Invalid model output does not replace the previous valid result.
+- Model-requested deletion of a native run requires human approval for that call. The typed `/session-insights --cleanup <run>` command previews a single run, and `--confirm` deletes it.
+- DSH rc.2 and rc.3 pinned vulnerable `zod@4.4.3`. The maintainer accepted this known risk for the reviewed 0.6.1 dependency cohort. See the [security policy at v0.6.1](https://github.com/GreenLv/dsh-session-insights/blob/v0.6.1/SECURITY.md#known-upstream-dependency-gap-in-061).
 
 ### Changed
 
-- Project identity and display labels are separated: every session, task family, project summary, excerpt and dashboard filter/export carries a stable anonymous `project_id` (hash of the lexical path key, case rules follow the path's own platform), and basename collisions get a short stable suffix instead of merging two projects.
-- One report timezone now derives date, hour and weekday together: captured once per request (host local, or explicit `--report-timezone`/IANA name/`UTC+HH:MM`), passed explicitly to the analysis Worker, recorded in the report scope and run manifests so a later resume cannot drift; Windows without IANA data gets an actionable tzdata error instead of a silent UTC fallback.
-- Semantic aggregates are content-bound: `get_aggregate` issues an `aggregate_input_identity` naming the exact prepared input, the response must echo that identity, and acceptance recomputes the input digest from the current validated facet content — a response generated against an earlier facet snapshot is refused instead of being re-stamped (a late response cannot complete). Finalize additionally re-verifies facet bytes and the prepared-input digest from disk (mtime-preserving edits cannot bypass it); stale or unbound aggregates refuse to complete, idempotent resubmission stays valid, and recovery is a rebuild-and-resubmit or an explicit degraded fallback. The semantic schema moves to 1.2.0 in both runtimes; prior runs are refused with "start a new run".
-- Project paths normalize once at the entry: the Python CLI resolves a relative `--project` against the invoking working directory, and the native entry refuses relative paths with an actionable absolute-path message (no process-cwd guessing, no silent empty reports); selection, worker matching, cache scope and resume records share the canonical key.
-- `analyzer_semantics` is now `v4-dsh021rc2.5` (identity version bump); the analyzer version string is `0.6.1-v4-dsh021rc2.5`.
-- Redirected Python CLI/analyzer/semantic output uses UTF-8, including Chinese and space-containing paths on Windows; development tests declare portable IANA timezone data.
-- CI pins every GitHub Actions use to a verified full commit SHA and adds a `dependency-security` job (`npm audit` for prod and full trees, `pip-audit` over the declared dependency set); scan failures fail the job, empty/unreachable results are never a pass.
+- Same-named projects receive distinct anonymous identities. Each report uses one captured timezone for its dates and hours. Old reports retain their original projections.
+- Semantic summaries must match the current validated batch content. Rebuild an outdated summary or choose an explicit deterministic fallback.
+- The Python CLI resolves relative `--project` paths from the invoking directory. The native entry requires an absolute path. Redirected Python output uses UTF-8, including on Windows.
+- Corrupt logs that can be identified as outside the selected project are skipped. In-scope corruption remains an error.
 
-### Migration
-
-- Old deterministic (version 8) and semantic (1.1.0) caches are ignored automatically — runs reparse from source. Deleting the leftovers is a deliberate user action: `dsh-session-insights cache --dsh-home <home>` previews roots, `--delete` removes only confirmed cache roots and refuses links or unowned files. Historic copies, backups and model-side retention are unaffected by this deletion and are not claimed as cleaned.
-- Existing 0.6.0 HTML/JSON reports remain openable; they lack `project_id` and report-timezone fields, so pre-upgrade reports keep their historical (merged-basename, mixed-timezone) projections and are not retroactively re-differentiated.
-- Native 0.6.0 runs are not resumable by the 0.6.1 semantic contract; start a new run. Deleting old runs now goes through approval-gated cleanup.
+Details of the release and its platform-specific limits are in the [release acceptance record](docs/acceptance/v0.6.1-release.md). The [published 0.6.1 changelog](https://github.com/GreenLv/dsh-session-insights/blob/v0.6.1/CHANGELOG.md#061---2026-10-26) retains the full technical change list.
 
 ## 0.6.0
 
-Adapt Session Insights to DSH 0.2.1-rc.2. The floor moves to `>=0.2.1-rc.2`; 0.2.0-rc.2 and 0.2.1-rc.1 are refused. Session format remains V4, but the host adds required event vocabulary and new completion/delegation semantics, so start a new analysis run after upgrading.
+This release adapts to DSH `0.2.1-rc.2`, which becomes the minimum host version. Upgrade older hosts and start a new analysis run. Session logs remain in V4 format.
 
 ### Added
 
-- Admit the required 0.2.1-rc.2 events `job/registered`, `job/settled` and `working-directory/change` in both the Node and Python validators; fixtures are generated by the exact host `Session` writer and restored by the official strict catalog. Unknown required events are still refused and unknown ignorable events are still skipped.
-- Report background-job lifecycle per session and in totals: registered/settled/completed/failed/killed/pending, inherited and inherited-pending, by-kind/by-cause, teardown, unreported producer outcome, anomalous duration/detail, unpaired settlements, and turn-ends that occurred while an owned job was still running. Registry outcome is never presented as user-task completion or resource release.
-- Count delegation separately from completion: dispatch tool results for `subagent`/`subagent_fork`/`workflow`/`spawn_teammate`, runtime `subagent-settled` notices, `tool-jobs` completion notices, inbound/outbound relays, workflow run/agent records, and Team roster/task snapshots. Delivery, inbox acceptance and parent turn end are not completion evidence.
-- Add a labelled working-directory trajectory with header-origin attribution, own vs inherited segments, cross-project activity, platform path forms (posix, home-prefix, drive, UNC, relative), duplicate/relative/invalid change anomalies, and privacy-shaped output. Raw paths stay out of redacted/metrics reports; project filtering and resume keep the immutable header criterion.
-- Recognise `web_search` and `web_fetch` as recorded calls (one multi-query search is one call), keep legacy `web.*` search aliases, and retain PTC outer/inner separation. Record `model/selection` and reasoning effort, `llm/retry` scheduled vs performed attempts and chain ids, and per-session token provenance (`input_tokens`/`total_tokens` derived sums, raw buckets recorded).
-- Keep third-party `plugin:` records opaque: only type/count coverage is retained, never payload, user intent, model context or completion evidence.
-- Refresh fixtures, peer ranges (DSH `>=0.2.1-rc.2`, Cordis `~4.0.5`) with the fixture runtime pinned to exact 0.2.1-rc.2 and Cordis 4.0.5 and contract tooling; add Node/Python parity coverage across local/redacted/metrics privacy and both locales.
+- Reports track background jobs and distinguish delegation from completion. A dispatched task or an ended parent turn alone does not establish completion.
+- Working-directory history shows activity across projects, including inherited segments. Output follows the selected privacy mode.
+- Reports recognize `web_search` and `web_fetch` calls, model selection and retries, and show token provenance. Third-party `plugin:` records contribute type and count coverage without exposing their payload.
+- Both analyzers accept the new background-job and working-directory events. They continue to reject unknown required events and skip unknown ignorable ones.
 
 ### Changed
 
-- `INPUT_IDENTITY`/analyzer semantics are now `v4-dsh021rc2.4`; cached deterministic parses and prior-run resume with different semantics are invalidated by design.
-- The npm/Python/Bundle/Skill identity is 0.6.0 and the DSH engines/peers floor is `>=0.2.1-rc.2`.
+- Analysis semantics changed, so older runs cannot be resumed under the new identity and old deterministic caches are ignored. The DSH peer floor is `>=0.2.1-rc.2` and the Cordis peer range is `~4.0.5` for this release.
 
-- Source and synthetic checks are preserved in the [development record](docs/acceptance/v0.6.0-rc2.1-candidate.md). Native, model and UI results are recorded separately in the acceptance receipts attached to each exact release artifact; range admission does not establish testing of future hosts.
-
+The [0.6.0 release acceptance](docs/acceptance/v0.6.0-release.md) and [development record](docs/acceptance/v0.6.0-rc2.1-candidate.md) describe their respective verification scopes. The [published changelog](https://github.com/GreenLv/dsh-session-insights/blob/v0.6.0/CHANGELOG.md#060) retains the detailed event and report fields.
 
 ## 0.5.2 - 2026-09-30
 
-This patch continues the 0.5.x host-adaptation series, fixes unsafe resume selection and bounds analysis resources. It requires DSH `>=0.2.0-rc.2` and no longer supports RC.1. Start a new analysis run after upgrading from 0.5.1; existing reports remain on disk. Separately installed Python CLI and Skill copies require their own update. Native acceptance is recorded per artifact.
+This update requires DSH `>=0.2.0-rc.2`. Start a new analysis run after upgrading from 0.5.1. Existing reports remain on disk. Separately installed Python CLI and Skill copies require their own update.
 
 ### Changed
 
-- Raise the DSH floor to `>=0.2.0-rc.2` across npm engines, Bundle compatibility and DSH peers. Future host versions are admitted by the declared range (the official RC.2 market consumer evaluates with `includePrerelease`), not by static version tables; only format or analyzer-semantics changes invalidate runs. Fixture runtimes and contract tooling pin the exact RC.2.
-- Bind resume to an explicit run and its recorded selection scope. Every run now records a normalized scope (project key, window length, privacy pair, analysis depth, locale) with a scope fingerprint; implicit resume requires an exact match, an explicit `--workdir` refuses contradictory fields, multi-run ambiguity is reported with the candidate paths, and manifests without a recorded scope are refused. Host-version growth alone no longer invalidates a semantically identical run.
-- Cap concurrent native analysis per plugin instance (two runs; cancellable FIFO queue of eight). Slash-command and tool calls can no longer multiply 256 MiB analysis Workers without bound; queued work is cancelled on abort or unload.
-- Bound Python session-log reads: streaming JSONL with hard budgets for decoded bytes, line count and single-line size, frame-by-frame zstd decoding that detects truncated final frames, refusal of oversized header frames and high compression ratios, and explicit `resource_limited_files` coverage instead of silent truncation or older-generation fallback. Corrupt UTF-8 is reported as unreadable instead of crashing the run.
-- Classify RC.2 asynchronous question replies (`source.kind=user-question-reply`) and scheduled prompts (`schedule`) as injected context in the native reader: counted separately, excluded from body evidence, corrections, acceptance signals and completion inference, and never treated as authorization.
-- Give `--no-open` a verifiable meaning: the command output stays a bare path line with no view hint, no opened files, no resident server and no upload; the default output appends one view hint naming the report file. Documented viewing steps for the Web runtime and the official Desktop keep the offline HTML as the only report surface.
+- Resume now checks the run's recorded project, time window, privacy, depth and language. Conflicting selections are refused, and ambiguous matches are listed for the user to choose.
+- Each plugin instance limits concurrent native analyses and queues additional work. Cancellation and unload also cancel queued requests.
+- Python log reading has size and decompression limits. Files that exceed those limits are reported instead of silently truncated or replaced with an older generation.
+- Scheduled prompts and asynchronous question replies are counted as injected context. They do not become human-work or authorization evidence.
+- `--no-open` returns the report path without opening a file, starting a server or uploading the report. The dashboard also handles single-card rows and narrow filter controls more cleanly.
 
-- Independent review fixes project-filtered preparation, keeps each scheduler slot until Worker termination, validates recorded selection fingerprints, and checks compressed-log budgets during block decoding. Completed `--no-open` results contain only the report path.
-- A section with one narrative card now uses the full row. Filter actions wrap on narrow screens, avoiding horizontal overflow.
+The [0.5.2 candidate record](docs/acceptance/v0.5.2-candidate.md) details the checks and limits. The [published changelog](https://github.com/GreenLv/dsh-session-insights/blob/v0.5.2/CHANGELOG.md#052---2026-09-30) retains the complete technical list.
 
 ## 0.5.1 - 2026-09-29
 
-Target DSH `0.2.0-rc.1` exclusively. Start a new analysis run after upgrading; existing reports are retained.
+Reports separate interrupted tool calls with unknown outcomes from confirmed failures. If a call may have changed external state, verify that state before retrying it.
 
 ### Changed
 
-- Count interrupted tool results separately from confirmed failures in both production readers. JSON totals and session summaries add `tool_recovery: {outcome_unknown, not_started}` for the host's exact recovery codes; these records do not increase failure, failed-verification, permission or retry counts. Call identity includes its turn and step, preserving separate uncertainty evidence when an ID is reused.
-- Pin DSH peers and Bundle compatibility to `0.2.0-rc.1`. New input identity `v4-dsh020rc1.2` invalidates earlier analysis manifests and deterministic caches.
-- Generate recovery fixtures through the exact host's official recoverer. Release tooling now retains one commit-bound tarball and validates installation bytes, populated reports, cancellation and cleanup in a portable gate. Source, package, native-host and model acceptance are recorded separately in the [release acceptance](docs/acceptance/v0.5.1-release.md).
-- Anonymize machine-local paths in a historical acceptance document and broaden the public-tree path scan. Historical results and limitations are unchanged.
+- Session summaries and totals show separately when a call's outcome was lost and when the log contains no record of it starting. Calls with the same ID in different turns keep separate evidence.
+- This release requires DSH `0.2.0-rc.1`. Start a new analysis after upgrading. Old report caches are rebuilt when needed, and saved reports remain available.
+
+See the [release acceptance](docs/acceptance/v0.5.1-release.md) for the package, native-host and model results.
 
 ## 0.5.0 - 2026-09-26
 
-Target DSH `0.1.7-rc.2` exclusively and start new V4 analysis runs after upgrading.
+The plugin and the Python CLI now read only V4 session data. Use DSH `0.1.7-rc.2` for this release, migrate older logs in DSH, and start a new analysis run after upgrading.
 
 ### Changed
 
-- Read V4 only in both native snapshots and the optional Python CLI. Migrate older raw logs upstream; old analysis manifests and caches cannot resume.
-- Use producer-owned notice messages and cancellable query observations; release observations before analysis and wait for owned work during unload.
-- Track developer surface replacements, PTC inner calls and permission-blocked results without treating injected context as human work or approval text as execution evidence.
-- Align npm and Python versions at 0.5.0. Source/CI checks, macOS model workflow, Windows deterministic host acceptance and human bilingual browser checks are separately recorded in the [release acceptance](docs/acceptance/v0.5.0-release.md).
+- The report includes tool calls made inside a programmatic tool call and distinguishes permission denials from execution failures. Injected instructions are excluded from human-work statistics.
+- Cancelling an analysis or unloading the plugin stops work that belongs to that run.
+- npm and Python package versions now match.
+
+See the [release acceptance](docs/acceptance/v0.5.0-release.md) for the macOS model, Windows deterministic and bilingual report checks.
 
 ## 0.4.0 - 2026-09-20
 
-The native Bundle now generates reports without Python and adds explicit run cleanup.
+The DSH plugin now generates reports without a Python installation. The standalone Python CLI remains available.
 
 ### Changed
 
-- Move native Bundle analysis and semantic validation to Node.js; remove Python interpreter discovery, subprocess execution and inherited Python environment/import paths. The optional Python CLI remains available.
-- Restrict native artifacts to marked run directories, reject linked paths and validate model output before writing. Explicit structured failures now take precedence over success-looking output text.
-- Add preview-first cleanup for a single run. Native runs keep validated outputs for resume but no longer write a shared semantic cache; old Python runs must be finished through the CLI or restarted.
-- Keep the report schema and dashboard, with refreshed deterministic summaries. Add legacy/V3 Python–JavaScript metric comparisons, full semantic-flow tests and adversarial storage checks. Native DSH acceptance remains pending.
+- The plugin writes to its own marked run directories, refuses linked paths and validates model output before saving it. A recorded tool failure remains a failure even if its output includes success text.
+- Preview or delete one managed run at a time. Each run keeps its validated model output for resumption. Finish older Python runs in the CLI or start a new run in the plugin.
+
+The [release receipt](docs/acceptance/v0.4.0-release-receipt.json) records package publication. Native DSH acceptance was pending at that release readback.
 
 ## 0.3.2 - 2026-09-11
 
@@ -178,27 +164,23 @@ The declared minimum DSH version remains `0.1.0-rc.8`. This change targets `0.1.
 
 ## 0.3.0 - 2026-08-25
 
-0.3.0 polishes the dashboard's layout (consistent cards, aligned filter toolbar, scroll-aware chip navigation), adds Skill usage and plugin/MCP usage views, measures active time in hours, and records per-session skill calls in the deterministic analyzers.
-
-### Changed
-
-- Dashboard visual system: every block uses the same card treatment (task-family list, friction signals, representative workflows, evidence and coverage notes included), a consistent 28px vertical rhythm, equal-height card rows with bottom-aligned card actions, and one-column collapse below 850px. The filter toolbar was rebuilt as a six-column form grid with the work-area filter and the Reset / Export buttons on one aligned second row.
-- KPI cards reordered by what matters most — active time, dedicated token usage, sessions (was "Rollout 数"), turns, tools — with active time in hours everywhere. The drilldown section is renamed 会话明细 (Session details).
-- Navigation: the sticky table-of-contents became a pill-chip card that follows document order (任务族 before 时段对比) with scroll tracking, and now includes entries for 会话明细 and 证据.
-- Color accents: status pills use green/red/amber tints, usage-chart cards get distinct series colors, and glance cards cycle accent colors.
-- Number formatting follows the report language (1.4B vs 14亿) instead of the browser locale.
+The dashboard now shows which skills, plugins and MCP services you use most. Active time is shown in hours.
 
 ### Added
 
-- Interaction metrics now count Skill calls and Plugin/MCP calls per filter scope (plus Web searches separately); the deterministic analyzers record per-session `skill_calls` (parser contract bumped to DSH 0.2.2 / 6.0.4).
-- The usage section gains 「Skill 使用」 and 「插件/MCP 使用」 cards that rank the most-used skills and MCP servers/plugins (alongside session types, tools, file types, and active hours).
+- Usage charts rank skills, plugins and MCP services. Filtered totals also count web searches separately.
+- Deterministic reports record skill calls per session in `skill_calls`.
+
+### Changed
+
+- The overview puts active time and token use first. The report formats numbers in its selected language and shows the daily hours in a dedicated chart.
+- Filters and card actions align across sections. On narrow screens, cards stack in one column.
 
 ### Fixed
 
-- Chart: the daily active-time measure shows hours with the unit on the y-axis, every date is labelled (even sampling beyond 12 days), and the chart lives in its own card.
-- Recommendation and work-area cards align their action rows (copy prompt + adoption select, drill-down buttons) and pin them to the card bottom-right.
-- Task-family rows use the same fluid-title / right-aligned-meta proportions as the session-detail list, with completion evidence spanning the full row.
-- Scroll tracking no longer jumps ahead or leaves the session-detail and evidence sections unlit; anchor jumps respect the sticky bar.
+- The navigation follows the section in view and jumps directly to session details and evidence without hiding the heading under the toolbar.
+
+See the [0.3.0 acceptance summary](docs/acceptance/v0.3.0-summary.md) for the platform checks.
 
 ## 0.2.0 - 2026-08-22
 

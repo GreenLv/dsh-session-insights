@@ -6,279 +6,117 @@
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-运行 `/session-insights`，把 DeepSeek Harness 的会话历史整理成一份本地工作流复盘。Bundle 通过 DSH 的 `sessionQuery` 服务读取会话，写出可直接打开的 HTML Dashboard 和配套 JSON。
+想回顾过去一个月用 DeepSeek Harness（DSH）做了什么，可以运行 `/session-insights`。打开生成的网页报告，就能比较各项目花了多少时间，找到工具失败、反复重试或值得回看的会话。
 
-它主要回答：
+## 安装并生成第一份报告
 
-- 我最近主要让 DSH 做了哪些类型的工作？
-- 哪些项目和工作流投入最多？
-- 工具失败、重复尝试和未完成任务集中在哪里？
-- 哪些做法已经有效，下一步值得尝试什么？
+0.8.0 插件包（Bundle）要求 DSH `>=0.2.2-rc.1` 和 Node.js `>=24.9.0`，安装插件无需 Python。
 
-这是**行为复盘，不是遥测**。它不是实时监控器，不计算账单，也不会替你判断工作质量。
+DSH rc.1 的一项依赖在校验某些输入时可能耗尽内存。目前尚未确认能否在 DSH 中触发。详见[安全说明](SECURITY.md#known-upstream-dependency-gap)和 [Zod 漏洞公告](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)。
 
-![许多分散的会话轨迹经过分析透镜，收束为结构化证据卡片和一份清晰报告](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/social/hero.jpg)
-
-## 报告里有什么
-
-Dashboard 把同一批证据组织成几个容易浏览的视角：
-
-| 视角 | 可以看懂什么 |
-|---|---|
-| 总览与时段对比 | 会话数、任务族、token 用量，以及前后两个时段的变化 |
-| 工作与流程拆解 | 项目、角色、代表性工作流和完成证据 |
-| 使用方式 | 每日活跃时间趋势、会话类型、常用工具、Skill 与插件/MCP 使用、文件类型和本地活跃时段 |
-| 亮点与摩擦 | 有证据支持的有效做法，以及失败、重试等值得调查的信号 |
-| 建议 | 与测量证据绑定的 DSH 工作方式建议，并附可复制提示词 |
-
-<p align="center"><img src="https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/screenshots/dashboard-overview-zh.png" alt="确定性复盘 Dashboard 总览（合成数据）" width="640"></p>
-
-HTML 已内嵌样式和数据，不需要启动服务器；配套 JSON 便于继续处理或审计。
-
-## 安装 Bundle
-
-`0.8.0` Bundle 随版本发布三种 locale——`zh-CN`、`en` 与俄语（`--locale ru`），并提供完整俄语版 [`README.ru-RU.md`](README.ru-RU.md)。
-
-`0.8.0` Bundle 需要 DSH `>=0.2.2-rc.1` 和 Node.js `>=24.9.0`，无需 Python。可选的文件日志 CLI 仍需要 Python 3.11+。更早的宿主必须先升级到 `>=0.2.2-rc.1`，本版本不提供旧接口回退。早期产品版本创建的 semantic run 在 0.8.0 输入身份下不再恢复——用创建它的版本完成，或在本版本新建 run；旧确定性缓存自动失效并从源码重新解析。
-
-**DSH 兼容性：** 软件包要求 `>=0.2.2-rc.1`——`0.2.2-rc.1` 是本版本契约与服务测试实际运行的精确宿主，更早的宿主不再保留正向支持。低于 `0.2.2-rc.1` 的宿主（包括整个 0.2.0/0.2.1 线以及 `rc.1` 之前的 `0.2.2` 预发布）都会被拒绝；范围内未来版本按声明准入但尚未实测。契约与服务测试在精确 rc.1 runtime 上覆盖合成 V4 输入；原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录。范围准入不代表未来宿主已经过实测。详见 [DSH 兼容性](#dsh-兼容性)。
-
-**已知上游安全缺口：** 本版本 peer 闭包（rc.1）解析到的 DSH 官方包仍通过 `dsh-commands`、`dsh-llm` 与 `dsh-agent` 固定使用有漏洞的 `zod@4.4.3`（GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404）；rc.1 生产扫描解析出 18 个受影响包。0.7.0 的例外已随其发布集合失效，且未续期。维护者于 2026-11-06 针对已审查的 0.8.0 集合作出新的限定风险接受决定。漏洞仍未修复，DSH 具体可达路径和日用触发概率尚未确定。接受风险不等于具备发布条件；制品与发布检查状态见[候选验收记录](docs/acceptance/v0.8.0-candidate.md)。安装前请阅读[风险与决定状态](SECURITY.md#known-upstream-dependency-gap)。
-
-下方 registry 命令需要 `0.8.0` 已发布。验收候选时，请安装已审查的 tgz 或源码版本；使用 registry 命令前，请先在 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) 核实版本：
+使用 DSH Web 时，在终端执行：
 
 ```bash
 dsh plugin --profile web add dsh-session-insights@0.8.0
 dsh web
 ```
 
-从源码安装时，请把 `REVIEWED_REF` 替换为发布后的 `v0.8.0`，或候选制品清单中记录的完整提交号。安装前先选择该版本；仅克隆仓库会检出默认分支，它可能还是其他版本：
+进入 DSH 后，在消息输入框运行：
+
+```text
+/session-insights --days 30 --locale zh-CN --deterministic
+```
+
+把命令返回的 `report.html` 路径放进本地浏览器打开即可。插件会在 `$DSH_HOME/insights/runs/` 下新建一个目录，保存网页报告和便于程序处理的 `report.json`。这条命令在本地整理会话记录，无需调用模型。
+
+**官方桌面版。** 在应用的插件管理界面安装同一个包。macOS 也可以用应用自带的命令行工具：
 
 ```bash
-git clone https://github.com/GreenLv/dsh-session-insights.git
-cd dsh-session-insights
-git checkout --detach REVIEWED_REF
-dsh plugin --profile web add .
-dsh web
+"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" plugin --profile desktop add dsh-session-insights@0.8.0
 ```
 
-默认语义分析会通过当前 DSH agent，将有界会话证据交给其配置的模型提供方处理，适用该提供方的数据处理规则和费用。会话节选可能含敏感信息，脱敏不能保证不泄露。添加 `--deterministic` 可跳过模型分析。批次串行处理，耗时随选中的会话和模型响应变化。
+Windows 上如果重装时因文件占用报 `EPERM`，先退出桌面应用和它启动的宿主进程再试。安装后在消息框运行上面的命令，用浏览器打开报告。
 
-随后在 DSH 输入框中运行：
+## 报告里有什么
+
+<p align="center"><img src="https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/screenshots/dashboard-overview-zh.png" alt="使用合成会话数据生成的离线报告总览" width="640"></p>
+
+- 对比两个时段的会话数、活跃时间和 token 用量。用量来自会话记录，账单以服务商的数据为准。
+- 按项目和工作流程查看投入，顺着报告中的证据找到失败、重试或没有收尾的会话。
+- 查看常用工具、技能和插件，以及自己通常在什么时间使用 DSH。启用模型分析后，报告还可以结合会话给出改进建议和可复制的提示词。
+
+网页内嵌了数据和样式，断网也能打开。配套 JSON 遵循[报告格式](docs/schema/report-v1.schema.json)。判断任务是否完成时，请结合报告列出的证据。
+
+## 控制会话内容的使用范围
+
+去掉 `--deterministic`，当前 DSH 智能体就会用模型分批分析会话片段。命令提示已排队后，等智能体给出最终报告路径。
+
+模型会收到选中的会话片段，数据处理和费用由 DSH 中配置的模型服务商决定。脱敏会过滤常见的敏感内容，但片段仍可能含有敏感信息。
+
+| `--privacy` | 报告保留的内容 |
+| --- | --- |
+| `redacted`（默认） | 过滤身份、路径和疑似密钥后的会话片段 |
+| `metrics` | 只保留汇总数字，跳过模型分析 |
+| `local` | 过滤疑似密钥后，保留选中的会话片段和本地路径。要把分析留在本机，请同时使用 `--deterministic`。 |
+
+模型分析默认沿用报告的隐私设置，也可用 `--analysis-privacy` 单独指定。两个隐私选项中只要有一个设为 `metrics`，就会跳过模型分析。插件读写和发送的数据见[安全说明](SECURITY.md)。
+
+## 筛选会话、续跑和清理
 
 ```text
-/session-insights --days 30 --locale zh-CN
+/session-insights [--days N] [--project PATH] [--locale zh-CN|en|ru]
+  [--privacy MODE] [--analysis-privacy MODE] [--analysis-depth conversation|evidence]
+  [--report-timezone ZONE] [--deterministic] [--resume] [--workdir RUN] [--no-open]
 ```
 
-该命令会准备有界语义批次，让当前 DSH agent 串行分析，并把最终 HTML/JSON 写入 `$DSH_HOME/insights/runs/<run-id>`。添加 `--deterministic` 可跳过模型语义阶段。主命令刻意不占用 `/insights`，因此可以与已发布的 `dsh-insights` 共存。
+- `--project` 使用绝对路径，例如 `/path/to/project` 或 Windows 上的 `C:/path/to/project`。路径包含空格时用双引号括起来。若选中超过 2,000 个会话或 64 MiB 输入，缩短时间范围或只选一个项目。
+- 报告的日期和时段默认按宿主时区统计。可用 `--report-timezone Asia/Shanghai` 或 `--report-timezone UTC+08:00` 指定时区。
+- 用 `--resume --workdir RUN` 继续模型分析，天数、项目、语言、时区、分析深度和隐私设置须与该次运行相同。匹配到多个运行时，按提示指定目录。模型输出修正一次后仍不合格时，流程可保留一份标记为回退结果的本地报告。
+- 对于命令直接生成的报告，`--no-open` 让命令只返回文件路径。需要查看时自行打开 HTML。
 
-npm 包不含 install/build 生命周期脚本。registry 命令安装已发布 Bundle；`dsh plugin ... add .` 安装当前本地源码。
+报告和证据会保存在各自的运行目录。先输入 `/session-insights --cleanup RUN` 预览，再加 `--confirm` 删除这一次运行和它的报告。清理只接受插件标记过的目录。如果由智能体调用清理工具，宿主必须向你请求批准。
 
-### 官方 Desktop
+## DSH 兼容性
 
-Desktop 共用 Node 分析实现，其插件 profile 由官方 Electron 应用管理；npm CLI 会拒绝 `--profile desktop`。请通过应用内的插件管理或应用自带的命令 carrier 安装或卸载 Bundle。macOS carrier 位于 `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`，安装调用为 `plugin --profile desktop add <package>`。各平台的实测结果请查看该精确发布制品的附带验收回执。Windows 如因文件占用出现 `EPERM`，应在重装前关闭主程序及其 child host。命令返回 HTML 路径后，可用本地浏览器查看；传入 `--no-open` 时只返回路径，不附查看提示。
+0.8.0 使用 DSH `0.2.2-rc.1` 进行验证。更新的 DSH 也满足安装的版本要求，链接中的验收结果对应实际测试的版本。[0.8.0 发行说明](docs/releases/v0.8.0.md)列出了验收环境，[发布回执](docs/acceptance/v0.8.0-release-receipt.json)记录了已发布的软件包。
 
-## 获取渠道
+升级到 0.8.0 前，未完成的模型分析请用创建它的版本跑完，也可以在升级后重新开始。已生成的报告可以继续打开。单独安装的命令行工具需要单独升级，旧报告缓存会自动重建。
 
-- 从 [npm](https://www.npmjs.com/package/dsh-session-insights) 安装已发布 Bundle。
-- 从 [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases/latest) 下载版本化发布产物。
-- 在 [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/) 查看公开目录条目。
-- 其他已核验的社区条目统一记录在[分发状态表](docs/distribution.md)。
+若从源码安装，克隆本仓库后先检出 `v0.8.0`，再在该目录运行 `dsh plugin --profile web add .`，以选中已发布版本的源码。
 
-## 权限与依赖
+## 单独使用 Python 命令行工具和 Skill
 
-Bundle 在 Node.js worker 中分析 `sessionQuery` 快照，不再启动 Python 或 Shell。worker 使用空环境，也不继承 Node 启动参数；`DSH_SESSION_INSIGHTS_PYTHON`、`PYTHONPATH` 和 Python 启动文件不再影响原生分析。可选 Python CLI 仍作为独立流程保留。
+需要直接读取磁盘上的 V4 会话日志，或用脚本批量生成报告时，可以使用单独的命令行工具。它需要 Python 3.11 或更高版本。请在要使用的仓库版本中执行安装脚本。
 
-| 能力 | 使用范围 |
-|---|---|
-| 会话与文件 | 在内存中读取选中的快照，将报告、有界证据和通过校验的模型输出写入 `$DSH_HOME/insights/runs` 下带管理标记的目录。不保存原始快照，不创建共享语义缓存。 |
-| 路径保护 | 仅接受带标记的直接运行子目录；逐次检查产物路径，拒绝链接和特殊文件。批次 ID 必须属于本次运行清单。新建目录和文件使用仅所有者可访问的 POSIX 权限；Windows 访问权限由父目录 ACL 决定。 |
-| 环境与凭据 | 宿主仅用 `DSH_HOME` 或操作系统用户目录定位存储。原生分析不探测解释器、不转发环境变量、不需要独立 API Key，也不调用凭据库。会话内容仍可能含有秘密，脱敏不能保证适合公开。 |
-| 网络与模型 | 确定性分析可离线运行。默认语义流程经当前 DSH agent 把清洗并限制范围的证据交给配置的模型提供方，遵循该提供方的数据处理规则和计费方式。添加 `--deterministic` 可跳过此阶段。 |
-
-Bundle 需要 Node.js `>=24.9.0`，以及 DSH 的 `commands`、`tools` 和 `sessionQuery` 服务，并使用声明的 `>=0.2.2-rc.1` DSH peer 依赖（含官方消息 helper）。服务缺失、worker 失败、不安全路径或无效语义输出都会使相关操作停止。模型输出先在内存校验再写入；无效的替换请求不会覆盖已有合法结果。显式回退会生成标记为降级的确定性报告。
-
-每次最多分析 2,000 个选中快照，序列化输入上限为 64 MiB；超出时请缩短 `--days` 或按 `--project` 筛选。每个插件实例最多同时进行两个分析，更多请求进入可取消的排队队列，slash command 与 tool 并发调用不会无界地倍增 Worker；单个 Worker 的 `maxOldGenerationSizeMb` 只限制该 Worker 的 V8 old space，不是宿主 RSS 上限。新运行记录完整选择范围（归一化 project、时间窗长度、隐私对、depth、locale）；恢复必须绑定显式 run 且范围完全一致，因此恢复不会选中其他项目或更宽的隐私范围。缺少范围记录、或格式/分析语义身份不符的 manifest 会被拒绝；仅宿主版本号增长不会使语义相同的运行失效。新运行保留自身已验证输出供恢复使用，不跨运行复用语义缓存。
-
-### 保留与清理
-
-报告和证据会保留到显式删除。`session_insights_cleanup` 以运行目录 `workdir` 调用时是只读预览（文件数与字节数）。删除需要宿主的人工审批：携带 `confirm: true` 时工具会就这一个 run 向部署的审批服务发起一次请求，只有用户在提示中选择允许（`allowed-once`）才会真正删除——模型自行填写的参数永远不能授权删除，没有审批服务的宿主直接失败关闭。直接键入 DSH 命令 `/session-insights --cleanup <run>` 为预览、`/session-insights --cleanup <run> --confirm` 恰好删除一个指定 run——该命令不运行分析、不排队模型工作，是纯人工入口。清理会删除整个带标记的运行目录，包括报告，且不可撤销。未标记的旧目录和带链接的条目会被拒绝；其他运行、原始日志和可选 CLI 的共享缓存会保留。旧 CLI 缓存可用 `dsh-session-insights cache` 子命令预览，并仅在显式 `--delete` 时删除确认归属的缓存根。
-
-可选 CLI 仍需要 Python 3.11+；读取压缩日志需要 `zstandard>=0.23,<1`，`jsonschema>=4.23,<5` 与 `tzdata>=2024.1` 仅供开发测试使用。其 bootstrap 安装器会调用 pip，并管理独立的 skill/runtime 目录。具体边界及商城策略限制见[安全策略](SECURITY.md)。
-
-## 三档隐私模式
-
-确定性报告完全离线运行。原生插件在内存中分析 `sessionQuery` 返回的完整快照，不会在运行目录复制原始 transcript。你可以决定报告和可选模型阶段允许保留多少会话内容：
-
-| 模式 | 报告内容 | 语义分析 |
-|---|---|---|
-| `redacted`（默认） | 匿名化身份和路径、过滤密钥后，保留有界摘录 | 默认语义流程使用有界且已脱敏的证据；`--deterministic` 跳过该阶段 |
-| `metrics` | 不保留摘录，只输出聚合测量 | 完全禁用，不生成语义批次 |
-| `local` | 过滤密钥后保留有界的本地路径和文本 | 需要显式启用，只应面向可信的本地输出位置和模型提供方 |
-
-本工具本身不会增加上传通道。如果启用可选语义流程，按 `--analysis-privacy` 清洗并限制范围后的证据，会交给 DSH 当前配置的模型提供方分析。
-
-工具拒绝把报告写入 `$DSH_HOME/sessions`，避免生成文件混入原始日志目录。
-
-## 原生命令
-
-```text
-/session-insights [--days N] [--project PATH] [--privacy MODE] [--report-timezone ZONE]
-  [--analysis-privacy MODE] [--analysis-depth LEVEL]
-  [--locale zh-CN|en|ru] [--deterministic] [--resume] [--workdir RUN] [--no-open]
-```
-
-项目过滤必须使用绝对路径。相对路径会被拒绝并给出可操作错误——插件入口无法可靠获知宿主的调用目录，因此拒绝猜测，也不会输出误导性的空报告。在 Windows 上请使用 `/session-insights --project C:/path/to/project` 这样的原生路径；如果传入 `/path/to/project` 这类 POSIX 根路径，插件会明确报错，而不是静默匹配不到会话。可选 Python CLI 会把相对 `--project` 按你调用命令时的工作目录解析一次。
-
-报告的 date、hour、weekday 共用一个报告时区：默认在请求入口捕获宿主本地时区，也可用 `--report-timezone` 显式指定（IANA 名称如 `Asia/Shanghai`，或固定偏移如 `UTC+08:00`）。时区随请求显式传入分析，并记录在报告 scope 与 run manifest 中，后续 resume 不会漂移；原始时间戳保持 UTC 瞬时值。可选 Python CLI 在 Windows 上缺少 IANA 数据时会明确报错并提示安装 `tzdata`，不会静默回退 UTC。
-
-语义复盘是默认流程。模型输出无效时最多修复一次，仍失败则明确降级并保留确定性报告。当前复盘会话计入覆盖范围，但标记为元分析，不进入建议生成。
-
-`--no-open` 有明确含义：命令只返回报表路径本身——输出保持单行路径、不带查看提示，不打开文件、不启动服务器、不上传任何内容。不带该 flag 时，命令输出会在路径后附一行查看提示。插件自身从不开文件、不启动查看器、不提供 HTTP 服务；无论 Web runtime 还是官方 Desktop，都请用本地浏览器打开返回的 HTML 路径（文件自包含、可离线查看）。`--resume` 支持显式 `--workdir` 指定运行目录；不指定时，只有记录范围与请求完全一致的运行才会被恢复，多个运行同时匹配时会报错并列出路径，而不是随机挑选。
-
-## 兼容 CLI 与 Skill 流程
-
-V4 文件日志 CLI 与 Skill 继续保留，适合自动化或未挂载 Bundle 的环境：
+macOS 和 Linux：
 
 ```bash
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 python3 scripts/bootstrap.py install --dsh-home "$DSH_HOME"
 CLI="$DSH_HOME/tools/dsh-session-insights/venv/bin/dsh-session-insights"
-
-# 复盘最近 30 天并打开中文 Dashboard
-"$CLI" report --dsh-home "$DSH_HOME" --days 30 --locale zh-CN \
-  --format html --output ./dsh-insights.html --open
-
-# 在 macOS 或 Linux 上只看一个项目
-"$CLI" report --dsh-home "$DSH_HOME" \
-  --project /path/to/project --format html --output ./project-insights.html
-
-# 不保留摘录，也不生成语义批次
-"$CLI" report --dsh-home "$DSH_HOME" --privacy metrics \
-  --format json --output ./dsh-metrics.json
-
-# 检查安装状态
-"$CLI" doctor --dsh-home "$DSH_HOME"
+"$CLI" report --dsh-home "$DSH_HOME" --days 30 --locale zh-CN --format html --output ./dsh-insights.html
 ```
 
-Windows PowerShell 应使用受管的 Windows 启动器和 Windows 原生项目路径：
+Windows PowerShell：
 
 ```powershell
+if (-not $env:DSH_HOME) { $env:DSH_HOME = Join-Path $HOME '.dsh' }
+python scripts/bootstrap.py install --dsh-home $env:DSH_HOME
 $Cli = Join-Path $env:DSH_HOME 'tools\dsh-session-insights\venv\Scripts\dsh-session-insights.exe'
-& $Cli report --dsh-home $env:DSH_HOME --project 'C:\path\to\project' --format html --output .\project-insights.html
+& $Cli report --dsh-home $env:DSH_HOME --days 30 --locale zh-CN --format html --output .\dsh-insights.html
 ```
 
-只卸载本项目管理的目录：
+打开生成的 `dsh-insights.html`，也可以在命令行的 `report` 命令后加 `--open` 自动打开。用 `doctor --dsh-home <path>` 检查安装，`report --help` 查看筛选条件和输出格式，`semantic --help` 查看如何用脚本运行模型分析。要移除脚本安装的命令行工具和 Skill，用同一个 Python 和 DSH 目录运行 `scripts/bootstrap.py uninstall`。
 
-```bash
-python3 scripts/bootstrap.py uninstall --dsh-home "$DSH_HOME"
-```
+工具读取 `session.v4.jsonl` 或 `session.v4.jsonl.zstd`。旧日志要先在 DSH 中迁移。如果同一个会话的最新日志无法读取，工具会报告问题，避免把旧副本算进去。
 
-安装器只管理：
+## 项目链接
 
-- `$DSH_HOME/skills/dsh-session-insights`
-- `$DSH_HOME/tools/dsh-session-insights`
+- [npm 软件包](https://www.npmjs.com/package/dsh-session-insights) · [GitHub 发行版](https://github.com/GreenLv/dsh-session-insights/releases/latest) · [dsh.pub 条目](https://dsh.pub/en/plugins/dsh-session-insights/)
+- [更新日志](CHANGELOG.zh-CN.md) · [贡献指南](CONTRIBUTING.md) · [分发记录](docs/distribution.md)
 
-它会拒绝符号链接目标、相互重叠的根目录，以及已有但不带本项目标记的目录，不会覆盖其他 Skill。
+![dsh-session-insights 的 npm 累计下载量](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/stats/npm-downloads.svg)
 
-## 手动语义复盘
+图中统计的是 npm 下载请求，包含重复下载和自动化请求。
 
-原生命令默认编排语义复盘。CLI 也暴露每个阶段，便于调试或自动化：
-
-```bash
-dsh-session-insights semantic prepare --dsh-home "$DSH_HOME" --days 30 --workdir /safe/workdir
-dsh-session-insights semantic validate-batch --workdir /safe/workdir --batch batch-001
-dsh-session-insights semantic prepare-aggregate --workdir /safe/workdir
-dsh-session-insights semantic validate-aggregate --workdir /safe/workdir
-dsh-session-insights semantic finalize --workdir /safe/workdir --output report.html
-```
-
-模型生成的每个 JSON 都必须先通过验证，才能进入最终报告。未知证据 ID、禁止的完成声明、错误枚举或隐私泄漏都会 fail closed；aggregate 响应还必须回显 `get_aggregate` 签发的规范 `aggregate_input_identity`，响应中其它位置的同类结构按普通内容处理。若语义阶段不能完成，`finalize --fallback` 会记录降级状态并保留确定性报告。
-
-## 当前范围与限制
-
-- 原生输入来自可信 DSH `sessionQuery` 服务；CLI 只读取 `$DSH_HOME/sessions` 下的 `session.v4.jsonl.zstd` 或 `session.v4.jsonl`，旧原始日志需由上游 DSH 迁移。
-- 输出遵循 [`dsh-session-insights/1`](docs/schema/report-v1.schema.json)。
-- token 以 `(turn, step)` 去重；这是使用量口径，不是账单或配额口径。
-- Dashboard 与语义提示契约基于同一报告 schema 支持 `zh-CN`、`en` 和 `ru`。
-- 报告只能根据现有证据推断模式，不能证明意图、质量、任务验收或安全性。
-
-历史 0.2.0 包身份、CI、macOS 原生验收和限定的 Windows 原生验收记录在 [v0.2.0 发布验收记录](docs/acceptance/v0.2.0-candidate.md)中。这些历史结果不代表当前版本。v0.1 CLI/Skill 的历史证据保留在 [v0.1.0 验收记录](docs/acceptance/v0.1.0-candidate.md)。已发布运行时的历史兼容性证据及平台边界记录在 [0.1.5-rc.2 验收记录](docs/acceptance/v0.1.5-rc.2-compatibility.md)中。
-
-## DSH 兼容性
-
-最低支持宿主与实际测试版本分开记录。声明范围准入 0.2.2-rc.1 及以上版本，包括后续预发布版本；输入格式和 API 检查仍会拒绝不兼容的操作。准入规则不代表未来宿主已经过实测。
-
-本版要求 DSH `>=0.2.2-rc.1`，拒绝更旧宿主；输入格式仍为 V4（rc.1 宿主保留了扩展后的 V4 事件词汇，格式号未变——与 rc.5 相同的 62 个事件类型）。原生分析读取宿主恢复后的 V4 快照；可选 Python CLI 只读取 `session.v4.jsonl` 和 `session.v4.jsonl.zstd`。旧原始日志需先由上游 DSH 迁移。当前文件损坏或存在高于 V4 的代数时，不会回退读取旧文件。
-
-0.8.0 分析器把输入身份重定到 `0.2.2-rc.1`（`v4-dsh022rc1.1`），早期产品版本创建的 semantic run 不再恢复：用创建它的版本完成，或在本版本新建 run。更早版本的确定性 CLI 缓存自动失效，运行会从源重新解析。已经输出的 HTML、JSON 和 Markdown 报告按原文件保留。单独安装的 CLI/Skill 需从同一版本更新；安装 Bundle 不会更新它们。
-
-工具工作量包含日志记录的程序化工具调用（PTC）内层调用。JSON 的 `tool_execution` 分别记录外层运输调用、内层执行、失败、未结束调用和调用者取消；每个失败调用结果计一次。若内层调用和外层程序都失败，则保留两个结果，不据此推断它们是否源于同一个原因。权限拒绝不算验证命令执行失败。developer 工具注册消息和定时注入不计人工请求。
-
-DSH 把定时消息写为 user role、`source.kind=schedule` 的消息；DSH 0.2.0-rc.2 新增异步问答回复，`source.kind=user-question-reply`。两者都不算用户工作：都单独计入注入上下文、不进入对话证据、纠正/验收信号与完成推断，也不能构成任何授权。只有 `source.kind=user` 的人类消息才贡献正文证据。官方恢复结果使用结构化错误码 `TOOL_OUTCOME_UNKNOWN` 和 `TOOL_NOT_STARTED`，与确认失败分开统计：`tool_recovery` 按 `{outcome_unknown, not_started}` 在每个会话和总量中单独计数。`TOOL_OUTCOME_UNKNOWN` 表示已记录的调用没有持久化的最终结果，工具可能已产生副作用；`TOOL_NOT_STARTED` 表示日志中没有该调用开始的记录。两者都不计入工具失败或验证失败，也不证明工具执行过或没有执行。仅正文提到恢复码的文本仍按一般结果规则分类。重试可能改变数据的操作前，应先核实外部状态。
-
-调用者取消是独立的已结算结局，仅按 rc.1 工具管线记录的结构化错误码 `ABORTED` 与 `ABORTED_BEFORE_DISPATCH`（位于 `error.code` 或 `error.info.code`）分类，按会话和总量计入 `tool_execution.outer_cancelled` / `inner_cancelled`。被取消的调用绝不是成功、绝不是执行失败、也绝不是审批拒绝；取消本身不证明该调用是否运行过——执行体在结局变为 `ABORTED` 前会运行到静止，副作用仍可能已发生，保留的证据会如实标注，不会宣称调用"没有执行"。真实执行失败、审批拒绝、官方恢复记录与调用者取消始终保持相互可区分。
-
-DSH 0.2.1-rc.2 仍使用会话格式 4，但新增了必需的 `job/registered`、`job/settled` 与 `working-directory/change` 记录。读取器接受这些记录，并把注册表结算仅视为生产者/注册表结果：它不证明用户任务完成、交付产出或资源已释放。已注册但未结算的 job 记为 pending（包括父轮已结束而子工作仍在运行）；注册缺失的结算按完整性异常计数，而不是让整个会话不可读。Team 名册/任务快照与入站 relay 作为委派证据计数，不算 Lead 的任务完成，也不当作用户提示。工作目录变化形成带标签的轨迹，而不可变的 header cwd 仍是会话来源项目，用于筛选与恢复；跨项目活动会显式呈现，原始路径不进入 redacted/metrics 报告。第三方 `plugin:` 记录只保留不透明类型/数量覆盖，不进入用户意图、模型上下文或完成证据。`web_search` 与 `web_fetch` 按记录的工具调用计数；一次搜索返回多个来源仍只算一次调用。Token 原始分桶为记录值；`input_tokens` 与 `total_tokens` 是由记录值派生的和，并已标注。
-
-0.6.0（DSH 0.2.1-rc.2）的源码与合成检查保留在 [docs/acceptance/v0.6.0-rc2.1-candidate.md](docs/acceptance/v0.6.0-rc2.1-candidate.md)。原生、模型与 UI 结果由各精确发布制品的附带验收回执分别记录。0.5.2 的独立复核记录在 [docs/acceptance/v0.5.2-candidate.md](docs/acceptance/v0.5.2-candidate.md)。0.5.1 的候选审查范围记录在 [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md)。[0.5.0 发布验收记录](docs/acceptance/v0.5.0-release.md)和[冻结的 0.5.0 候选记录](docs/acceptance/v0.5.0-rc2-candidate.md)只适用于那个 0.5.0 实现及其注明的宿主。历史验收只适用于各自注明的实现。
-
-## 会话日志代际
-
-同一个逻辑会话可以保留多个不可变日志代际。读取方只选取其中一个，依据规范文件名而非文件修改时间。
-
-| 情况 | 行为 |
-| --- | --- |
-| 同一会话目录存在多个规范代际 | 选取版本最高者；该会话只统计一次，迁移后的会话不会被重复相加 |
-| 仅有第 0–3 代 | 拒绝分析并提示需要迁移；请使用上游 DSH 迁移 |
-| 非规范名称（临时文件、大写、前导零、`.v0`、`session.lock`） | 永不选取；写入中的文件不会被误认为已提交代际 |
-| 高于本读取方支持的代际 | 记录诊断并跳过，同时给出警告；**不会**静默按旧代际输出报告 |
-| 当前代际损坏或无法解压 | 记为不可读文件；**不会**回退到旧代际 |
-| 同一目录混用两种压缩编码 | 记为歧义并跳过该会话 |
-| 多个工程目录声称同一会话 ID | 各会话目录独立计数 |
-
-工具和用量统计保留历史事件；语义证据则排除已被替换的消息。DSH 根据事件日志维护模型可见的有序对话（surface），替换操作以该对话中的位置为准，不能按事件序号大小推断。
-
-| 事件 | 行为 |
-| --- | --- |
-| `system/message` | 记为系统内容；绝不算作用户工作，不进入摘录，不泄露到标题或语义证据 |
-| `source.kind == "user"` 的 `user/message` | 真人直接输入：计入用户工作，可作为标题来源 |
-| 其他 `source.kind` 的 `user/message` | 合成注入上下文（plugin、goal、skill 目录、子代理报告等）：单独计数，排除在用户工作与语义证据之外 |
-| `assistant/attempt` | 记为未产出可见回复的模型尝试；不会伪造成 assistant 消息，其 Token 用量如实标记为不可得而非估算 |
-| `assistant/message` | 携带该步用量；用量按 `(turn, step)` 去重，stream 字段不会造成重复相加 |
-| `surfaceOp: "append"` | 表面正常增长 |
-| `surfaceOp: {op: "replace", startSeq, endSeq}` | 被压缩的对话退出语义摘要；历史工具与 Token 事件统计保留 |
-| 带 `data.inherited: true` 的 `session/end-seed` | 记录继承切点；未带标记的结束标记不建立切点 |
-| 未知事件类型 | 拒绝必需事件；明确标为可忽略的扩展保留覆盖诊断 |
-
-## npm 下载量历史
-
-![dsh-session-insights 的累计 npm 下载量增长](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/stats/npm-downloads.zh-CN.svg)
-
-该累计图每天根据 npm Downloads API 自动生成。npm 下载量统计的是 registry 请求次数，不等于独立用户数或已确认的真实安装人数。如果 GitHub 延迟或停用定时任务，也可以手动触发工作流。
-
-## 开发与项目文档
-
-```bash
-python3 -m pip install -e '.[dev]'
-npm ci --ignore-scripts
-# 唯一的当前 rc.1 runtime（声明下限与验收宿主）：
-npm ci --prefix tests/dsh-runtime --ignore-scripts
-DSH_RUNTIME="$PWD/tests/dsh-runtime" DSH_EXPECTED_VERSION=0.2.2-rc.1 \
-  python3 -m unittest discover -s tests -v
-DSH_RUNTIME="$PWD/tests/dsh-runtime" DSH_EXPECTED_VERSION=0.2.2-rc.1 npm test
-python3 scripts/build_native_rules.py --check
-python3 scripts/build_fixture.py --check
-python3 scripts/audit_public_tree.py --root .
-```
-
-- [更新记录](CHANGELOG.zh-CN.md)
-- [安全策略](SECURITY.md)
-- [参与贡献](CONTRIBUTING.md)
-- [分发说明](docs/distribution.md)
-
-测试 fixture 全部为合成数据，并可确定性重建。
-
-## 许可证
-
-[MIT](LICENSE)
+[MIT 许可证](LICENSE)

@@ -6,279 +6,117 @@
 [![Release](https://img.shields.io/github/v/release/GreenLv/dsh-session-insights)](https://github.com/GreenLv/dsh-session-insights/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Run `/session-insights` to turn DeepSeek Harness session history into a local workflow review. The Bundle reads sessions through DSH's `sessionQuery` service and writes a self-contained HTML dashboard plus companion JSON.
+Run `/session-insights` in DeepSeek Harness (DSH) to review your session history. Open the HTML report to compare where you spent time across projects, spot tool failures and retries, and find sessions worth revisiting.
 
-It helps answer questions such as:
+## Quick start
 
-- What kinds of work am I doing with DSH?
-- Which projects and workflows take the most effort?
-- Where do tool failures, retries, or unfinished work appear?
-- Which practices are working, and what should I try next?
+The 0.8.0 Bundle requires DSH `>=0.2.2-rc.1` and Node.js `>=24.9.0`. The plugin runs without Python.
 
-This is **behavioral review, not telemetry**. It is not a live monitor, a billing calculator, or a claim that it can judge the quality of your work.
+A dependency in DSH rc.1 can exhaust memory when validating certain inputs. Whether DSH exposes that path is unknown. See the [security policy](SECURITY.md#known-upstream-dependency-gap) and [Zod advisory](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
 
-![Scattered session trails pass through an analysis lens and resolve into structured evidence cards and a clear report](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/social/hero.jpg)
-
-## What you get
-
-The dashboard brings several views of the same evidence together:
-
-| View | What it helps you understand |
-|---|---|
-| Overview and time comparison | Sessions, task families, token usage, and changes between two periods |
-| Work and workflow breakdown | Projects, roles, representative workflows, and completion evidence |
-| Usage patterns | Daily active-time trends, session types, top tools, skill and plugin/MCP usage, file types, and local active hours |
-| Wins and friction | Evidence-backed strengths plus failures, retries, and other signals worth investigating |
-| Recommendations | DSH workflow suggestions tied to measured evidence, with prompts you can copy |
-
-<p align="center"><img src="https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/screenshots/dashboard-overview-en.png" alt="Deterministic retrospective dashboard overview (synthetic data)" width="640"></p>
-
-The HTML file contains its own styles and data, so you can keep it locally and open it without a server. A machine-readable JSON report is written beside it.
-
-## Install the Bundle
-
-The `0.8.0` Bundle ships three locales — `zh-CN`, `en`, and Russian (`--locale ru`) — with a full [`README.ru-RU.md`](README.ru-RU.md).
-
-The `0.8.0` Bundle requires DSH `>=0.2.2-rc.1` and Node.js `>=24.9.0`, without Python. The optional file-log CLI still requires Python 3.11+. Older hosts must upgrade to at least `0.2.2-rc.1`; there is no older-API fallback. Semantic runs recorded by earlier product versions no longer resume under the 0.8.0 input identity — finish them with the version that created them or start a new run; old deterministic caches are invalidated automatically and reparsed from source.
-
-**DSH compatibility:** The package requires `>=0.2.2-rc.1` — `0.2.2-rc.1` is the exact host this release's contract and service tests run against, and no older host keeps forward support. Hosts below `0.2.2-rc.1` (including the whole 0.2.0/0.2.1 lines and `0.2.2` prereleases before `rc.1`) are refused, and later releases are admitted by the declared range, not by static version tables; a future host version inside the range is admitted but not yet tested. Contract and service tests cover synthetic V4 input against the exact rc.1 runtime. Native, model and UI results are recorded separately in the acceptance receipts attached to each exact release artifact; range admission does not establish testing of future hosts. See [DSH compatibility](#dsh-compatibility).
-
-**Known upstream security gap:** the official DSH packages that this release's peer closure resolves (rc.1) still pin vulnerable `zod@4.4.3` (GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404) through `dsh-commands`, `dsh-llm` and `dsh-agent`; the rc.1 production scan resolves 18 affected packages. The 0.7.0 exception expired with its release cohort and was not renewed. On 2026-11-06 the maintainer made a new, limited risk decision for the reviewed 0.8.0 cohort. The vulnerability remains unfixed; a reachable DSH path and everyday trigger probability have not been established. Accepting the risk does not establish release readiness; see the [candidate acceptance record](docs/acceptance/v0.8.0-candidate.md) for artifact and release-check status. Read the [risk and decision status](SECURITY.md#known-upstream-dependency-gap) before installing.
-
-The registry command below requires `0.8.0` to be published. When testing a candidate, install its reviewed tarball or source revision instead. Check the version on [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases) before using the registry command:
+For DSH Web, run:
 
 ```bash
 dsh plugin --profile web add dsh-session-insights@0.8.0
 dsh web
 ```
 
-To install from source, replace `REVIEWED_REF` with `v0.8.0` after publication, or with the full candidate commit recorded in its artifact manifest. Select that revision before installing; cloning alone checks out the default branch, which may contain another version:
+In the DSH message box, run:
+
+```text
+/session-insights --days 30 --locale en --deterministic
+```
+
+Open the returned `report.html` path in your browser. The plugin writes it and `report.json` to a new directory under `$DSH_HOME/insights/runs/`. This command analyzes the selected sessions locally, without asking a model to read them.
+
+**Desktop.** Install the same package with the official app's plugin controls. On macOS you can also use the app's bundled CLI:
 
 ```bash
-git clone https://github.com/GreenLv/dsh-session-insights.git
-cd dsh-session-insights
-git checkout --detach REVIEWED_REF
-dsh plugin --profile web add .
-dsh web
+"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" plugin --profile desktop add dsh-session-insights@0.8.0
 ```
 
-By default, semantic analysis sends bounded session evidence through the current DSH agent to its configured model provider; that provider’s data handling and charges apply. Session excerpts may contain sensitive information, and redaction is not a disclosure guarantee. Add `--deterministic` to skip model analysis. Batches run serially, so duration varies with the selected sessions and model response time.
+If a Windows reinstall fails with `EPERM` because files are in use, close Desktop and its child host before retrying. Then run the same slash command and open the returned HTML file.
 
-Then run this in the DSH composer:
+## Read the report
+
+<p align="center"><img src="https://raw.githubusercontent.com/GreenLv/dsh-session-insights/main/assets/screenshots/dashboard-overview-en.png" alt="Deterministic report overview with synthetic session data" width="640"></p>
+
+- Compare sessions, active time and token usage across two periods. Token totals describe recorded usage, rather than a bill.
+- See which projects and workflows account for the most activity. Follow the evidence to sessions with failures, retries or unfinished work.
+- Review when you work and which tools, skills and plugins you use. With model analysis enabled, the report can also suggest changes to your workflow and give you prompts to try.
+
+The HTML includes its data and styles and works offline. The companion JSON follows the [report schema](docs/schema/report-v1.schema.json). Interpret inferred patterns alongside their evidence, especially when judging whether work was completed.
+
+## Choose what to share
+
+Remove `--deterministic` to have the current DSH agent review selected session evidence and write findings. It works through batches one at a time. Wait for the final report path after the command says the run was queued.
+
+With model analysis, your configured provider receives selected excerpts. Its data handling and charges apply. Redaction reduces exposure, but sensitive text can still appear in excerpts.
+
+| `--privacy` | What the report keeps |
+| --- | --- |
+| `redacted` (default) | Selected excerpts with identities, paths and likely secrets filtered |
+| `metrics` | Aggregate measurements only. Model analysis is skipped. |
+| `local` | Selected text and local paths after secret filtering. Use `--deterministic` to keep the analysis on this machine. |
+
+Model analysis uses the report’s privacy mode unless you set `--analysis-privacy` separately. Either privacy option set to `metrics` skips that stage. See the [security policy](SECURITY.md) for what the plugin reads, writes and sends.
+
+## Select, resume or remove a run
 
 ```text
-/session-insights --days 30 --locale en
+/session-insights [--days N] [--project PATH] [--locale zh-CN|en|ru]
+  [--privacy MODE] [--analysis-privacy MODE] [--analysis-depth conversation|evidence]
+  [--report-timezone ZONE] [--deterministic] [--resume] [--workdir RUN] [--no-open]
 ```
 
-The command prepares bounded semantic batches, queues the current DSH agent to analyze them serially, and writes the final HTML/JSON under `$DSH_HOME/insights/runs/<run-id>`. Add `--deterministic` to skip the model-assisted stage. The command name intentionally differs from `/insights`, so this Bundle can coexist with `dsh-insights`.
+- Use `--project` with an absolute path, for example `/path/to/project` or `C:/path/to/project` on Windows. Quote paths containing spaces. If the selection exceeds 2,000 sessions or 64 MiB of input, shorten the time window or select one project.
+- Dates and hours use the host timezone by default. Set `--report-timezone Asia/Shanghai` or `--report-timezone UTC+08:00` to choose another.
+- Resume model analysis with `--resume --workdir RUN` and the same days, project, locale, timezone, depth and privacy settings. If more than one run matches, use the reported directory to choose. When model output remains invalid after one repair attempt, the workflow can keep a local report marked as a fallback.
+- For a report generated directly by the command, `--no-open` returns just the file path. Open the HTML yourself when you want to view it.
 
-The npm package has no install or build lifecycle script. The registry command installs the published Bundle; `dsh plugin ... add .` installs the current local checkout.
+Run directories hold the report and its evidence until you remove them. Type `/session-insights --cleanup RUN` to preview one run, then add `--confirm` to delete that run and its reports. The plugin only removes directories it marked as its own. If the agent requests cleanup through its tool, the host must ask you to approve it.
 
-### Official Desktop
+## DSH compatibility
 
-Desktop uses the same Node analysis implementation. Its plugin profile is managed by the official Electron application; the npm CLI rejects `--profile desktop`. Use the app's plugin controls or its bundled command carrier to manage the Bundle. On macOS that carrier is `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`; invoke it with `plugin --profile desktop add <package>`. Consult the acceptance receipts attached to the exact release artifact for platform-specific results. On Windows, close the main app and its child host before reinstalling when files are in use (`EPERM`). Report viewing uses the HTML path returned by the command; open it in your local browser, or pass `--no-open` for a path without the viewing hint.
+Version 0.8.0 was tested with DSH `0.2.2-rc.1`. Later DSH releases meet the package’s version requirement. The linked checks cover that exact host. See the [0.8.0 release notes](docs/releases/v0.8.0.md) for the tested systems and the [release receipt](docs/acceptance/v0.8.0-release-receipt.json) for the published package.
 
-## Availability
+If you upgrade to 0.8.0 while model analysis is in progress, finish it with the version that created the run or start a new one after upgrading. Existing reports can still be opened. The standalone CLI rebuilds old report caches automatically and needs its own update.
 
-- Install the published Bundle from [npm](https://www.npmjs.com/package/dsh-session-insights).
-- Download versioned artifacts from [GitHub Releases](https://github.com/GreenLv/dsh-session-insights/releases/latest).
-- Find the public directory entry on [dsh.pub](https://dsh.pub/en/plugins/dsh-session-insights/).
-- Other verified community listings are recorded in [the distribution ledger](docs/distribution.md).
+For a source installation, clone this repository and check out `v0.8.0` before running `dsh plugin --profile web add .` from that checkout. This selects the published version's source.
 
-## Permissions and dependencies
+## Standalone Python CLI and Skill
 
-The Bundle analyzes `sessionQuery` snapshots in a Node.js worker. It does not start Python or a shell, and the worker receives an empty environment and no inherited Node startup arguments. `DSH_SESSION_INSIGHTS_PYTHON`, `PYTHONPATH` and Python startup files no longer affect native analysis. The optional Python CLI remains a separate workflow.
+Use the standalone CLI to read on-disk V4 session logs or generate reports from a script. It requires Python 3.11 or later. Run the installer from the version of this repository you want to use.
 
-| Capability | Scope |
-|---|---|
-| Sessions and files | Reads selected snapshots in memory. Writes reports, bounded evidence and validated model outputs into marked directories under `$DSH_HOME/insights/runs`. It does not persist raw snapshots or create a shared semantic cache. |
-| Path protection | Requires a direct, marked run directory; checks every artifact path and rejects links and special files. Batch IDs must belong to the run manifest. New directories/files use owner-only POSIX modes; Windows access follows the parent ACL. |
-| Environment and credentials | The host uses `DSH_HOME` or the OS home directory to locate storage. No interpreter discovery, environment forwarding, separate API key or credential-store calls are used by native analysis. Session content can still contain secrets; redaction is not a disclosure guarantee. |
-| Network and models | Deterministic analysis runs offline. The default semantic workflow sends bounded, sanitized evidence through the current DSH agent to its configured model provider, with that provider's data handling and costs. Use `--deterministic` to skip it. |
-
-The Bundle requires Node.js `>=24.9.0` and DSH's `commands`, `tools` and `sessionQuery` services. The Bundle uses the declared `>=0.2.2-rc.1` DSH peers, including the official message helper. Missing services, worker failure, unsafe paths or invalid semantic output stop the affected operation. Model output is validated before writing; a rejected replacement preserves any previously valid result. Explicit fallback produces a deterministic report marked as degraded.
-
-A run accepts at most 2,000 selected snapshots and 64 MiB of serialized snapshot input. Reduce `--days` or filter `--project` when that limit is exceeded. At most two analyses collect and analyze concurrently per plugin instance and further requests wait in a cancellable queue, so concurrent slash-command and tool calls cannot multiply Workers without bound; the per-Worker `maxOldGenerationSizeMb` limit caps one Worker's V8 old space and is not a host RSS guarantee. Native runs record their full selection scope (normalized project, window length, privacy pair, depth and locale); resume binds an explicit run and requires the same scope, so a resume request can never select another project or a wider privacy range. Runs whose manifest lacks a recorded scope, or whose format or analyzer semantics differ, are refused; growth of the host version alone does not invalidate a semantically identical run. Native runs retain their own validated outputs for resumption, but do not reuse a cross-run semantic cache.
-
-### Retention and cleanup
-
-Reports and evidence remain on disk until explicitly deleted. `session_insights_cleanup` with a run's `workdir` is a read-only preview of its files and bytes. Deletion needs the human approval of the host: with `confirm: true` the tool asks the deployment's approval service once for exactly that run, and only an `allowed-once` grant (answering the prompt the user sees) deletes anything — a model-supplied flag alone never authorizes deletion, and hosts without an approval service fail closed. Typing the DSH command `/session-insights --cleanup <run>` previews and `/session-insights --cleanup <run> --confirm` deletes exactly one named run — the command runs no analysis and queues no model work, acting as the direct human entry. Cleanup removes the whole marked run, including its report, and cannot be undone. It refuses unmarked legacy directories and linked entries. Other runs, source logs and the optional CLI's shared caches are preserved. Review old CLI artifacts separately before removing them; the `dsh-session-insights cache` subcommand previews and (with `--delete`) removes only confirmed cache roots.
-
-The optional CLI still requires Python 3.11+ and `zstandard>=0.23,<1` for compressed logs; `jsonschema>=4.23,<5` and `tzdata>=2024.1` are used only by development tests. Its bootstrap installer runs pip and manages its own skill/runtime directories. See [Security Policy](SECURITY.md) for the separate boundaries and STORE policy limits.
-
-## Privacy modes
-
-Deterministic reports run offline. In native mode, complete raw snapshots are analyzed in memory and are not copied into the run directory. Choose how much session content the report and optional model stage may retain:
-
-| Mode | Report content | Semantic analysis |
-|---|---|---|
-| `redacted` (default) | Keeps bounded excerpts after anonymizing identity and paths and filtering secrets | Uses bounded, redacted evidence in the default semantic workflow; `--deterministic` skips it |
-| `metrics` | Omits excerpts and keeps aggregate measurements | Disabled; no semantic batches are created |
-| `local` | Keeps bounded local paths and text after secret filtering | Explicit opt-in for a trusted local destination and configured model provider |
-
-The tool itself does not add an upload channel. If you use the optional semantic workflow, bounded evidence cleaned according to `--analysis-privacy` is analyzed by the model provider currently configured in DSH.
-
-Reports are refused inside `$DSH_HOME/sessions`, so generated files cannot be mixed into the source log tree.
-
-## Native command
-
-```text
-/session-insights [--days N] [--project PATH] [--privacy MODE] [--report-timezone ZONE]
-  [--analysis-privacy MODE] [--analysis-depth LEVEL]
-  [--locale zh-CN|en|ru] [--deterministic] [--resume] [--workdir RUN] [--no-open]
-```
-
-Project filters use absolute host paths. A relative path is refused with an actionable error — the plugin entry cannot reliably know the host's invocation directory and refuses to guess. On Windows, pass a native path such as `/session-insights --project C:/path/to/project`; a POSIX-rooted path such as `/path/to/project` is rejected instead of silently matching no sessions. The optional Python CLI resolves a relative `--project` against the working directory you invoked it from.
-
-Date, hour and weekday fields share one report timezone, captured from the host at request time or set explicitly with `--report-timezone` (an IANA name like `Asia/Shanghai`, or a fixed offset like `UTC+08:00`). The zone travels with the request into analysis, is recorded in the report and the run manifest, and raw timestamps remain UTC instants. The optional Python CLI on Windows without IANA data reports an actionable tzdata installation error instead of silently falling back to UTC.
-
-The semantic workflow is the default. Invalid model output gets one repair opportunity and can then fall back explicitly to the deterministic report. The current session is counted for coverage but excluded from recommendations as meta-analysis.
-
-`--no-open` is the explicit statement that the command must only report the artifact path: the output stays a plain path line with no view hint, no file is opened, no server is started and nothing is uploaded. Without it, the command output appends one view hint naming the report file. The plugin itself never opens files, spawns viewers or serves HTTP; in the Web runtime and in the official Desktop, open the reported HTML path with your local browser or system viewer — the file is self-contained and works offline. The `--resume` flow accepts an explicit `--workdir` run directory; without it, a resumable run is selected only when its recorded scope matches the request exactly, and ambiguity between multiple matching runs is reported with their paths instead of guessed.
-
-## Compatible CLI and Skill workflow
-
-The V4 file-log CLI and Skill remain available for automation and environments that do not mount the Bundle:
+On macOS or Linux:
 
 ```bash
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 python3 scripts/bootstrap.py install --dsh-home "$DSH_HOME"
 CLI="$DSH_HOME/tools/dsh-session-insights/venv/bin/dsh-session-insights"
-
-# Review the last 30 days and open an English dashboard
-"$CLI" report --dsh-home "$DSH_HOME" --days 30 --locale en \
-  --format html --output ./dsh-insights.html --open
-
-# Limit the report to one project on macOS or Linux
-"$CLI" report --dsh-home "$DSH_HOME" \
-  --project /path/to/project --format html --output ./project-insights.html
-
-# Produce aggregate metrics without excerpts or semantic batches
-"$CLI" report --dsh-home "$DSH_HOME" --privacy metrics \
-  --format json --output ./dsh-metrics.json
-
-# Check the installation
-"$CLI" doctor --dsh-home "$DSH_HOME"
+"$CLI" report --dsh-home "$DSH_HOME" --days 30 --locale en --format html --output ./dsh-insights.html
 ```
 
-The Windows PowerShell equivalent uses the managed Windows launcher and a Windows-native project path:
+On Windows, in PowerShell:
 
 ```powershell
+if (-not $env:DSH_HOME) { $env:DSH_HOME = Join-Path $HOME '.dsh' }
+python scripts/bootstrap.py install --dsh-home $env:DSH_HOME
 $Cli = Join-Path $env:DSH_HOME 'tools\dsh-session-insights\venv\Scripts\dsh-session-insights.exe'
-& $Cli report --dsh-home $env:DSH_HOME --project 'C:\path\to\project' --format html --output .\project-insights.html
+& $Cli report --dsh-home $env:DSH_HOME --days 30 --locale en --format html --output .\dsh-insights.html
 ```
 
-To remove only this project's managed directories:
+Open the resulting `dsh-insights.html`, or add `--open` to the CLI report command to open it automatically. Use `doctor --dsh-home <path>` to check the installation, `report --help` for other formats and filters, and `semantic --help` for scripted model review. Run `scripts/bootstrap.py uninstall` with the same Python and DSH home to remove the managed CLI and Skill.
 
-```bash
-python3 scripts/bootstrap.py uninstall --dsh-home "$DSH_HOME"
-```
+The CLI reads `session.v4.jsonl` or `session.v4.jsonl.zstd`. Migrate older logs in DSH first. When the latest log cannot be read, the CLI reports the problem rather than counting an older copy of the same session.
 
-The installer manages only:
+## Project links
 
-- `$DSH_HOME/skills/dsh-session-insights`
-- `$DSH_HOME/tools/dsh-session-insights`
+- [npm package](https://www.npmjs.com/package/dsh-session-insights) · [GitHub releases](https://github.com/GreenLv/dsh-session-insights/releases/latest) · [dsh.pub listing](https://dsh.pub/en/plugins/dsh-session-insights/)
+- [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Distribution record](docs/distribution.md)
 
-It refuses symbolic-link targets, overlapping roots, and existing unmarked directories. It does not overwrite another Skill.
+![Cumulative npm downloads for dsh-session-insights](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/stats/npm-downloads.svg)
 
-## Manual semantic review
+The chart counts npm download requests, which can include repeated downloads and automation.
 
-The native command orchestrates semantic review by default. The CLI exposes each phase for debugging or automation:
-
-```bash
-dsh-session-insights semantic prepare --dsh-home "$DSH_HOME" --days 30 --workdir /safe/workdir
-dsh-session-insights semantic validate-batch --workdir /safe/workdir --batch batch-001
-dsh-session-insights semantic prepare-aggregate --workdir /safe/workdir
-dsh-session-insights semantic validate-aggregate --workdir /safe/workdir
-dsh-session-insights semantic finalize --workdir /safe/workdir --output report.html
-```
-
-Each model-produced JSON file is validated before it can enter the final report. Unknown evidence IDs, prohibited completion claims, malformed enums, and privacy leakage fail closed; the aggregate response must also echo the canonical `aggregate_input_identity` issued by `get_aggregate`, and identity-shaped objects anywhere else in the response are treated as ordinary content. If the semantic stage cannot finish, `finalize --fallback` records the degradation and preserves the deterministic report.
-
-## Current scope and limitations
-
-- Native input is the trusted DSH `sessionQuery` service; the CLI reads only `session.v4.jsonl.zstd` or `session.v4.jsonl` under `$DSH_HOME/sessions`. Older raw logs require upstream migration.
-- Output follows [`dsh-session-insights/1`](docs/schema/report-v1.schema.json).
-- Token counts are deduplicated per `(turn, step)` and are usage measurements, not billing or quota figures.
-- The Dashboard and semantic prompt contract support `zh-CN`, `en`, and `ru` from the same report schema.
-- Reports infer patterns from available evidence; they do not prove intent, quality, task acceptance, or security.
-
-Historical 0.2.0 package, CI, native macOS, and focused native Windows evidence is kept in the [v0.2.0 release acceptance record](docs/acceptance/v0.2.0-candidate.md). Those historical results do not describe the current release. The historical v0.1 CLI/Skill evidence remains in the [v0.1.0 acceptance record](docs/acceptance/v0.1.0-candidate.md). Historical released-runtime compatibility evidence and its platform limits are recorded in the [0.1.5-rc.2 acceptance record](docs/acceptance/v0.1.5-rc.2-compatibility.md).
-
-## DSH compatibility
-
-The minimum supported host is fixed separately from the versions actually tested. The declared range admits DSH releases at or above 0.2.2-rc.1, including later prereleases. Input-format and API checks still reject incompatible operations; admission is not evidence that a future host has been tested.
-
-This version requires DSH `>=0.2.2-rc.1` and refuses older hosts; input remains V4 (the rc.1 host keeps the extended V4 vocabulary without changing the format number — the same 62-type set as rc.5). Native analysis uses host-restored V4 snapshots; the optional Python CLI reads only `session.v4.jsonl` and `session.v4.jsonl.zstd`. Migrate older raw logs with upstream DSH before using the CLI. It never falls back to an older generation when the current file is corrupt or newer than V4.
-
-The 0.8.0 analyzer retargets its input identity to `0.2.2-rc.1` (`v4-dsh022rc1.1`), so semantic runs recorded by earlier product versions no longer resume: finish them with the version that created them, or start a new run in this version. Deterministic CLI caches from earlier versions are invalidated automatically and runs reparse from source. Existing HTML, JSON and Markdown reports are retained as files. Update a separately installed CLI/Skill from this same version; installing the Bundle does not update it.
-
-Tool workload includes recorded programmatic tool calling (PTC) inner calls. The JSON `tool_execution` fields separate outer transport calls, inner executions, failures, unsettled inner calls and caller-cancelled calls; each recorded failed call outcome is counted once. If both an inner call and its outer program fail, both outcomes remain visible; the report does not infer whether they share one root cause. Permission denials are distinct from failed verification commands. Developer tool-registration messages and scheduled injections do not count as human requests.
-
-DSH writes scheduled prompts as user-role messages with source kind `schedule`, and DSH 0.2.0-rc.2 added asynchronous question replies with source kind `user-question-reply`. Neither is treated as user work: both are counted separately as injected context, excluded from conversation evidence, corrections, acceptance signals and completion inference, and can never authorize an action. Only human user messages with source kind `user` contribute body evidence. Official recovery results with the structured error codes `TOOL_OUTCOME_UNKNOWN` and `TOOL_NOT_STARTED` are classified separately from confirmed failures: `tool_recovery` counts `{outcome_unknown, not_started}` per session and in totals. `TOOL_OUTCOME_UNKNOWN` means a recorded call's completed outcome was not durably recorded, so the tool may have produced side effects; `TOOL_NOT_STARTED` means the log has no record of the call starting. Neither state is counted as a tool failure or a failed verification, and neither proves that a tool executed or that it did nothing. Text that merely mentions a recovery code is classified by the ordinary result rules. Verify external state before retrying an operation that can change data.
-
-Caller cancellation is a settled outcome of its own, classified only by the structured error codes `ABORTED` and `ABORTED_BEFORE_DISPATCH` that the rc.1 tools pipeline records (`error.code` or `error.info.code`). Per session and in totals, `tool_execution.outer_cancelled` / `inner_cancelled` count these calls. A cancelled call is never a success, never an execution failure and never an approval rejection, and the cancellation itself proves nothing about whether the call ran: the body reaches quiescence before the outcome becomes `ABORTED`, so side effects remain possible and the retained evidence says so instead of claiming the call "did not run". Real execution failures, approval rejections, recovery records and cancellations remain mutually distinct classifications.
-
-DSH 0.2.1-rc.2 keeps session format 4 but adds required `job/registered`, `job/settled` and `working-directory/change` records. The reader accepts them and treats a registry settlement as a producer/registry outcome only: it never proves user-task completion, delivered output or resource release. A job that is registered without a settlement is reported as pending (including when the parent turn ended while it ran); a lost registration is counted as an integrity anomaly rather than making the session unreadable. Team roster/task snapshots and inbound relays are counted as delegation evidence, not as the Lead's task completion or as human prompts. Working-directory changes form a labelled trajectory while the immutable header cwd remains the session-origin project used for filtering and resume; cross-project activity is exposed explicitly, and raw paths stay out of redacted/metrics reports. Third-party `plugin:` records are retained only as opaque type/count coverage and never become user intent, model context or completion evidence. `web_search` and `web_fetch` are counted as recorded tool calls; one search returning many sources is still one call. The raw token buckets are recorded values; `input_tokens` and `total_tokens` are derived sums and are marked as such.
-
-The source and synthetic checks for 0.6.0 with DSH 0.2.1-rc.2 are preserved in [docs/acceptance/v0.6.0-rc2.1-candidate.md](docs/acceptance/v0.6.0-rc2.1-candidate.md). Native, model and UI results are recorded separately in the acceptance receipts attached to each exact release artifact. The 0.5.2 independent review is recorded in [docs/acceptance/v0.5.2-candidate.md](docs/acceptance/v0.5.2-candidate.md). The 0.5.1 candidate review scope is recorded in [docs/acceptance/v0.5.1-candidate.md](docs/acceptance/v0.5.1-candidate.md). The [0.5.0 release acceptance](docs/acceptance/v0.5.0-release.md) and the [frozen 0.5.0 candidate record](docs/acceptance/v0.5.0-rc2-candidate.md) apply only to that 0.5.0 implementation and its named host. Historical acceptance records apply only to their named implementations.
-
-## Session log generations
-
-One logical session can hold several immutable log generations. The reader selects exactly one, using the canonical filename rather than file timestamps.
-
-| Situation | Behavior |
-| --- | --- |
-| Several canonical generations in one session directory | The highest version wins; the session is counted once, and a migrated session is never summed twice |
-| Only generations 0–3 | Refuse analysis and report migration required; migrate with upstream DSH |
-| Noncanonical names (temporary, uppercase, leading-zero, `.v0`, `session.lock`) | Never selected; an in-flight write cannot be mistaken for a committed generation |
-| Newer than the supported generation | Reported and skipped, with a warning; the session is **not** silently reported from an older generation |
-| Corrupt or undecompressable current generation | Reported as unreadable; the reader does **not** fall back to an older generation |
-| Both compression encodings in one directory | Reported as ambiguous; the session is not read |
-| Several project directories claim one session id | Each session directory is counted independently |
-
-Tool and usage counts retain historical events, while semantic evidence excludes replaced messages. DSH derives an ordered model-visible conversation (the surface) from its event log. Replacement endpoints refer to positions in that conversation, not a numeric range of event sequence numbers.
-
-| Event | Behavior |
-| --- | --- |
-| `system/message` | Counted as system content; never user work, never excerpted, never leaked into titles or semantic evidence |
-| `user/message` with `source.kind == "user"` | A direct human prompt: counts as user work and may seed the title |
-| `user/message` with any other `source.kind` | Synthetic injected context (plugin, goal, skill catalog, subagent report, …): counted separately, excluded from user work and semantic evidence |
-| `assistant/attempt` | Counted as an attempt that committed no visible reply; never materialized as an assistant message, and its token usage is reported unavailable rather than estimated |
-| `assistant/message` | Carries its step usage; usage is deduplicated per `(turn, step)` so a stream field cannot double-count |
-| `surfaceOp: "append"` | Normal surface growth |
-| `surfaceOp: {op: "replace", startSeq, endSeq}` | Compacted conversation leaves the semantic summary; historical tool and token event statistics are retained |
-| `session/end-seed` with `data.inherited: true` | Records the fork cut; untagged markers establish nothing |
-| Unknown event type | Reject required events; retain coverage diagnostics for explicitly ignorable extensions |
-
-## npm download history
-
-![Cumulative npm download growth for dsh-session-insights](https://raw.githubusercontent.com/GreenLv/dsh-session-insights/stats/npm-downloads.svg)
-
-The cumulative chart is generated daily from the npm Downloads API. npm download counts measure registry requests; they are not counts of unique users or confirmed installations. The workflow can also be run manually if GitHub delays or disables a scheduled run.
-
-## Development and project docs
-
-```bash
-python3 -m pip install -e '.[dev]'
-npm ci --ignore-scripts
-# The single current rc.1 runtime (the declared floor and acceptance host):
-npm ci --prefix tests/dsh-runtime --ignore-scripts
-DSH_RUNTIME="$PWD/tests/dsh-runtime" DSH_EXPECTED_VERSION=0.2.2-rc.1 \
-  python3 -m unittest discover -s tests -v
-DSH_RUNTIME="$PWD/tests/dsh-runtime" DSH_EXPECTED_VERSION=0.2.2-rc.1 npm test
-python3 scripts/build_native_rules.py --check
-python3 scripts/build_fixture.py --check
-python3 scripts/audit_public_tree.py --root .
-```
-
-- [Changelog](CHANGELOG.md)
-- [Security policy](SECURITY.md)
-- [Contributing](CONTRIBUTING.md)
-- [Distribution notes](docs/distribution.md)
-
-The test fixture is fully synthetic and reproducibly compressed.
-
-## License
-
-[MIT](LICENSE)
+[MIT License](LICENSE)
