@@ -5,7 +5,7 @@ import {syncBuiltinESMExports} from 'node:module'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {spawnSync} from 'node:child_process'
-import {COHORT_PATHS,digest,assessAudit,assessTreeAudit,captureAudit,verifyResults,TREE_AUDITS} from '../scripts/audit_node_deps.mjs'
+import {COHORT_PATHS,HOST_RISK_POLICY_PATH,canonical,digest,assessAudit,assessTreeAudit,captureAudit,verifyResults,TREE_AUDITS} from '../scripts/audit_node_deps.mjs'
 
 const workflow='.github/workflows/ci.yml'
 const files=Object.fromEntries([...COHORT_PATHS,workflow].map(p=>[p,readFileSync(new URL('../'+p,import.meta.url))]))
@@ -192,7 +192,7 @@ test('a primary tree carrying findings cannot pass the summary',()=>outputs(dir=
   for(const scope of ['prod','full'])captureAudit(scope,join(dir,scope),{root,runner:cleanScan})
   stageTreeCaptures(dir,root)
   captureAudit('tree',join(dir,'tree','host'),{root,runner:findingScan,tree:'host'})
-  assert.throws(()=>verifyResults(dir,allOutcomes(),{root}),/tree audit must scan clean: host/)
+  assert.throws(()=>verifyResults(dir,allOutcomes(),{root}),/tree audit must scan clean.*host/)
   rmSync(root,{recursive:true,force:true})
 }))
 test('tree audit input drift voids the summary',()=>outputs(dir=>{
@@ -273,6 +273,119 @@ test('snapshot cleanup failure fails the capture with a recorded reason',()=>out
   assert.equal(JSON.parse(readFileSync(join(dir,'prod','result.json'),'utf8')).status,'failed')
   if(scanDir)rmSync(scanDir,{recursive:true,force:true})
   rmSync(root,{recursive:true,force:true})
+}))
+
+test('tree cleanup failures remain failures when the summary rereads a clean scan',()=>outputs(dir=>{
+  const root=stageRoot()
+  let scanDir
+  try {
+    for(const scope of ['prod','full'])captureAudit(scope,join(dir,scope),{root,runner:cleanScan})
+    stageTreeCaptures(dir,root)
+    const originalRemove=fs.rmSync
+    let result
+    fs.rmSync=(path,options)=>{
+      if(scanDir&&path===scanDir)throw Object.assign(new Error('synthetic tree cleanup refusal'),{code:'EACCES'})
+      return originalRemove(path,options)
+    }
+    syncBuiltinESMExports()
+    try {
+      result=captureAudit('tree',join(dir,'tree','host'),{root,tree:'host',runner:(command,args,options)=>{
+        scanDir=options.cwd
+        return cleanScan()
+      }})
+    } finally {fs.rmSync=originalRemove;syncBuiltinESMExports()}
+    assert.equal(result.status,'failed')
+    assert.match(result.reason,/synthetic tree cleanup refusal/)
+    assert.throws(()=>verifyResults(dir,allOutcomes(),{root}),/tree.*(?:failed|status)/)
+  } finally {rmSync(root,{recursive:true,force:true})}
+}))
+
+test('a misattributed tree capture cannot pass even with clean bound bytes',()=>outputs(dir=>{
+  const root=stageRoot()
+  try {
+    for(const scope of ['prod','full'])captureAudit(scope,join(dir,scope),{root,runner:cleanScan})
+    stageTreeCaptures(dir,root)
+    const path=join(dir,'tree','host','result.json')
+    const result=JSON.parse(readFileSync(path,'utf8'))
+    result.scope='full'
+    writeFileSync(path,JSON.stringify(result)+'\n')
+    assert.throws(()=>verifyResults(dir,allOutcomes(),{root}),/tree.*(?:scope|misattributed)/)
+  } finally {rmSync(root,{recursive:true,force:true})}
+}))
+
+function syntheticHostPolicy(root,report=findingReport()) {
+  const tree=TREE_AUDITS.find(t=>t.label==='host')
+  const policy={
+    schema:'dsi-host-risk-acceptance/v1',
+    product_version:JSON.parse(files['package.json']).version,
+    host_version:tree.version,
+    authorization:{decision:'accepted',recorded_on:'2026-11-13',scope:'Synthetic test-only decision'},
+    manifest_sha256:digest(files[tree.dir+'/package.json']),
+    lock_sha256:digest(files[tree.dir+'/package-lock.json']),
+    advisories:[...new Set(Object.values(report.vulnerabilities).flatMap(r=>r.via.filter(v=>typeof v==='object').map(v=>v.url)))].sort(),
+    reviewed_report_sha256:[digest(canonical(report))],
+    expiry:'Synthetic input-bound decision',note:'Synthetic report, never production authorization',
+  }
+  mkdirSync(join(root,'config'),{recursive:true})
+  writeFileSync(join(root,HOST_RISK_POLICY_PATH),JSON.stringify(policy)+'\n')
+  return policy
+}
+
+test('only the exact host decision can pass findings while retaining scanner exit 1',()=>outputs(dir=>{
+  const root=stageRoot()
+  try {
+    syntheticHostPolicy(root)
+    for(const scope of ['prod','full'])captureAudit(scope,join(dir,scope),{root,runner:cleanScan})
+    stageTreeCaptures(dir,root)
+    const host=captureAudit('tree',join(dir,'tree','host'),{root,tree:'host',runner:findingScan})
+    assert.equal(host.status,'accepted_known_risk')
+    assert.equal(host.scan.exit_code,1)
+    assert.equal(JSON.parse(readFileSync(join(dir,'tree/host/audit.json'),'utf8')).vulnerabilities.zod.severity,'high')
+    assert.equal(verifyResults(dir,allOutcomes(),{root}).status,'passed_with_known_host_risk')
+    const runtime=captureAudit('tree',join(dir,'tree','runtime'),{root,tree:'runtime',runner:findingScan})
+    assert.equal(runtime.status,'unauthorized_findings','the host decision cannot authorize the runtime tree')
+    const prod=captureAudit('prod',join(dir,'prod'),{root,runner:findingScan})
+    assert.equal(prod.status,'unauthorized_findings','the host decision cannot authorize root production findings')
+  } finally {rmSync(root,{recursive:true,force:true})}
+}))
+
+test('expired identities, new advisories and unreviewed report changes stay unauthorized',()=>outputs(dir=>{
+  const root=stageRoot()
+  try {
+    for(const mutate of [
+      p=>{p.product_version='0.0.0'},p=>{p.host_version='0.2.2-rc.1'},
+      p=>{p.lock_sha256='0'.repeat(64)},p=>{p.manifest_sha256='0'.repeat(64)},
+      p=>{p.authorization.decision='pending'},p=>{p.advisories.push('https://github.com/advisories/GHSA-unreviewed')},
+      p=>{p.reviewed_report_sha256=['0'.repeat(64)]},
+    ]) {
+      const policy=syntheticHostPolicy(root);mutate(policy)
+      writeFileSync(join(root,HOST_RISK_POLICY_PATH),JSON.stringify(policy)+'\n')
+      const result=captureAudit('tree',join(dir,'tree','host'),{root,tree:'host',runner:findingScan})
+      assert.equal(result.status,'unauthorized_findings')
+      assert.ok(result.assessment.reason)
+    }
+    syntheticHostPolicy(root)
+    const changed=findingReport();changed.vulnerabilities.zod.via[0].severity='critical'
+    const result=captureAudit('tree',join(dir,'tree','host'),{root,tree:'host',runner:()=>({...findingScan(),stdout:JSON.stringify(changed)})})
+    assert.equal(result.status,'unauthorized_findings','the same advisory URL cannot bless unreviewed report changes')
+  } finally {rmSync(root,{recursive:true,force:true})}
+}))
+
+test('a changed decision invalidates retained host captures; clean scans need no decision',()=>outputs(dir=>{
+  const root=stageRoot()
+  try {
+    const policy=syntheticHostPolicy(root)
+    for(const scope of ['prod','full'])captureAudit(scope,join(dir,scope),{root,runner:cleanScan})
+    stageTreeCaptures(dir,root)
+    captureAudit('tree',join(dir,'tree','host'),{root,tree:'host',runner:findingScan})
+    policy.note='changed after capture'
+    writeFileSync(join(root,HOST_RISK_POLICY_PATH),JSON.stringify(policy)+'\n')
+    assert.throws(()=>verifyResults(dir,allOutcomes(),{root}),/decision changed after capture/)
+    writeFileSync(join(root,HOST_RISK_POLICY_PATH),'invalid JSON')
+    const clean=captureAudit('tree',join(dir,'tree','host'),{root,tree:'host',runner:cleanScan})
+    assert.equal(clean.status,'clean')
+    assert.equal(verifyResults(dir,allOutcomes(),{root}).status,'passed')
+  } finally {rmSync(root,{recursive:true,force:true})}
 }))
 
 test('CI always collects all audits, checks outcome, and propagates Python pipeline failures',()=>{

@@ -9,18 +9,9 @@ Windows plus one Node 25 probe of the same rc.2 host.
 Target-sensitive tests check the resolved package identity; a matrix label
 alone is not evidence of the runtime actually used.
 
-The dependency audit is bound per dependency tree — root production/full,
-the exact rc.2 runtime and host trees, and Python — and distinguishes two
-outcomes: a clean scan passes only with a valid, non-empty dependency
-inventory; any finding reports `unauthorized_findings` and fails the job.
-There is no exception path in this candidate: the 0.8.0 exact-cohort policy
-in `config/dependency-audit-exceptions.json` is a historical record whose
-cohort, product version and root lock all changed, and it cannot authorize
-anything. Anything else — network failure, invalid JSON, a missing step,
-cancellation, or a new finding — fails the job. The rc.2 host tree currently
-carries upstream advisories from the host's own dependency closure (see
-[SECURITY](SECURITY.md#known-upstream-dependency-gap)); that scan fails the
-gate by design until a maintainer decision resolves the closure.
+The dependency audit binds root production/full, the exact rc.2 runtime/host trees, and Python separately. Root and runtime findings always fail. The host tree may pass only as clean or under the maintainer's 2026-11-13 decision in `config/host-dependency-risk.json`: product/host version, manifest/lock hashes, advisory set and reviewed report must all match. The raw finding exit remains 1, while the accepted result is `accepted_known_risk` and the summary is `passed_with_known_host_risk`. It is not a clean scan.
+
+The 0.8.0 Zod policy remains historical and cannot authorize anything current. Scanner errors, missing/skipped steps, cancellation, invalid JSON, input drift, capture/cleanup failures and unreviewed findings fail the job. Reassessment cannot erase a capture failure or change a receipt's tree/scope attribution. See the [security policy](../SECURITY.md#known-upstream-dependency-gap) for the exact current decision.
 
 The profile and portable scripts use isolated test homes. A failed operation
 or failed cleanup produces a failed outcome. Profile cleanup attempts each

@@ -1,7 +1,7 @@
 """rc.2 semantic regressions: structured approval non-grants and team/mode.
 
-These tests exercise the analyzer contract changes for DSH 0.2.2-rc.2 while
-keeping the rc.1 floor: structured codes are matched by their persisted
+These tests exercise the analyzer contract changes for the sole DSH rc.2
+target: structured codes are matched by their persisted
 identity, never by success text, and team configuration never upgrades into
 user work, authorization or completion.
 """
@@ -104,6 +104,19 @@ class ApprovalNonGrantTests(unittest.TestCase):
         report, session, _internal = build(snapshot)
         self.assertEqual(session["tool_execution"]["approval_unavailable"], 1)
         self.assertEqual(report["totals"]["tool_failures"], 0)
+
+    def test_repeated_non_grants_keep_separate_evidence(self):
+        path = ROOT / "tests/fixtures/rc1-cancellation/repeated-cancellation/session.v4.jsonl"
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        for event in rows[1:]:
+            if event["type"] == "tool/result":
+                event["data"]["error"] = {"name": "ApprovalError", "code": "APPROVAL_CANCELLED"}
+        report, session, internal = build({"session": rows[0], "events": rows[1:]})
+        self.assertEqual(session["tool_execution"]["approval_cancelled"], 2)
+        facts = blocked_facts(internal["semantic_messages"])
+        self.assertEqual(len(facts), 2)
+        self.assertEqual([fact["turn"] for fact in facts], [1, 2])
+        self.assertEqual(len({fact["record_identity"] for fact in facts}), 2)
 
     def test_approval_rejected_is_a_permission_boundary(self):
         snapshot = snapshot_with_result_error({"name": "ApprovalError", "code": "APPROVAL_REJECTED", "reason": "the user rejected tool bash"})

@@ -1,15 +1,21 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { buildReport } from '../plugin/lib/analyzer.js'
 import { validateV4, INPUT_IDENTITY } from '../plugin/lib/v4.js'
+import { targetRequire, assertTargetPackage } from './fixtures/target-runtime.mjs'
+import { Store } from '../plugin/lib/storage.js'
+import { prepareSemantic, getBatch } from '../plugin/lib/semantic.js'
 
 // rc.2 semantic regressions on the native side: structured approval non-grants
 // and the team/mode lifecycle. Structured codes are matched by their persisted
 // identity, never by success text; team configuration never upgrades into user
 // work, authorization or completion. The rc.2-only team/mode fixture is also
-// checked through V4 admission (its official-catalog refusal on rc.1 lives in
-// verify_session_contract's coverage negative).
+// checked through the sole supported rc.2 catalog and V4 admission. Historical
+// fixture names describe data provenance, not an older supported host.
 const rows = JSON.parse('[' + readFileSync(new URL('../tests/fixtures/synthetic-session.jsonl', import.meta.url), 'utf8').trim().split('\n').join(',') + ']')
 const options = { now: rows[0].createdAt + 86400000, days: 30, privacy: 'redacted', locale: 'en', analysis_depth: 'evidence' }
 const snapshot = () => {
@@ -63,6 +69,32 @@ test('error.info.code variant carries the same classification', () => {
   const built = buildReport([withResultError({ name: 'ApprovalError', code: 'APPROVAL_UNAVAILABLE' }, { infoVariant: true })], options)
   assert.equal(built.report.session_summaries[0].tool_execution.approval_unavailable, 1)
   assert.equal(built.report.totals.tool_failures, 0)
+})
+
+test('identical approval non-grants in separate turns retain separate evidence', async () => {
+  const [session, ...events] = readFileSync(new URL('../tests/fixtures/rc1-cancellation/repeated-cancellation/session.v4.jsonl', import.meta.url), 'utf8').trim().split('\n').map(JSON.parse)
+  for (const event of events)
+    if (event.type === 'tool/result') event.data.error = { name: 'ApprovalError', code: 'APPROVAL_CANCELLED' }
+  assertTargetPackage('@deepseek-ai/dsh-session-format-catalog')
+  const { sessionFormatCatalog } = await import(pathToFileURL(targetRequire.resolve('@deepseek-ai/dsh-session-format-catalog')).href)
+  const restore = sessionFormatCatalog.createRestore(session, { recovery: 'strict', validation: 'current' })
+  for (const event of events) restore.decodeRow(event)
+  restore.finish()
+  const built = buildReport([{ session, events }], { ...options, now: session.createdAt + 86400000 })
+  assert.equal(built.report.session_summaries[0].tool_execution.approval_cancelled, 2)
+  const facts = blockedFacts(built)
+  assert.equal(facts.length, 2, 'distinct call scopes must not collapse because their summaries match')
+  assert.deepEqual(facts.map(f => f.turn), [1, 2])
+  assert.equal(new Set(facts.map(f => f.record_identity)).size, 2)
+  const home = mkdtempSync(join(tmpdir(), 'dsi-approval-evidence-'))
+  try {
+    const store = new Store(home), run = store.create()
+    const prepared = prepareSemantic(store, run, built)
+    const evidence = prepared.batches.flatMap(id => getBatch(store, run, id).tasks)
+      .flatMap(task => task.evidence).filter(item => item.tool_facts?.outcome === 'blocked')
+    assert.equal(evidence.length, 2, 'both recorded non-grants must reach the semantic consumer')
+    assert.equal(new Set(evidence.map(item => item.id)).size, 2)
+  } finally { rmSync(home, { recursive: true, force: true }) }
 })
 
 test('APPROVAL_REJECTED is a permission boundary failure', () => {

@@ -1,4 +1,4 @@
-# Official rc.1 composition template for the real-executor integration checks
+# Official executor composition template for the real-executor integration checks
 # (scripts/dsh-executor-contract.mjs). This is a minimal host composition:
 # the service providers the PTC stack requires, mounted through the official
 # loader against the exact tests/dsh-host closure. The placeholder is rendered

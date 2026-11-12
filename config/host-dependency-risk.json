@@ -1,0 +1,30 @@
+{
+  "schema": "dsi-host-risk-acceptance/v1",
+  "product_version": "0.8.1",
+  "host_version": "0.2.2-rc.2",
+  "authorization": {
+    "decision": "accepted",
+    "recorded_on": "2026-11-13",
+    "scope": "Maintainer acceptance for this release, the exact official rc.2 host manifest/lock and the ten listed advisories only."
+  },
+  "manifest_sha256": "e6da6f310c67747eeb895bf5728f782facdb19abbb34d7fc78accf679b3fce22",
+  "lock_sha256": "77f372a32d21c5c64c8a57979b274c4cf231fceb9b10d022aae8637b36710773",
+  "advisories": [
+    "https://github.com/advisories/GHSA-2m5v-pch6-74hx",
+    "https://github.com/advisories/GHSA-4qv8-2p9j-2685",
+    "https://github.com/advisories/GHSA-4w7w-5xrc-9h26",
+    "https://github.com/advisories/GHSA-55wc-3pg8-jfw6",
+    "https://github.com/advisories/GHSA-6prh-2h8m-c8cw",
+    "https://github.com/advisories/GHSA-9fm3-97px-rjf6",
+    "https://github.com/advisories/GHSA-f72v-6w45-q472",
+    "https://github.com/advisories/GHSA-px8p-9vwx-vf98",
+    "https://github.com/advisories/GHSA-qrxm-fqhp-jwvm",
+    "https://github.com/advisories/GHSA-xjj6-f33q-929c"
+  ],
+  "reviewed_report_sha256": [
+    "45565ac03ddc0b589d46291de10564d7d2fa49ef24768c1953184c522e73501b",
+    "a0ab539210ecd3704b1e809687d01bc163f61d185f3559a6c6d9a2b5c468d1e1"
+  ],
+  "expiry": "A product/host identity or manifest/lock change, new advisory or unreviewed report invalidates this decision. A clean scan remains clean; scanner and capture failures remain failures.",
+  "note": "The two reviewed reports contain the same ten direct advisories with 75 and 78 affected package entries. This acceptance does not fix the vulnerabilities or cover root/runtime/Python findings."
+}

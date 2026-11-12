@@ -42,7 +42,7 @@ FAILURE_RULE_VERSION = "5.1.0"
 # cached session change, so a stale cache cannot mask a generation upgrade.
 # 10: 0.8.0 retargeted the input contract to DSH 0.2.2-rc.1 (v4-dsh022rc1.1),
 # so deterministic caches built by older analyzers must invalidate.
-# 11: 0.9.0 retargets the input contract to DSH 0.2.2-rc.2 (v4-dsh022rc2.1):
+# 11: 0.8.1 retargets the input contract to DSH 0.2.2-rc.2 (v4-dsh022rc2.1):
 # the team/mode vocabulary, rc.2 structured approval non-grant accounting and
 # team mode-change stats all change what a cached session records.
 DETERMINISTIC_CACHE_VERSION = 11

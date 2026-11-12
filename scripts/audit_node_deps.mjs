@@ -1,27 +1,27 @@
 // Dependency audit gate, bound per dependency tree. A clean scan passes only
-// with a valid non-empty inventory; ANY finding reports `unauthorized_findings`
-// and fails. The 0.8.0 single-release exception is retired (config file kept
-// only as a historical record): no expired exception, no compatibility-tree
-// residual path and no automatic risk authorization exists in this candidate.
+// with a valid non-empty inventory. Findings fail unless the host tree matches
+// the maintainer's new 0.8.1 manifest/lock, advisory set and reviewed report.
+// The retired 0.8.0 Zod policy cannot authorize any current finding.
 // Raw npm scan output and its actual exit status are retained either way.
 import {createHash} from 'node:crypto'
 import {spawnSync} from 'node:child_process'
-import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync} from 'node:fs'
+import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync,existsSync} from 'node:fs'
 import {join,resolve} from 'node:path'
 import {fileURLToPath,pathToFileURL} from 'node:url'
-import {HOST_TREES} from './acceptance_identity.mjs'
+import {HOST_TREES,PRODUCT_VERSION} from './acceptance_identity.mjs'
 
 const ROOT=fileURLToPath(new URL('../',import.meta.url))
 const WORKFLOW='.github/workflows/ci.yml'
+export const HOST_RISK_POLICY_PATH='config/host-dependency-risk.json'
 // Cohort of one candidate: root manifests plus the exact rc.2 acceptance
-// trees' manifest/lock. The 0.8.0 cohort also carried the rc.1 trees and the
-// exception policy; that set is retired with the compatibility queue.
+// trees' manifest/lock. The 0.8.0 cohort used rc.1 in these same paths; its
+// exception policy is historical and cannot authorize this candidate.
 export const COHORT_PATHS=['package.json','package-lock.json','pyproject.toml','src/dsh_session_insights/__init__.py',
   'scripts/acceptance_identity.mjs',
   ...Object.values(HOST_TREES).flatMap(t=>[t.runtime+'/package.json',t.runtime+'/package-lock.json',t.host+'/package.json',t.host+'/package-lock.json'])]
 // Per-tree audit identities. Both trees are primary acceptance trees: each
-// must scan clean. New advisories on a host closure are real failures that
-// the release gate has to resolve — never recorded as accepted.
+// must scan clean or satisfy its explicitly scoped maintainer decision.
+// No runtime/root finding can use the host-only decision.
 export const TREE_AUDITS=Object.freeze(Object.entries(HOST_TREES).flatMap(([version,tree])=>[
   Object.freeze({label:'runtime',dir:tree.runtime,version}),
   Object.freeze({label:'host',dir:tree.host,version}),
@@ -73,12 +73,32 @@ export function assessAudit({raw,exit_code,signal=null,error=null}){
   if(exit_code===0)return cleanAssessment(report)
   return {status:'unauthorized_findings',...summarizeFindings(report)}
 }
-// Tree-scope assessment: same contract as the root scopes. Findings are
-// unauthorized — there is no compatibility residual path and no exception.
-export function assessTreeAudit({raw,exit_code,signal=null,error=null}){
-  return assessAudit({raw,exit_code,signal,error})
+// Tree-scope findings start unauthorized. Only the exact current host decision
+// can change that assessment; root/runtime findings never use it.
+export function assessTreeAudit(scan,{tree=null,riskPolicy=null,files=null}={}){
+  const assessment=assessAudit(scan)
+  if(assessment.status==='clean'||tree?.label!=='host'||!riskPolicy)return assessment
+  try {
+    const policy=JSON.parse(riskPolicy)
+    requireThat(sameKeys(policy,['schema','product_version','host_version','authorization','manifest_sha256','lock_sha256','advisories','reviewed_report_sha256','expiry','note'])
+      &&policy.schema==='dsi-host-risk-acceptance/v1','invalid host risk decision')
+    requireThat(policy.product_version===PRODUCT_VERSION&&JSON.parse(files['package.json']).version===PRODUCT_VERSION
+      &&policy.host_version===tree.version,'host risk decision expired: product or host changed')
+    requireThat(policy.authorization?.decision==='accepted'&&/^\d{4}-\d{2}-\d{2}$/.test(policy.authorization.recorded_on)
+      &&typeof policy.authorization.scope==='string'&&policy.authorization.scope.length>0,'host risk authorization missing')
+    requireThat(policy.manifest_sha256===digest(files[tree.dir+'/package.json'])
+      &&policy.lock_sha256===digest(files[tree.dir+'/package-lock.json']),'host risk decision expired: manifest or lock changed')
+    requireThat(strings(policy.advisories)&&policy.advisories.length>0
+      &&canonical([...policy.advisories].sort())===canonical(assessment.direct_advisories),'host advisory set differs from the accepted decision')
+    const reportHash=digest(canonical(JSON.parse(scan.raw)))
+    requireThat(strings(policy.reviewed_report_sha256)&&policy.reviewed_report_sha256.length>0
+      &&policy.reviewed_report_sha256.every(hash=>/^[0-9a-f]{64}$/.test(hash))
+      &&policy.reviewed_report_sha256.includes(reportHash),'host report differs from the reviewed reports')
+    return {...assessment,status:'accepted_known_risk',policy_sha256:digest(riskPolicy),report_sha256:reportHash}
+  } catch(error) {return {...assessment,reason:error.message}}
 }
-function context(root){return {files:Object.fromEntries([...COHORT_PATHS,WORKFLOW].map(p=>[p,readFileSync(join(root,p))]))}}
+function context(root){return {files:Object.fromEntries([...COHORT_PATHS,WORKFLOW].map(p=>[p,readFileSync(join(root,p))])),
+  riskPolicy:existsSync(join(root,HOST_RISK_POLICY_PATH))?readFileSync(join(root,HOST_RISK_POLICY_PATH),'utf8'):null}}
 // Identity of the inputs a scan actually ran against. verifyResults refuses to
 // summarize captures whose inputs drifted afterwards, so a clean scan of one
 // tree can never endorse a different candidate.
@@ -131,7 +151,7 @@ export function captureAudit(scope,output,{root=ROOT,runner=spawnSync,tree=null}
     requireThat(snapshotUnchanged,
       'audit input changed while the scanner ran; the retained output cannot be attributed to the bound input')
     result.assessment=treeAudit
-      ?assessTreeAudit({raw,...scan})
+      ?assessTreeAudit({raw,...scan},{tree:treeAudit,riskPolicy:before.riskPolicy,files:before.files})
       :assessAudit({raw,...scan})
     result.status=result.assessment.status
   }catch(e){result.reason=e.message}
@@ -144,16 +164,16 @@ export function captureAudit(scope,output,{root=ROOT,runner=spawnSync,tree=null}
   writeFileSync(join(output,'result.json'),JSON.stringify(result,null,2)+'\n')
   return result
 }
-const PASSING=['clean']
+const PASSING=['clean','accepted_known_risk']
 export function verifyResults(output,outcomes,{root=ROOT}={}){
   const requiredScopes=['prod','full','python',...TREE_AUDITS.map(t=>t.label)]
   requireThat(sameKeys(outcomes,requiredScopes)&&Object.values(outcomes).every(v=>v==='success'),'required audit step missing, failed, skipped or cancelled')
-  const {files}=context(root)
+  const {files,riskPolicy}=context(root)
   const current=inputBinding(files)
   const assessments=[],bindings=[]
   for(const scope of ['prod','full']){
     const dir=join(output,scope),result=JSON.parse(readFileSync(join(dir,'result.json'),'utf8')),raw=readFileSync(join(dir,'audit.json'),'utf8'),stderr=readFileSync(join(dir,'stderr.log'))
-    requireThat(result.schema==='dsi-node-audit-result/v1'&&result.scope===scope&&PASSING.includes(result.status),'required npm assessment missing or failed')
+    requireThat(result.schema==='dsi-node-audit-result/v1'&&result.scope===scope&&result.status==='clean','required npm assessment missing or failed')
     requireThat(digest(raw)===result.scan.raw_sha256&&digest(stderr)===result.scan.stderr_sha256,'retained scan bytes changed')
     // The summarized input must be the captured input: reject drift between
     // capture and summary, and inputs that differ between the two scopes.
@@ -163,31 +183,35 @@ export function verifyResults(output,outcomes,{root=ROOT}={}){
       'capture predates input binding; recapture against the current inputs')
     bindings.push(result.input_binding)
     assessments.push(assessAudit({raw,...result.scan}))
-    requireThat(PASSING.includes(assessments[assessments.length-1].status),'re-assessed scan no longer passes')
+    requireThat(assessments[assessments.length-1].status==='clean','re-assessed scan no longer passes')
   }
   // The two scopes must describe one captured input before either is compared
   // with the tree being summarized.
   requireThat(canonical(bindings[0])===canonical(bindings[1]),'audit scopes captured different inputs')
   requireThat(canonical(bindings[0])===canonical(current),'audit input drifted after capture; the retained scan no longer describes the current candidate')
   // Per-tree assessments: every acceptance tree must have a completed capture
-  // bound to its CURRENT bytes and must scan clean. Any finding is a real
-  // failure the release gate has to resolve.
+  // bound to its CURRENT bytes and must scan clean or match the explicit
+  // current host decision. Capture failures cannot inherit acceptance.
   const treeAssessments=[]
   for(const tree of TREE_AUDITS){
     const dir=join(output,'tree',tree.label)
     const result=JSON.parse(readFileSync(join(dir,'result.json'),'utf8')),raw=readFileSync(join(dir,'audit.json'),'utf8'),stderr=readFileSync(join(dir,'stderr.log'))
-    requireThat(result.schema==='dsi-node-audit-result/v1'&&result.tree===tree.label,'tree audit capture missing or misattributed: '+tree.label)
+    requireThat(result.schema==='dsi-node-audit-result/v1'&&result.scope==='tree'&&result.tree===tree.label,'tree audit capture missing or misattributed: '+tree.label)
     requireThat(digest(raw)===result.scan.raw_sha256&&digest(stderr)===result.scan.stderr_sha256,'retained tree scan bytes changed: '+tree.label)
     requireThat(object(result.input_binding)
       &&result.input_binding.schema==='dsi-audit-tree-binding/v1'
       &&sameKeys(result.input_binding,['schema','tree','manifest_sha256','lock_sha256']),
       'tree capture predates binding; recapture: '+tree.label)
     requireThat(canonical(result.input_binding)===canonical(treeInputBinding(tree,files)),'tree audit input drifted after capture: '+tree.label)
-    const assessment=assessTreeAudit({raw,...result.scan})
-    requireThat(assessment.status==='clean','tree audit must scan clean: '+tree.label+' ('+assessment.status+')')
-    treeAssessments.push({tree:tree.label,version:tree.version,status:assessment.status,dependencies:assessment.dependencies})
+    const assessment=assessTreeAudit({raw,...result.scan},{tree,riskPolicy,files})
+    // Reassessing clean scanner bytes cannot erase a capture failure, such
+    // as a snapshot that could not be removed after that successful scan.
+    requireThat(result.status===assessment.status,'tree audit capture status conflicts with reassessment: '+tree.label)
+    requireThat(PASSING.includes(assessment.status),'tree audit must scan clean or match its explicit decision: '+tree.label+' ('+assessment.status+')')
+    requireThat(canonical(result.assessment)===canonical(assessment),'tree audit decision changed after capture: '+tree.label)
+    treeAssessments.push({tree:tree.label,version:tree.version,...assessment})
   }
-  return {schema:'dsi-required-dependency-audits/v2',status:'passed',exception_fixed:true,
+  return {schema:'dsi-required-dependency-audits/v2',status:treeAssessments.some(t=>t.status==='accepted_known_risk')?'passed_with_known_host_risk':'passed',exception_fixed:true,
     scopes:requiredScopes,input_cohort_sha256:current.cohort_sha256,assessments,trees:treeAssessments}
 }
 function main(){

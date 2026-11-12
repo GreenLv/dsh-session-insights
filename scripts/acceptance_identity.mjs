@@ -96,7 +96,7 @@ export async function inspectRuntime(root, expectedVersion = TARGET) {
       await visit(dependency, packagePath)
     }
   }
-  const roots = Object.keys(manifest.dependencies || {}).filter(name => name.startsWith('@deepseek-ai/dsh-') || name === '@deepseek-ai/cordis')
+  const roots = Object.keys(manifest.dependencies || {}).filter(name => name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-') || name === '@deepseek-ai/cordis')
   if (!roots.length) throw new Error('runtime root has no DSH packages')
   for (const name of roots) await visit(name, anchor)
   identities.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)

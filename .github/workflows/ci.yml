@@ -44,10 +44,10 @@ jobs:
   dependency-security:
     # Runtime and development dependency auditing, bound per dependency tree:
     # root production/full, the exact rc.2 runtime/host trees, and Python.
-    # There is no compatibility queue and no risk exception: every acceptance
-    # tree must scan clean, any finding reports unauthorized and fails, and a
-    # scan that cannot reach its advisory database fails the job. Raw npm
-    # exits stay intact.
+    # Root/runtime must scan clean. Only the exact host lock, advisory set
+    # and reviewed report accepted for 0.8.1 may pass as accepted_known_risk.
+    # Scanner, capture or input failures and new findings fail the job; raw
+    # npm exits remain intact. No historical Zod decision carries forward.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -87,7 +87,7 @@ jobs:
           mkdir -p reports/dependency-audit
           python -m pip install --disable-pip-version-check pip-audit 2>&1 | tee reports/dependency-audit/python-install.log
           python scripts/audit_python_deps.py 2>&1 | tee reports/dependency-audit/python.log
-      - name: Require all audits and validate the tree-scoped clean gates
+      - name: Require all audits and validate the tree-scoped decisions
         if: always()
         env:
           AUDIT_PROD_OUTCOME: ${{ steps.audit_prod.outcome }}

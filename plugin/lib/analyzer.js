@@ -679,7 +679,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
       return
     const text = sanitize(raw, analysisPrivacy, role === 'tool' ? 700 : 12000)
     if (!text || text === '[code omitted]') return
-    const digest = hash(`${role}\0${facts?.recovery || facts?.cancelled ? `${facts.record_identity}\0` : ''}${text}`)
+    const digest = hash(`${role}\0${facts?.recovery || facts?.cancelled || facts?.approval ? `${facts.record_identity}\0` : ''}${text}`)
     if (!s.messages.some((m) => m.digest === digest))
       s.messages.push({
         role,

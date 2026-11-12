@@ -12,7 +12,7 @@
 
 0.8.1 插件包（Bundle）要求 DSH `>=0.2.2-rc.2` 和 Node.js `>=24.9.0`，安装插件无需 Python。（0.8.0 的要求是 `>=0.2.2-rc.1`；本版本把支持的宿主下限提高到 0.2.2-rc.2。）
 
-DSH rc.1 的一项依赖在校验某些输入时可能耗尽内存。目前尚未确认能否在 DSH 中触发。详见[安全说明](SECURITY.md#known-upstream-dependency-gap)和 [Zod 漏洞公告](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)。
+DSH rc.2 已修复此前的 Zod 依赖问题，但完整宿主仍有已知依赖漏洞。使用前请阅读[安全说明](SECURITY.md#known-upstream-dependency-gap)。
 
 使用 DSH Web 时，在终端执行：
 

@@ -12,7 +12,7 @@ Run `/session-insights` in DeepSeek Harness (DSH) to review your session history
 
 The 0.8.1 Bundle requires DSH `>=0.2.2-rc.2` and Node.js `>=24.9.0`. The plugin runs without Python. (0.8.0 required `>=0.2.2-rc.1`; this release raises the supported floor to 0.2.2-rc.2.)
 
-A dependency in DSH rc.1 can exhaust memory when validating certain inputs. Whether DSH exposes that path is unknown. See the [security policy](SECURITY.md#known-upstream-dependency-gap) and [Zod advisory](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
+DSH rc.2 fixes the previous Zod dependency issue, but its full host dependency tree still has known advisories. Review the [security policy](SECURITY.md#known-upstream-dependency-gap) before use.
 
 For DSH Web, run:
 

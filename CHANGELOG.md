@@ -14,24 +14,24 @@ Public releases are listed newest first.
 
 ## 0.8.1 - Unreleased (candidate)
 
-This is a patch release that raises the supported host floor. It targets DSH `0.2.2-rc.2` as the sole acceptance host and adds the rc.2 event and error vocabulary. Because the minimum host changes, a patch number does not mean 0.2.2-rc.1 stays supported.
+Reports distinguish an approval that was cancelled or unavailable from a tool execution failure, and preserve separate evidence when the same tool is blocked in different turns. Upgrade DSH to `0.2.2-rc.2` or later before installing this version.
 
 ### Changed
 
-- The minimum DSH host is now `0.2.2-rc.2`. rc.1 and older hosts are refused; later releases stay admitted by the declared range (forward compatibility by range, not a version whitelist). `0.2.2-rc.2` is the exact host the source and contract checks run against.
-- The analysis identity is retargeted to `v4-dsh022rc2.1` (target `0.2.2-rc.2`). Semantic runs recorded by 0.8.0 or earlier do not resume under this identity, and deterministic CLI caches are invalidated and rebuilt from source. Existing runs, evidence and saved HTML/JSON/Markdown reports are retained.
-- The product vocabulary is the official rc.2 catalog exactly (63 event types). Unknown required events keep the explicit rejection; there is no per-version union or subset exception.
+- The minimum DSH host rises from rc.1 to `0.2.2-rc.2`. Later versions remain admitted by the declared range; rc.2 is the exact acceptance target. Node.js `>=24.9.0` and Cordis `~4.1.0` are unchanged.
+- Approval rejection remains a permission boundary. A cancelled approval window and an unavailable approval channel have separate counters and blocked evidence; neither counts as caller cancellation or execution failure.
+- Team-mode changes are recorded as configuration context, rather than user tasks, authorization or completion. Historical V4 data still follows the supported catalog; unknown required events are refused.
+- Start a new semantic analysis after upgrading, or finish an existing run with the version that created it. Old deterministic caches are rebuilt when needed; saved runs, reports and source logs remain available.
 
-### Added
+### Fixed
 
-- `team/mode` (rc.2) is counted as team configuration context (`team.mode_changes` in session summaries and totals). It never counts as a new user task, an authorization or a completion; logs without the event are analyzed unchanged.
-- rc.2 structured approval non-grants are classified from their persisted error codes: `APPROVAL_REJECTED` joins the permission-boundary cause like a human rejection, while `APPROVAL_CANCELLED` (approval window cancelled without a caller cancellation) and `APPROVAL_UNAVAILABLE` (no approval service, Agent or channel) are counted as their own blocked outcomes (`tool_execution.approval_cancelled`, `tool_execution.approval_unavailable`) with distinct evidence. They are never caller cancellations, human rejections or execution failures, and success text never overwrites the structured result.
+- Distinct approval non-grants with identical summary text keep separate evidence, including when passed to the semantic analysis stage.
+- Dependency-audit summaries retain tree-capture failures and reject captures attributed to the wrong scope.
 
 ### Security
 
-- The rc.2 release family of `dsh-agent`, `dsh-commands` and `dsh-llm` moves the exact `zod` pin to the patched `4.6.6`, so this project's DSH peer closure (rc.2) and the root production/full scans resolve zod without the [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) finding, and the rc.1 residual is no longer present in the supported closure.
-- The 0.8.0 exact-cohort exception is retired: the product version, cohort files and root lock it was bound to all changed, and no new exception is granted for this candidate. Any audit finding reports unauthorized and fails the gate.
-- The fresh scan of the exact rc.2 `@deepseek-ai/dsh` host tree reports upstream advisories inside the host's own published dependency closure (75 affected package entries across 10 advisories: `undici` 8.0.0–8.12.1 with four high-severity entries, the MCP TypeScript SDK 2.0.0–2.2.2, and `fflate` 0.8.0–0.8.2). These come from the upstream host release, not from this project's dependencies, and cannot be fixed by this project's pins. See the [security policy](SECURITY.md#known-upstream-dependency-gap) for the recorded state; release remains gated on a maintainer decision for this exact closure.
+- DSH rc.2 replaces the old vulnerable Zod pins. The plugin's production/full and slim runtime scans are clean; the 0.8.0 Zod exception is retired.
+- The full official rc.2 host still has ten known dependency advisories. The maintainer accepted the exact host lock and reviewed findings for 0.8.1 on 2026-11-13. Raw failure results remain distinct from clean scopes; changed inputs or new findings require review. See the [security policy](SECURITY.md#known-upstream-dependency-gap).
 
 ## 0.8.0 - 2026-11-07
 

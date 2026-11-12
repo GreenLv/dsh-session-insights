@@ -1,4 +1,4 @@
-// Real-executor and Agent-scope integration checks for the exact rc.1 host
+// Real-executor and Agent-scope integration checks for the exact current host
 // closure (zero-model, synthetic data only). This is service/executor
 // evidence, not a GUI, real-model, or real-host-acceptance claim.
 //
@@ -49,6 +49,7 @@ import {spawnSync} from 'node:child_process'
 import {join,resolve,sep} from 'node:path'
 import {classifySettledBatch,foreignSetRefusalProblem,readSuccessfulToolValue,readDsiPrepareValue,readPtcProgramResult,selfTestVerdict,settleWithTimeout} from './dsh-executor-consumers.mjs'
 import assert from 'node:assert/strict'
+import {HOST_TARGETS,inspectRuntime} from './acceptance_identity.mjs'
 
 export function compositionTemplatePath(){
   // The composition template ships beside this script; the URL boundary is
@@ -63,6 +64,8 @@ const runtime=resolve(positional[0] || ''), packageRoot=resolve(positional[1] ||
 if(!runtime)throw new Error('target host tree required (tests/dsh-host)')
 const req=createRequire(join(runtime,'package.json'))
 const load=async name=>import(pathToFileURL(req.resolve(name)).href)
+const expectedHostVersion=HOST_TARGETS.primary
+const runtimeIdentity=await inspectRuntime(runtime,expectedHostVersion)
 
 async function fileTreeDigest(root){
   const files=[]
@@ -244,7 +247,7 @@ try {
 
   const signal=new AbortController().signal
   const modelSelection={provider:'synthetic',model:'synthetic'}
-  result={subject:'zero-model real-executor/agent-scope integration; no GUI, real-model or model-driven-turn claim',scope:'official rc.1 executors over the official composition, default native plus one Agent PTC override'}
+  result={subject:'zero-model real-executor/agent-scope integration; no GUI, real-model or model-driven-turn claim',scope:`official ${expectedHostVersion} executors over the official composition, default native plus one Agent PTC override`,target_dsh_version:expectedHostVersion,runtime_sha256:runtimeIdentity.sha256}
 
   const runCount=async()=>{
     const dir=join(home,'insights','runs')

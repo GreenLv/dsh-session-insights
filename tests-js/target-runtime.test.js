@@ -5,6 +5,27 @@ import {cpSync,mkdirSync,readFileSync,readdirSync,mkdtempSync,rmSync,writeFileSy
 import {join,resolve} from 'node:path'
 import {tmpdir} from 'node:os'
 import {runtime} from './fixtures/target-runtime.mjs'
+import {inspectRuntime, HOST_TARGETS} from '../scripts/acceptance_identity.mjs'
+
+test('host identity includes the main dsh package as well as app-boot',async()=>{
+  const root=mkdtempSync(join(tmpdir(),'dsi-host-identity-'))
+  try {
+    writeFileSync(join(root,'package.json'),JSON.stringify({dependencies:{'@deepseek-ai/dsh':HOST_TARGETS.primary,'@deepseek-ai/dsh-app-boot':HOST_TARGETS.primary}}))
+    for(const name of ['dsh','dsh-app-boot']) {
+      const dir=join(root,'node_modules','@deepseek-ai',name)
+      mkdirSync(dir,{recursive:true})
+      writeFileSync(join(dir,'package.json'),JSON.stringify({name:'@deepseek-ai/'+name,version:HOST_TARGETS.primary,main:'index.js'}))
+      writeFileSync(join(dir,'index.js'),'')
+    }
+    const checked=await inspectRuntime(root,HOST_TARGETS.primary)
+    assert.deepEqual(checked.identities.map(p=>p.name),['@deepseek-ai/dsh','@deepseek-ai/dsh-app-boot'])
+    const path=join(root,'node_modules/@deepseek-ai/dsh/package.json')
+    const metadata=JSON.parse(readFileSync(path,'utf8'))
+    metadata.version='0.2.2-rc.1'
+    writeFileSync(path,JSON.stringify(metadata))
+    await assert.rejects(inspectRuntime(root,HOST_TARGETS.primary),/mixed DSH runtime closure/)
+  } finally {rmSync(root,{recursive:true,force:true})}
+})
 
 test('failed target service staging removes only its own fresh directory',()=>{
   const prefix='.dsh-session-insights-under-test-'
