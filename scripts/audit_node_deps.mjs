@@ -70,6 +70,7 @@ export function assessAudit({raw,exit_code,signal=null,error=null}){
   requireThat((exit_code===0||exit_code===1),'npm scanner unexpected exit status')
   requireThat(typeof raw==='string'&&raw.trim().length>0&&Buffer.byteLength(raw)<=4*1024*1024,'empty or oversized scan output')
   const report=JSON.parse(raw)
+  requireThat(sameKeys(report,['auditReportVersion','vulnerabilities','metadata']),'npm audit report is malformed or reports an error')
   if(exit_code===0)return cleanAssessment(report)
   return {status:'unauthorized_findings',...summarizeFindings(report)}
 }

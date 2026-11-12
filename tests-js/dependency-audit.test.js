@@ -69,7 +69,8 @@ test('npm failure, cancellation and contradictory success exits never pass',()=>
 })
 test('a network-style scanner error report cannot pass in any state',()=>{
   const networkError={error:{code:'ENETUNREACH',summary:'npm audit failed',detail:'request to https://registry.npmjs.org/-/npm/v1/security/advisories/bulk failed'}}
-  for(const exit of [1,0])assert.throws(()=>assessAudit({raw:JSON.stringify(networkError),exit_code:exit}))
+  for(const report of [networkError,{...cleanReport,...networkError},{...findingReport(),...networkError}])
+    for(const exit of [1,0])assert.throws(()=>assessAudit({raw:JSON.stringify(report),exit_code:exit}))
 })
 test('both scopes preserve the real scanner exit and raw bytes, and the summary passes on clean states',()=>outputs(dir=>{
   const root=stageRoot()
