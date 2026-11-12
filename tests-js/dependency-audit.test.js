@@ -5,7 +5,7 @@ import {syncBuiltinESMExports} from 'node:module'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {spawnSync} from 'node:child_process'
-import {COHORT_PATHS,HOST_RISK_POLICY_PATH,canonical,digest,assessAudit,assessTreeAudit,captureAudit,verifyResults,TREE_AUDITS} from '../scripts/audit_node_deps.mjs'
+import {COHORT_PATHS,HOST_RISK_POLICY_PATH,HOST_REPORT_PROJECTION,hostReportDigest,canonical,digest,assessAudit,assessTreeAudit,captureAudit,verifyResults,TREE_AUDITS} from '../scripts/audit_node_deps.mjs'
 
 const workflow='.github/workflows/ci.yml'
 const files=Object.fromEntries([...COHORT_PATHS,workflow].map(p=>[p,readFileSync(new URL('../'+p,import.meta.url))]))
@@ -324,7 +324,8 @@ function syntheticHostPolicy(root,report=findingReport()) {
     manifest_sha256:digest(files[tree.dir+'/package.json']),
     lock_sha256:digest(files[tree.dir+'/package-lock.json']),
     advisories:[...new Set(Object.values(report.vulnerabilities).flatMap(r=>r.via.filter(v=>typeof v==='object').map(v=>v.url)))].sort(),
-    reviewed_report_sha256:[digest(canonical(report))],
+    report_projection:HOST_REPORT_PROJECTION,
+    reviewed_findings_sha256:[hostReportDigest(report)],
     expiry:'Synthetic input-bound decision',note:'Synthetic report, never production authorization',
   }
   mkdirSync(join(root,'config'),{recursive:true})
@@ -357,7 +358,7 @@ test('expired identities, new advisories and unreviewed report changes stay unau
       p=>{p.product_version='0.0.0'},p=>{p.host_version='0.2.2-rc.1'},
       p=>{p.lock_sha256='0'.repeat(64)},p=>{p.manifest_sha256='0'.repeat(64)},
       p=>{p.authorization.decision='pending'},p=>{p.advisories.push('https://github.com/advisories/GHSA-unreviewed')},
-      p=>{p.reviewed_report_sha256=['0'.repeat(64)]},
+      p=>{p.reviewed_findings_sha256=['0'.repeat(64)]},p=>{p.report_projection='unknown/v1'},
     ]) {
       const policy=syntheticHostPolicy(root);mutate(policy)
       writeFileSync(join(root,HOST_RISK_POLICY_PATH),JSON.stringify(policy)+'\n')
@@ -386,6 +387,41 @@ test('a changed decision invalidates retained host captures; clean scans need no
     const clean=captureAudit('tree',join(dir,'tree','host'),{root,tree:'host',runner:cleanScan})
     assert.equal(clean.status,'clean')
     assert.equal(verifyResults(dir,allOutcomes(),{root}).status,'passed')
+  } finally {rmSync(root,{recursive:true,force:true})}
+}))
+
+test('host report binding tolerates only typed npm advice; vulnerability facts remain exact',()=>outputs(dir=>{
+  const root=stageRoot()
+  try {
+    syntheticHostPolicy(root)
+    for(const scope of ['prod','full'])captureAudit(scope,join(dir,scope),{root,runner:cleanScan})
+    stageTreeCaptures(dir,root)
+    const capture=report=>captureAudit('tree',join(dir,'tree','host'),{root,tree:'host',runner:()=>({...findingScan(),stdout:JSON.stringify(report)})})
+    for(const mutate of [r=>{r.vulnerabilities.zod.effects=['zod']},r=>{r.vulnerabilities.zod.fixAvailable=true},r=>{r.vulnerabilities.zod.fixAvailable={isSemVerMajor:true}},r=>{r.vulnerabilities.zod.fixAvailable={name:'upstream-parent',version:'9.0.0',isSemVerMajor:true}}]){
+      const report=findingReport();mutate(report)
+      const result=capture(report)
+      assert.equal(result.status,'accepted_known_risk')
+      assert.equal(result.scan.exit_code,1)
+      assert.equal(readFileSync(join(dir,'tree/host/audit.json'),'utf8'),JSON.stringify(report))
+      assert.equal(verifyResults(dir,allOutcomes(),{root}).status,'passed_with_known_host_risk')
+    }
+    const forbidden=[
+      r=>{r.vulnerabilities.zod.severity='critical'},r=>{r.vulnerabilities.zod.isDirect=false},
+      r=>{r.vulnerabilities.zod.range='*'},r=>{r.vulnerabilities.zod.nodes.push('node_modules/nested/zod')},
+      r=>{r.vulnerabilities.zod.via[0].severity='critical'},r=>{r.vulnerabilities.zod.via[0].range='*'},
+      r=>{r.vulnerabilities.zod.via[0].title='changed advisory'},r=>{r.vulnerabilities.zod.via.push('other-parent')},
+      r=>{r.vulnerabilities.other=clone(r.vulnerabilities.zod)},r=>{r.metadata.dependencies.total++},
+      r=>{r.metadata.vulnerabilities.high++},r=>{r.vulnerabilities.zod.unreviewed=true},
+      r=>{delete r.vulnerabilities.zod.effects},r=>{r.vulnerabilities.zod.effects='zod'},
+      r=>{r.vulnerabilities.zod.effects=['unknown-package']},r=>{r.vulnerabilities.zod.effects=['zod','zod']},
+      r=>{delete r.vulnerabilities.zod.fixAvailable},r=>{r.vulnerabilities.zod.fixAvailable=null},
+      r=>{r.vulnerabilities.zod.fixAvailable={name:'parent',version:'9',isSemVerMajor:true,error:'bad'}},
+    ]
+    for(const [i,mutate] of forbidden.entries()){
+      const report=findingReport();mutate(report)
+      assert.equal(capture(report).status,'unauthorized_findings','mutation '+i)
+      assert.throws(()=>verifyResults(dir,allOutcomes(),{root}))
+    }
   } finally {rmSync(root,{recursive:true,force:true})}
 }))
 

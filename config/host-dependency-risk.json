@@ -21,11 +21,11 @@
     "https://github.com/advisories/GHSA-qrxm-fqhp-jwvm",
     "https://github.com/advisories/GHSA-xjj6-f33q-929c"
   ],
-  "reviewed_report_sha256": [
-    "1d9ced74d599e5f04ba4d87c910d219d775c3df544476b550e269c06bc69ca79",
-    "45565ac03ddc0b589d46291de10564d7d2fa49ef24768c1953184c522e73501b",
-    "a0ab539210ecd3704b1e809687d01bc163f61d185f3559a6c6d9a2b5c468d1e1"
-  ],
-  "expiry": "A product/host identity or manifest/lock change, new advisory or unreviewed report invalidates this decision. A clean scan remains clean; scanner and capture failures remain failures.",
-  "note": "The reviewed local and Linux npm reports contain the same ten direct advisories with 75 or 78 affected package entries. Linux differs from the local 75-entry report only in derived effects and fixAvailable fields. No input or advisory scope is expanded; other trees remain excluded."
+  "expiry": "A product/host identity or manifest/lock change, new advisory or unreviewed vulnerability facts invalidate this decision. Scanner and capture failures remain failures.",
+  "note": "Reviewed reports contain the same ten direct advisories with 75 or 78 affected package entries. All report fields are bound except per-entry effects (derived reverse propagation) and fixAvailable (solver advice), whose shapes are validated and raw values retained. Package sets, via edges, installed node paths, ranges, advisory payloads and metadata remain exact. Other trees remain excluded.",
+  "report_projection": "npm-v2-findings-without-derived-advice/v1",
+  "reviewed_findings_sha256": [
+    "38d6ff51cca79b7297c93a5b2353ec8878202d0c39f576fb46a5ef1f56348245",
+    "576a20bc7cd57e98a17a8e8a12d4065b87e16baaeb00ab600cbc6c6cddb19eb7"
+  ]
 }

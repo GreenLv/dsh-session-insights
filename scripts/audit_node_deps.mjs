@@ -74,6 +74,22 @@ export function assessAudit({raw,exit_code,signal=null,error=null}){
   if(exit_code===0)return cleanAssessment(report)
   return {status:'unauthorized_findings',...summarizeFindings(report)}
 }
+// npm derives effects (reverse propagation) and fixAvailable (solver advice)
+// with unstable attribution. Neither defines an installed vulnerable path.
+// Preserve them in raw evidence, validate their shape, and bind every other
+// field, including all package rows, via edges, node paths, ranges and metadata.
+export const HOST_REPORT_PROJECTION='npm-v2-findings-without-derived-advice/v1'
+export function hostReportDigest(report){
+  const projected=structuredClone(report)
+  for(const row of Object.values(projected.vulnerabilities)){
+    requireThat(sameKeys(row,['name','severity','isDirect','via','effects','range','nodes','fixAvailable']),'unreviewed vulnerability entry fields')
+    requireThat(strings(row.effects)&&row.effects.every(name=>Object.hasOwn(projected.vulnerabilities,name)),'malformed derived effects')
+    const fix=row.fixAvailable
+    requireThat(typeof fix==='boolean'||(sameKeys(fix,['isSemVerMajor'])&&typeof fix.isSemVerMajor==='boolean')||(sameKeys(fix,['name','version','isSemVerMajor'])&&typeof fix.name==='string'&&fix.name.length>0&&typeof fix.version==='string'&&fix.version.length>0&&typeof fix.isSemVerMajor==='boolean'),'malformed derived fix advice')
+    delete row.effects;delete row.fixAvailable
+  }
+  return digest(canonical(projected))
+}
 // Tree-scope findings start unauthorized. Only the exact current host decision
 // can change that assessment; root/runtime findings never use it.
 export function assessTreeAudit(scan,{tree=null,riskPolicy=null,files=null}={}){
@@ -81,7 +97,7 @@ export function assessTreeAudit(scan,{tree=null,riskPolicy=null,files=null}={}){
   if(assessment.status==='clean'||tree?.label!=='host'||!riskPolicy)return assessment
   try {
     const policy=JSON.parse(riskPolicy)
-    requireThat(sameKeys(policy,['schema','product_version','host_version','authorization','manifest_sha256','lock_sha256','advisories','reviewed_report_sha256','expiry','note'])
+    requireThat(sameKeys(policy,['schema','product_version','host_version','authorization','manifest_sha256','lock_sha256','advisories','report_projection','reviewed_findings_sha256','expiry','note'])
       &&policy.schema==='dsi-host-risk-acceptance/v1','invalid host risk decision')
     requireThat(policy.product_version===PRODUCT_VERSION&&JSON.parse(files['package.json']).version===PRODUCT_VERSION
       &&policy.host_version===tree.version,'host risk decision expired: product or host changed')
@@ -92,10 +108,12 @@ export function assessTreeAudit(scan,{tree=null,riskPolicy=null,files=null}={}){
     requireThat(strings(policy.advisories)&&policy.advisories.length>0
       &&canonical([...policy.advisories].sort())===canonical(assessment.direct_advisories),'host advisory set differs from the accepted decision')
     const reportHash=digest(canonical(JSON.parse(scan.raw)))
-    requireThat(strings(policy.reviewed_report_sha256)&&policy.reviewed_report_sha256.length>0
-      &&policy.reviewed_report_sha256.every(hash=>/^[0-9a-f]{64}$/.test(hash))
-      &&policy.reviewed_report_sha256.includes(reportHash),'host report differs from the reviewed reports')
-    return {...assessment,status:'accepted_known_risk',policy_sha256:digest(riskPolicy),report_sha256:reportHash}
+    const findingsHash=hostReportDigest(JSON.parse(scan.raw))
+    requireThat(policy.report_projection===HOST_REPORT_PROJECTION
+      &&strings(policy.reviewed_findings_sha256)&&policy.reviewed_findings_sha256.length>0
+      &&policy.reviewed_findings_sha256.every(hash=>/^[0-9a-f]{64}$/.test(hash))
+      &&policy.reviewed_findings_sha256.includes(findingsHash),'host report differs from the reviewed findings')
+    return {...assessment,status:'accepted_known_risk',policy_sha256:digest(riskPolicy),report_sha256:reportHash,findings_sha256:findingsHash}
   } catch(error) {return {...assessment,reason:error.message}}
 }
 function context(root){return {files:Object.fromEntries([...COHORT_PATHS,WORKFLOW].map(p=>[p,readFileSync(join(root,p))])),
