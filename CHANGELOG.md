@@ -6,11 +6,32 @@ Public releases are listed newest first.
 
 ## Release guide
 
-- **0.8.x** counts cancelled tool calls separately and requires DSH 0.2.2-rc.1 or later. Existing semantic runs need to be finished with their original version or restarted.
+- **0.8.x** counts cancelled tool calls and structured approval non-grants separately. 0.8.1 requires DSH 0.2.2-rc.2 or later (0.8.0 required 0.2.2-rc.1). Existing semantic runs need to be finished with their original version or restarted.
 - **0.7.x** adds Russian reports and documentation while retaining 0.6.1 run compatibility.
 - **0.6.x** expands coverage of background jobs, delegation and working directories, then strengthens report, privacy and cleanup boundaries.
 - **0.5.x** adapts to V4 session logs and later host releases, with safer recovery and bounded analysis.
 - **0.4.x and earlier** introduce native reports and cleanup, the dashboard, and the original Python CLI.
+
+## 0.8.1 - Unreleased (candidate)
+
+This is a patch release that raises the supported host floor. It targets DSH `0.2.2-rc.2` as the sole acceptance host and adds the rc.2 event and error vocabulary. Because the minimum host changes, a patch number does not mean 0.2.2-rc.1 stays supported.
+
+### Changed
+
+- The minimum DSH host is now `0.2.2-rc.2`. rc.1 and older hosts are refused; later releases stay admitted by the declared range (forward compatibility by range, not a version whitelist). `0.2.2-rc.2` is the exact host the source and contract checks run against.
+- The analysis identity is retargeted to `v4-dsh022rc2.1` (target `0.2.2-rc.2`). Semantic runs recorded by 0.8.0 or earlier do not resume under this identity, and deterministic CLI caches are invalidated and rebuilt from source. Existing runs, evidence and saved HTML/JSON/Markdown reports are retained.
+- The product vocabulary is the official rc.2 catalog exactly (63 event types). Unknown required events keep the explicit rejection; there is no per-version union or subset exception.
+
+### Added
+
+- `team/mode` (rc.2) is counted as team configuration context (`team.mode_changes` in session summaries and totals). It never counts as a new user task, an authorization or a completion; logs without the event are analyzed unchanged.
+- rc.2 structured approval non-grants are classified from their persisted error codes: `APPROVAL_REJECTED` joins the permission-boundary cause like a human rejection, while `APPROVAL_CANCELLED` (approval window cancelled without a caller cancellation) and `APPROVAL_UNAVAILABLE` (no approval service, Agent or channel) are counted as their own blocked outcomes (`tool_execution.approval_cancelled`, `tool_execution.approval_unavailable`) with distinct evidence. They are never caller cancellations, human rejections or execution failures, and success text never overwrites the structured result.
+
+### Security
+
+- The rc.2 release family of `dsh-agent`, `dsh-commands` and `dsh-llm` moves the exact `zod` pin to the patched `4.6.6`, so this project's DSH peer closure (rc.2) and the root production/full scans resolve zod without the [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) finding, and the rc.1 residual is no longer present in the supported closure.
+- The 0.8.0 exact-cohort exception is retired: the product version, cohort files and root lock it was bound to all changed, and no new exception is granted for this candidate. Any audit finding reports unauthorized and fails the gate.
+- The fresh scan of the exact rc.2 `@deepseek-ai/dsh` host tree reports upstream advisories inside the host's own published dependency closure (75 affected package entries across 10 advisories: `undici` 8.0.0–8.12.1 with four high-severity entries, the MCP TypeScript SDK 2.0.0–2.2.2, and `fflate` 0.8.0–0.8.2). These come from the upstream host release, not from this project's dependencies, and cannot be fixed by this project's pins. See the [security policy](SECURITY.md#known-upstream-dependency-gap) for the recorded state; release remains gated on a maintainer decision for this exact closure.
 
 ## 0.8.0 - 2026-11-07
 

@@ -78,11 +78,11 @@ Run directories hold the report and its evidence until you remove them. Type `/s
 
 ## DSH compatibility
 
-Version 0.8.0 was tested with DSH `0.2.2-rc.1`. Later DSH releases meet the package’s version requirement. The linked checks cover that exact host. See the [0.8.0 release notes](docs/releases/v0.8.0.md) for the tested systems and the [release receipt](docs/acceptance/v0.8.0-release-receipt.json) for the published package.
+Version 0.8.1 targets DSH `0.2.2-rc.2` as its exact acceptance host; rc.1 and older hosts are refused. The source and contract checks for this candidate run against that exact host, while native, GUI and model acceptance are completed per platform before release. Historical releases were tested against their own hosts: the [0.8.0 release notes](docs/releases/v0.8.0.md) record the rc.1 testing of that published version.
 
-If you upgrade to 0.8.0 while model analysis is in progress, finish it with the version that created the run or start a new one after upgrading. Existing reports can still be opened. The standalone CLI rebuilds old report caches automatically and needs its own update.
+If you upgrade to 0.8.1 while model analysis is in progress, finish it with the version that created the run or start a new one after upgrading: the analysis identity changed with the rc.2 retarget, so 0.8.0 runs do not resume under 0.8.1. Existing reports can still be opened. The standalone CLI rebuilds old report caches automatically and needs its own update.
 
-For a source installation, clone this repository and check out `v0.8.0` before running `dsh plugin --profile web add .` from that checkout. This selects the published version's source.
+For a source installation, clone this repository and check out the release tag (for example `v0.8.1`) before running `dsh plugin --profile web add .` from that checkout. This selects the published version's source.
 
 ## Standalone Python CLI and Skill
 

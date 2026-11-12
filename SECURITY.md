@@ -10,17 +10,19 @@ Do not open a public issue for a suspected secret leak, unsafe installer behavio
 
 Never attach real DSH sessions, reports, caches, credentials, or semantic work directories. State the affected version, platform, DSH version, privacy mode, and a minimal synthetic reproduction.
 
-## Native runtime permissions (0.8.0)
+## Native runtime permissions (0.8.1)
 
-Version 0.8.0 requires DSH `>=0.2.2-rc.1` and accepts only V4 input. Older hosts are refused without a legacy-API fallback. Raw logs remain read-only; unsupported generations require upstream migration.
+Version 0.8.1 requires DSH `>=0.2.2-rc.2` and accepts only V4 input. rc.1 and older hosts are refused without a legacy-API fallback; later releases stay admitted by the declared range. Raw logs remain read-only; unsupported generations require upstream migration.
 
 Query leases are released before Worker analysis. Each plugin instance analyzes at most two runs concurrently and queues at most eight more. Plugin disposal cancels and awaits owned work, including queued analysis. The 64 MiB detached-snapshot bound does not limit peak memory used by the host query service while opening a large log. The per-Worker `maxOldGenerationSizeMb` limit caps one Worker's V8 old space, not host RSS.
 
-Host recovery results `TOOL_OUTCOME_UNKNOWN` and `TOOL_NOT_STARTED` are recorded as uncertain, with side-effect caveats. Caller-cancelled calls identified by structured rc.1 codes `ABORTED` and `ABORTED_BEFORE_DISPATCH` are counted separately as `tool_execution.outer_cancelled` and `inner_cancelled`. These counts do not denote successes, execution failures or approval rejections. Cancellation does not establish whether side effects occurred.
+Host recovery results `TOOL_OUTCOME_UNKNOWN` and `TOOL_NOT_STARTED` are recorded as uncertain, with side-effect caveats. Caller-cancelled calls identified by structured codes `ABORTED` and `ABORTED_BEFORE_DISPATCH` are counted separately as `tool_execution.outer_cancelled` and `inner_cancelled`. These counts do not denote successes, execution failures or approval rejections. Cancellation does not establish whether side effects occurred.
+
+rc.2 approval non-grants are structured codes under `ApprovalError`. `APPROVAL_REJECTED` is a human rejection and joins the permission-boundary cause. `APPROVAL_CANCELLED` (the approval window was cancelled without a caller cancellation) and `APPROVAL_UNAVAILABLE` (no approval service, Agent or channel could answer) are counted as their own blocked outcomes (`tool_execution.approval_cancelled`, `approval_unavailable`): not caller cancellations, not human rejections, not execution failures, and never inferred from success text or message wording.
 
 Scheduled prompts, asynchronous question replies, subagent settlement notices and Team relay messages are counted as injected context, not user work or authorization. Background-job settlements and delegation dispatches are registry or producer records, not proof of user-task completion or resource release. In redacted and metrics modes, working-directory changes appear as project labels without raw paths.
 
-Resume binds an explicit run to its recorded selection scope. It cannot select another project or a wider privacy range, and ambiguous multi-run requests are refused with the candidate paths. Semantic runs recorded under the previous analyzer identity cannot resume under 0.8.0. Finish them with the version that created them or start a new run.
+Resume binds an explicit run to its recorded selection scope. It cannot select another project or a wider privacy range, and ambiguous multi-run requests are refused with the candidate paths. Semantic runs recorded under the previous analyzer identity cannot resume under 0.8.1. Finish them with the version that created them or start a new run.
 
 The Bundle uses a Node.js worker for cancellable snapshot analysis. It does not launch Python, a shell or another executable. The worker receives an empty environment and an empty `execArgv`; interpreter discovery, inherited `PYTHONPATH`, Python startup hooks and forwarding of host credentials have been removed from the native path. The host still runs with DSH's OS permissions; a worker is not an OS security sandbox.
 
@@ -31,7 +33,9 @@ The Bundle uses a Node.js worker for cancellable snapshot analysis. It does not 
 
 ## Known upstream dependency gap
 
-The official DSH packages that pin `zod@4.4.3` exactly still do so in the rc.1 release family: `dsh-commands`, `dsh-llm` and `dsh-agent` each declare the exact pin, so this project's DSH peer closure (rc.1) resolves `zod@4.4.3` and the fresh rc.1 production scan reports 18 affected package entries. [GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) rates the affected versions high severity; the patched Zod version is 4.6.6. Session Insights does not fix that upstream pin.
+**Fixed on the supported floor (0.8.1).** The 0.8.1 floor is DSH `0.2.2-rc.2`, whose `dsh-agent`, `dsh-commands` and `dsh-llm` packages moved the exact `zod` pin to the patched `4.6.6`. Fresh production, full and rc.2 runtime-tree scans no longer report [GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), and the rc.1-only residual is outside the supported closure. rc.1 remains historical; its residual is not carried forward.
+
+**Current open findings (rc.2 host closure, recorded 2026-11-12).** A fresh scan of the exact rc.2 `@deepseek-ai/dsh` host tree reports 10 upstream advisories across 75 affected package entries inside the host's own published dependency closure: `undici` 8.0.0–8.12.1 (six advisories, four high: TLS certificate validation bypass GHSA-2m5v-pch6-74hx, cache poisoning/cross-user disclosure GHSA-4w7w-5xrc-9h26, DoS via TLS 1.2 certificate validation GHSA-qrxm-fqhp-jwvm, DoS via unhandled error on `HTTP/2` GHSA-xjj6-f33q-929c; plus two moderate DoS advisories), the MCP TypeScript SDK 2.0.0–2.2.2 (GHSA-6prh-2h8m-c8cw, header/body replay on redirect), and `fflate` 0.8.0–0.8.2 (GHSA-px8p-9vwx-vf98). These come from the upstream host release's own dependency declarations — they are not dependencies of Session Insights, cannot be fixed by this project's pins (the host tree pins the exact rc.2 release), and the raw scan is retained under `reports/dependency-audit`. No exception is granted for this candidate; the audit gate fails on these findings and release stays gated on a maintainer decision for this exact closure.
 
 The advisory describes excessive memory allocation when a large array reaches a vulnerable schema-validation path and many elements fail validation. We have not established a reachable DSH exploit path or measured everyday trigger probability. Passing functional tests, bounded snapshot analysis and Worker limits do not prove that the host's schema-validation paths are protected.
 

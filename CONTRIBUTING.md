@@ -20,15 +20,15 @@ From the repository root, use Python 3.11 or later and Node.js 24.9.0 or later. 
 python3 -m pip install -e '.[dev]'
 npm ci --ignore-scripts
 npm ci --prefix tests/dsh-runtime --ignore-scripts
-DSH_RUNTIME="$PWD/tests/dsh-runtime" DSH_EXPECTED_VERSION=0.2.2-rc.1 \
+DSH_RUNTIME="$PWD/tests/dsh-runtime" DSH_EXPECTED_VERSION=0.2.2-rc.2 \
   python3 -m unittest discover -s tests -v
-DSH_RUNTIME="$PWD/tests/dsh-runtime" DSH_EXPECTED_VERSION=0.2.2-rc.1 npm test
+DSH_RUNTIME="$PWD/tests/dsh-runtime" DSH_EXPECTED_VERSION=0.2.2-rc.2 npm test
 python3 scripts/build_native_rules.py --check
 python3 scripts/build_fixture.py --check
 python3 scripts/audit_public_tree.py --root .
 ```
 
-These checks use the synthetic fixture and DSH `0.2.2-rc.1` runtime. For the host contract, dependency audit and OS matrix, see [CI](.github/workflows/ci.yml). Native host, model and GUI acceptance are recorded separately, as explained in [acceptance tooling](docs/acceptance-tooling.md).
+These checks use the synthetic fixture and DSH `0.2.2-rc.2` runtime (the exact acceptance target; the supported floor is `>=0.2.2-rc.2`). For the host contract, dependency audit and OS matrix, see [CI](.github/workflows/ci.yml). Native host, model and GUI acceptance are recorded separately, as explained in [acceptance tooling](docs/acceptance-tooling.md).
 
 ## DSH support policy
 
