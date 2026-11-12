@@ -652,6 +652,7 @@ class SessionFormatV4Tests(unittest.TestCase):
                     "outer_calls": 1, "inner_calls": 0, "outer_failures": 0,
                     "inner_failures": 0, "inner_incomplete": 0,
                     "outer_cancelled": 1, "inner_cancelled": 0,
+                    "approval_cancelled": 0, "approval_unavailable": 0,
                 },
             )
             self.assertEqual(report["totals"]["tool_failures"], 0)
@@ -753,7 +754,7 @@ class SessionFormatV4Tests(unittest.TestCase):
             self.assertEqual(fourth["totals"], third["totals"])
 
     def test_cache_version_reflects_generation_aware_parsing(self):
-        self.assertEqual(analyzer.DETERMINISTIC_CACHE_VERSION, 10)
+        self.assertEqual(analyzer.DETERMINISTIC_CACHE_VERSION, 11)
         self.assertEqual(analyzer.DSH_SESSION_FORMAT_VERSION, 4)
 
     def test_written_generations_satisfy_the_header_frame_contract(self):

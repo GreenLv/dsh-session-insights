@@ -13,8 +13,8 @@ def encode(value):
         return {'source': value.pattern.replace('(?i)', ''), 'flags': ('i' if value.flags & re.I else '') + ('s' if value.flags & re.S else '')}
     if isinstance(value, dict):
         return {key: encode(item) for key, item in value.items()}
-    if isinstance(value, (tuple, list, set)):
-        return [encode(item) for item in (sorted(value) if isinstance(value, set) else value)]
+    if isinstance(value, (tuple, list, set, frozenset)):
+        return [encode(item) for item in (sorted(value) if isinstance(value, (set, frozenset)) else value)]
     return value
 
 names = ['DSH_KNOWN_RECORD_TYPES', 'WORK_AREA_RULES', 'COMMON_FILE_EXTENSIONS', 'TEXT_ERROR_RULES', 'FAILURE_CAUSE_RULES', 'TOKEN_KEYS', 'ROLE_NAMES']

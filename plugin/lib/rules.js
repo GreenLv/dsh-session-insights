@@ -48,6 +48,7 @@ export default {
     "team/member",
     "team/message/delivered",
     "team/message/queued",
+    "team/mode",
     "team/task",
     "todo/write",
     "tool-workflow/agent-end",

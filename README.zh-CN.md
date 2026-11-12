@@ -10,14 +10,14 @@
 
 ## 安装并生成第一份报告
 
-0.8.0 插件包（Bundle）要求 DSH `>=0.2.2-rc.1` 和 Node.js `>=24.9.0`，安装插件无需 Python。
+0.8.1 插件包（Bundle）要求 DSH `>=0.2.2-rc.2` 和 Node.js `>=24.9.0`，安装插件无需 Python。（0.8.0 的要求是 `>=0.2.2-rc.1`；本版本把支持的宿主下限提高到 0.2.2-rc.2。）
 
 DSH rc.1 的一项依赖在校验某些输入时可能耗尽内存。目前尚未确认能否在 DSH 中触发。详见[安全说明](SECURITY.md#known-upstream-dependency-gap)和 [Zod 漏洞公告](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)。
 
 使用 DSH Web 时，在终端执行：
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.8.0
+dsh plugin --profile web add dsh-session-insights@0.8.1
 dsh web
 ```
 
@@ -32,7 +32,7 @@ dsh web
 **官方桌面版。** 在应用的插件管理界面安装同一个包。macOS 也可以用应用自带的命令行工具：
 
 ```bash
-"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" plugin --profile desktop add dsh-session-insights@0.8.0
+"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" plugin --profile desktop add dsh-session-insights@0.8.1
 ```
 
 Windows 上如果重装时因文件占用报 `EPERM`，先退出桌面应用和它启动的宿主进程再试。安装后在消息框运行上面的命令，用浏览器打开报告。

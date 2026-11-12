@@ -29,22 +29,25 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: npm ci --ignore-scripts
-      # One current runtime tree: every cell installs the same exact rc.1
-      # runtime that the dsh-contract job accepts.
+      # Primary trees resolve the exact rc.2 host; every cell installs the
+      # same exact runtime that the dsh-contract job accepts.
       - run: npm ci --prefix tests/dsh-runtime --ignore-scripts
       - run: python -m pip install --disable-pip-version-check -e ".[dev]"
       - run: python -m unittest discover -s tests -v
         env:
           DSH_RUNTIME: tests/dsh-runtime
-          DSH_EXPECTED_VERSION: '0.2.2-rc.1'
+          DSH_EXPECTED_VERSION: '0.2.2-rc.2'
       - run: python scripts/build_native_rules.py --check
       - run: python scripts/build_fixture.py --check
       - run: python scripts/audit_public_tree.py --root .
 
   dependency-security:
-    # Runtime and development dependency auditing. A scan that cannot reach
-    # its advisory database fails the job. Only the exact single-release,
-    # host/lock-bound upstream exception is eligible; raw npm exits stay intact.
+    # Runtime and development dependency auditing, bound per dependency tree:
+    # root production/full, the exact rc.2 runtime/host trees, and Python.
+    # There is no compatibility queue and no risk exception: every acceptance
+    # tree must scan clean, any finding reports unauthorized and fails, and a
+    # scan that cannot reach its advisory database fails the job. Raw npm
+    # exits stay intact.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -65,6 +68,16 @@ jobs:
         if: always()
         continue-on-error: true
         run: node scripts/audit_node_deps.mjs --scope full --output reports/dependency-audit/full
+      - name: Audit the rc.2 primary runtime tree and retain raw results
+        id: audit_runtime
+        if: always()
+        continue-on-error: true
+        run: node scripts/audit_node_deps.mjs --scope tree --tree runtime --output reports/dependency-audit/tree/runtime
+      - name: Audit the rc.2 primary host tree and retain raw results
+        id: audit_host
+        if: always()
+        continue-on-error: true
+        run: node scripts/audit_node_deps.mjs --scope tree --tree host --output reports/dependency-audit/tree/host
       - name: Audit Python runtime and development dependencies
         id: audit_python
         if: always()
@@ -74,11 +87,13 @@ jobs:
           mkdir -p reports/dependency-audit
           python -m pip install --disable-pip-version-check pip-audit 2>&1 | tee reports/dependency-audit/python-install.log
           python scripts/audit_python_deps.py 2>&1 | tee reports/dependency-audit/python.log
-      - name: Require all three audits and validate the narrow exception
+      - name: Require all audits and validate the tree-scoped clean gates
         if: always()
         env:
           AUDIT_PROD_OUTCOME: ${{ steps.audit_prod.outcome }}
           AUDIT_FULL_OUTCOME: ${{ steps.audit_full.outcome }}
+          AUDIT_RUNTIME_OUTCOME: ${{ steps.audit_runtime.outcome }}
+          AUDIT_HOST_OUTCOME: ${{ steps.audit_host.outcome }}
           AUDIT_PYTHON_OUTCOME: ${{ steps.audit_python.outcome }}
         run: node scripts/audit_node_deps.mjs --verify-results reports/dependency-audit
       - name: Retain raw dependency audit evidence even on failure
@@ -90,19 +105,21 @@ jobs:
           if-no-files-found: error
 
   dsh-contract:
-    # 0.2.2-rc.1 is the sole acceptance host on the Node 24.9.0 floor across
-    # all three OSes; one additional lane probes a newer Node on the same host.
-    # Every matrix entry names its real runtime; each result records which
-    # runtime actually ran.
+    # 0.2.2-rc.2 is the only acceptance host: the Node 24.9.0 floor across all
+    # three OSes, plus one additional lane probing a newer Node on the same
+    # host. Every matrix entry names its real runtime; each result records
+    # which runtime ran.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-latest, node: '24.9.0', dsh: '0.2.2-rc.1', runtime: tests/dsh-runtime, primary: true}
-          - {os: macos-latest, node: '24.9.0', dsh: '0.2.2-rc.1', runtime: tests/dsh-runtime, primary: true}
-          - {os: windows-latest, node: '24.9.0', dsh: '0.2.2-rc.1', runtime: tests/dsh-runtime, primary: true}
-          - {os: ubuntu-latest, node: '25', dsh: '0.2.2-rc.1', runtime: tests/dsh-runtime, primary: false}
+          - {os: ubuntu-latest, node: '24.9.0', dsh: '0.2.2-rc.2', runtime: tests/dsh-runtime, host: tests/dsh-host, primary: true}
+          - {os: macos-latest, node: '24.9.0', dsh: '0.2.2-rc.2', runtime: tests/dsh-runtime, host: tests/dsh-host, primary: true}
+          - {os: windows-latest, node: '24.9.0', dsh: '0.2.2-rc.2', runtime: tests/dsh-runtime, host: tests/dsh-host, primary: true}
+          - {os: ubuntu-latest, node: '25', dsh: '0.2.2-rc.2', runtime: tests/dsh-runtime, host: tests/dsh-host, primary: false}
     runs-on: ${{ matrix.os }}
+    env:
+      DSH_EXPECTED_VERSION: ${{ matrix.dsh }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -111,9 +128,11 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm ci --prefix ${{ matrix.runtime }} --ignore-scripts
       - name: Install the matching full host tree
-        run: npm ci --prefix tests/dsh-host --ignore-scripts
+        run: npm ci --prefix ${{ matrix.host }} --ignore-scripts
       - name: Verify the runtime really is the claimed DSH version
-        run: node scripts/verify_dsh_admission.mjs tests/dsh-host ${{ matrix.dsh }} --runtime ${{ matrix.runtime }}
+        run: node scripts/verify_dsh_admission.mjs ${{ matrix.host }} ${{ matrix.dsh }} --runtime ${{ matrix.runtime }}
+      # The full fixture corpus opens on the acceptance target; unknown
+      # required events keep their explicit rejection.
       - run: node scripts/verify_session_contract.mjs --fixture --runtime ${{ matrix.runtime }} --expected-dsh-version ${{ matrix.dsh }} --required
       - run: node scripts/dsh-repair-fixtures.mjs ${{ matrix.runtime }} --check
       - run: node scripts/dsh-contract-tests.mjs ${{ matrix.runtime }}
@@ -123,14 +142,15 @@ jobs:
       # scopes, one freshly resolved toolSet through resolve → assembly →
       # execute, positive-controlled refusals, mid-flight cancellation and
       # owner-dispose teardown, and cleanup ownership under injected
-      # failures. The full host closure lives in tests/dsh-host, so this
-      # step runs once per OS on the primary lane.
-      - run: node scripts/dsh-executor-contract.mjs tests/dsh-host
-        if: matrix.primary == true
+      # failures. The full host closure lives in the host tree, so this step
+      # runs once per OS on the Node-floor lanes.
+      - run: node scripts/dsh-executor-contract.mjs ${{ matrix.host }} --self-test
+        if: matrix.node == '24.9.0'
+      - run: node scripts/dsh-executor-contract.mjs ${{ matrix.host }}
+        if: matrix.node == '24.9.0'
       - run: npm test
         env:
           DSH_RUNTIME: ${{ matrix.runtime }}
-          DSH_EXPECTED_VERSION: ${{ matrix.dsh }}
       # CI above exercises GitHub's PR merge checkout. The one candidate
       # producer separately packs the exact PR head, without relabelling the
       # merge checkout as the source commit.

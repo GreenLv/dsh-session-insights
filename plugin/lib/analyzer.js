@@ -508,6 +508,16 @@ const JOB_SETTLE_CAUSES = new Set(['producer', 'kill', 'teardown'])
 // outcome becomes ABORTED, so side effects remain possible and a cancelled
 // result must not be reported as "not executed".
 const CANCELLED_ERROR_CODES = new Set(['ABORTED', 'ABORTED_BEFORE_DISPATCH'])
+// rc.2 records non-granting approval outcomes as structured ApprovalError
+// codes (@deepseek-ai/dsh-tools error-codes.ts). APPROVAL_REJECTED is a human
+// rejection: a permission boundary, like the rc.1 sandbox/auto-review denials.
+// APPROVAL_CANCELLED (approval window cancelled without a caller cancellation)
+// and APPROVAL_UNAVAILABLE (no approval service, Agent or channel) are NOT
+// caller cancellations and NOT human rejections; they are counted as their own
+// blocked outcomes and never overwrite structured failures with success text.
+const APPROVAL_REJECTED_CODES = new Set(['APPROVAL_REJECTED'])
+const APPROVAL_NON_GRANT_CODES = new Set(['APPROVAL_CANCELLED', 'APPROVAL_UNAVAILABLE'])
+const PERMISSION_ERROR_CODES = new Set(['FS_SANDBOX_DENIED', 'AUTO_REVIEW_DENIED', ...APPROVAL_REJECTED_CODES])
 function jobRegistration(d) {
   const jobId = d.jobId, owner = d.owner, kind = d.kind, label = d.label,
     startedAt = d.startedAt, toolCall = d.toolCall
@@ -636,7 +646,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
     epoch: 0,
     session_header_records: 1,
     ptc: new Map(), children: new Set(), permissionSeen: new Set(), deniedDecisions: new Set(),
-    tool_execution: {outer_calls: 0, inner_calls: 0, outer_failures: 0, inner_failures: 0, inner_incomplete: 0, outer_cancelled: 0, inner_cancelled: 0},
+    tool_execution: {outer_calls: 0, inner_calls: 0, outer_failures: 0, inner_failures: 0, inner_incomplete: 0, outer_cancelled: 0, inner_cancelled: 0, approval_cancelled: 0, approval_unavailable: 0},
     // Official host recovery results (DSH >= 0.2.0-rc.2) are uncertainty records,
     // never confirmed failures; they are counted separately per status.
     tool_recovery: {outcome_unknown: 0, not_started: 0},
@@ -655,7 +665,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
       workflow_agents_started: 0, workflow_agents_ended: 0,
     },
     subagent_descriptor: null,
-    team: {members: new Map(), tasks: new Map(), mailbox_legacy: 0, task_transitions: 0},
+    team: {members: new Map(), tasks: new Map(), mailbox_legacy: 0, task_transitions: 0, mode_changes: 0},
   }
   const analysisPrivacy =
     opts.privacy === 'metrics'
@@ -805,6 +815,13 @@ export function parseSnapshot(snapshot, opts, coverage) {
           s.team.task_transitions++
         }
       } else s.team.mailbox_legacy++
+      continue
+    }
+    if (type === 'team/mode') {
+      // rc.2 team-mode lifecycle ({ enabled: boolean }): configuration and
+      // context only. It never counts as a new user task, an authorization
+      // or a completion; a log without it stays fully accepted.
+      if (typeof d.enabled === 'boolean') s.team.mode_changes++
       continue
     }
     if (type === 'tool/ptc-dispatch-start' || type === 'tool/ptc-dispatch') {
@@ -1092,6 +1109,42 @@ export function parseSnapshot(snapshot, opts, coverage) {
         )
         continue
       }
+      // rc.2 structured approval non-grants. APPROVAL_CANCELLED (approval
+      // window cancelled without a caller cancellation) and
+      // APPROVAL_UNAVAILABLE (no approval service, Agent or channel) are
+      // their own blocked outcomes: never caller cancellations, never human
+      // rejections, never execution failures. The call did not run, so no
+      // failure, retry or verification attribution applies.
+      const approvalCode =
+        object(d.error) && typeof id === 'string' && id
+          ? (APPROVAL_NON_GRANT_CODES.has(d.error.code) ? d.error.code
+            : object(d.error.info) && APPROVAL_NON_GRANT_CODES.has(d.error.info.code) ? d.error.info.code
+            : null)
+          : null
+      if (approvalCode) {
+        s.tool_execution[approvalCode === 'APPROVAL_UNAVAILABLE' ? 'approval_unavailable' : 'approval_cancelled']++
+        const call = s.scoped_calls.get(scope) || { tool: 'unknown' }
+        message(
+          'tool',
+          `Tool ${call.tool || 'unknown'}; approval non-grant (${approvalCode}); call not executed`,
+          seq,
+          {
+            tool: call.tool || 'unknown',
+            outcome: 'blocked',
+            approval: approvalCode,
+            record_identity: scope,
+            call_id: id,
+            turn: d.turn ?? call.turn ?? null,
+            step: d.step ?? call.step ?? null,
+            exit_code: null,
+            cause: null,
+            verification: !!call.verification,
+            state_change: !!call.state_change,
+            git_commit: !!call.git_commit,
+          },
+        )
+        continue
+      }
       const call = s.calls.get(id) || { tool: 'unknown' },
         value = d.message || d
       if (DELEGATION_TOOL_NAMES.has(String(call.tool || ''))) {
@@ -1100,7 +1153,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
       }
       const txt = outputText(value),
         permission =
-          ['FS_SANDBOX_DENIED', 'AUTO_REVIEW_DENIED'].includes(d.error?.code) || s.rejected.has(id)
+          PERMISSION_ERROR_CODES.has(d.error?.code) || s.rejected.has(id)
       const a = analyzeTool(
         {
           isError: value.isError ?? false,
@@ -1277,6 +1330,9 @@ export function parseSnapshot(snapshot, opts, coverage) {
       tasks_by_status: tasksByStatus,
       task_transitions: s.team.task_transitions,
       mailbox_legacy: s.team.mailbox_legacy,
+      // rc.2 team/mode lifecycle records: configuration context, never task
+      // completion or user work. 0 on logs without the event (rc.1).
+      mode_changes: s.team.mode_changes,
     }
     s.delegation.dispatches_by_tool = new Map(s.delegation.dispatches_by_tool)
   }
@@ -1640,6 +1696,7 @@ export function buildReport(snapshots, input = {}) {
     tasks: sessions.reduce((n, s) => n + s.team_summary.tasks, 0),
     task_transitions: sessions.reduce((n, s) => n + s.team_summary.task_transitions, 0),
     mailbox_legacy: sessions.reduce((n, s) => n + s.team_summary.mailbox_legacy, 0),
+    mode_changes: sessions.reduce((n, s) => n + (s.team_summary.mode_changes || 0), 0),
     members_by_phase: publicCounts(memberPhaseTotals, opts, 'phase'),
     tasks_by_status: publicCounts(taskStatusTotals, opts, 'status'),
     measurement: 'last-wins roster/task snapshots; not Lead task completion',
@@ -2060,7 +2117,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.8.0-v4-dsh022rc1.1',
+    analyzer_version: '0.8.1-v4-dsh022rc2.1',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),

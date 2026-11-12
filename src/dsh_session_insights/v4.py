@@ -1,5 +1,9 @@
 """Bounded V4 admission for the read-only CLI (not an upstream migrator)."""
-IDENTITY = {"target_dsh_version": "0.2.2-rc.1", "input_format_version": 4, "analyzer_semantics": "v4-dsh022rc1.1"}
+# `target_dsh_version` is the target identity of this analysis contract — the
+# host generation the reading rules were verified against. The supported
+# floor is >=0.2.2-rc.2: later hosts stay admitted by that range (forward
+# compatibility), rc.1 and earlier hosts are refused.
+IDENTITY = {"target_dsh_version": "0.2.2-rc.2", "input_format_version": 4, "analyzer_semantics": "v4-dsh022rc2.1"}
 SURFACE = {"user/message", "assistant/message", "system/message", "developer/message", "tool/result"}
 
 def validate_records(records, known, *, physical=False):

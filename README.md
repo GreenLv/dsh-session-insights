@@ -10,14 +10,14 @@ Run `/session-insights` in DeepSeek Harness (DSH) to review your session history
 
 ## Quick start
 
-The 0.8.0 Bundle requires DSH `>=0.2.2-rc.1` and Node.js `>=24.9.0`. The plugin runs without Python.
+The 0.8.1 Bundle requires DSH `>=0.2.2-rc.2` and Node.js `>=24.9.0`. The plugin runs without Python. (0.8.0 required `>=0.2.2-rc.1`; this release raises the supported floor to 0.2.2-rc.2.)
 
 A dependency in DSH rc.1 can exhaust memory when validating certain inputs. Whether DSH exposes that path is unknown. See the [security policy](SECURITY.md#known-upstream-dependency-gap) and [Zod advisory](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
 
 For DSH Web, run:
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.8.0
+dsh plugin --profile web add dsh-session-insights@0.8.1
 dsh web
 ```
 
@@ -32,7 +32,7 @@ Open the returned `report.html` path in your browser. The plugin writes it and `
 **Desktop.** Install the same package with the official app's plugin controls. On macOS you can also use the app's bundled CLI:
 
 ```bash
-"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" plugin --profile desktop add dsh-session-insights@0.8.0
+"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" plugin --profile desktop add dsh-session-insights@0.8.1
 ```
 
 If a Windows reinstall fails with `EPERM` because files are in use, close Desktop and its child host before retrying. Then run the same slash command and open the returned HTML file.

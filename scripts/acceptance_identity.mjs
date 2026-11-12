@@ -16,18 +16,30 @@ export const run = promisify(execFile)
 export const digest = value => createHash('sha256').update(value).digest('hex')
 
 // The single map of acceptance host targets. `primary` is the release
-// acceptance host; `compatibility` hosts keep their source/contract coverage.
-// The 0.8.0 line supports DSH >=0.2.2-rc.1 only: one exact test target, no
-// historical-host forward-support queue.
+// acceptance host and the only development/acceptance baseline: the exact
+// rc.2 trees under tests/dsh-runtime and tests/dsh-host. There is no
+// compatibility queue: the supported floor is >=0.2.2-rc.2 (forward
+// compatibility by range — later hosts stay admitted by the range, rc.1 and
+// earlier are refused), and no historical-host test trees are maintained.
 export const HOST_TARGETS = Object.freeze({
-  primary: '0.2.2-rc.1',
+  primary: '0.2.2-rc.2',
   compatibility: Object.freeze([]),
 })
 // Back-compat export for tools not yet parameterized (tests, one-off checks):
 // the primary acceptance target.
 export const TARGET = HOST_TARGETS.primary
-export const MINIMUM_DSH_RANGE = '>=0.2.2-rc.1'
-export const PRODUCT_VERSION = '0.8.0'
+export const MINIMUM_DSH_RANGE = '>=0.2.2-rc.2'
+export const PRODUCT_VERSION = '0.8.1'
+// Exact test tree for the acceptance target. One plugin artifact targets this
+// host generation; range admission decides future hosts, never a whitelist.
+export const HOST_TREES = Object.freeze({
+  '0.2.2-rc.2': Object.freeze({runtime: 'tests/dsh-runtime', host: 'tests/dsh-host'}),
+})
+export function hostTree(version = TARGET) {
+  const tree = HOST_TREES[version]
+  if (!tree) throw new Error(`no test tree registered for DSH ${version}`)
+  return tree
+}
 
 export async function fileManifest(root) {
   const files = []

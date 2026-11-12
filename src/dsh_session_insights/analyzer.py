@@ -36,13 +36,16 @@ from .v4 import IDENTITY, validate_records
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.8.0-v4-dsh022rc1.1"
+ANALYZER_VERSION = "0.8.1-v4-dsh022rc2.1"
 FAILURE_RULE_VERSION = "5.1.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
-# 10: 0.8.0 retargets the input contract to DSH 0.2.2-rc.1 (v4-dsh022rc1.1),
+# 10: 0.8.0 retargeted the input contract to DSH 0.2.2-rc.1 (v4-dsh022rc1.1),
 # so deterministic caches built by older analyzers must invalidate.
-DETERMINISTIC_CACHE_VERSION = 10
+# 11: 0.9.0 retargets the input contract to DSH 0.2.2-rc.2 (v4-dsh022rc2.1):
+# the team/mode vocabulary, rc.2 structured approval non-grant accounting and
+# team mode-change stats all change what a cached session records.
+DETERMINISTIC_CACHE_VERSION = 11
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
 
 # Session-log generations understood by this reader. Native V3 is the current
@@ -136,11 +139,18 @@ DSH_V4_EXT_RECORD_TYPES = {
     "job/settled",
     "working-directory/change",
 }
+# Host 0.2.2-rc.2 adds the team-mode lifecycle (`{ enabled: boolean }`) to the
+# same V4 format. It records team configuration/context only: it never counts
+# as a new user task, an authorization or a completion. The vocabulary is the
+# official rc.2 catalog exactly — there is no dual-host union or per-version
+# subset exemption: unknown required events keep the explicit rejection.
+DSH_RC2_RECORD_TYPES = {"team/mode"}
 DSH_KNOWN_RECORD_TYPES = (
     DSH_BASE_RECORD_TYPES
     | DSH_V3_RECORD_TYPES
     | DSH_V4_RECORD_TYPES
     | DSH_V4_EXT_RECORD_TYPES
+    | DSH_RC2_RECORD_TYPES
 )
 
 # The four message-producing event types. Only these may carry `surfaceOp`,
@@ -161,6 +171,16 @@ JOB_SETTLE_CAUSES = frozenset({"producer", "kill", "teardown"})
 # ABORTED, so side effects remain possible and a cancelled result must not be
 # reported as "not executed".
 DSH_CANCELLED_ERROR_CODES = frozenset({"ABORTED", "ABORTED_BEFORE_DISPATCH"})
+# rc.2 records non-granting approval outcomes as structured ApprovalError
+# codes (@deepseek-ai/dsh-tools error-codes.ts). APPROVAL_REJECTED is a human
+# rejection: a permission boundary, like the rc.1 sandbox/auto-review denials.
+# APPROVAL_CANCELLED (approval window cancelled without a caller cancellation)
+# and APPROVAL_UNAVAILABLE (no approval service, Agent or channel) are NOT
+# caller cancellations and NOT human rejections; they are counted as their own
+# blocked outcomes and never overwrite structured failures with success text.
+DSH_APPROVAL_REJECTED_CODES = frozenset({"APPROVAL_REJECTED"})
+DSH_APPROVAL_NON_GRANT_CODES = frozenset({"APPROVAL_CANCELLED", "APPROVAL_UNAVAILABLE"})
+DSH_PERMISSION_ERROR_CODES = frozenset({"FS_SANDBOX_DENIED", "AUTO_REVIEW_DENIED"}) | DSH_APPROVAL_REJECTED_CODES
 
 
 def scope_key(call_id: Any, turn: Any, step: Any) -> str:
@@ -1683,6 +1703,58 @@ def add_cancelled_tool_evidence(
     )
 
 
+def add_blocked_tool_evidence(
+    session: dict[str, Any],
+    config: AnalysisConfig,
+    summary: str,
+    call: dict[str, Any],
+    *,
+    approval: str,
+    record_identity: str,
+    seq: int | None = None,
+) -> None:
+    """Retain one structured approval non-grant (rc.2 APPROVAL_CANCELLED /
+    APPROVAL_UNAVAILABLE) as bounded blocked evidence. It is neither a caller
+    cancellation nor a human rejection and never attributes a failure."""
+    if (
+        not config.semantic_capture
+        or config.metrics_only
+        or analysis_privacy(config) == "metrics"
+        or config.analysis_depth != "evidence"
+    ):
+        return
+    if not summary:
+        return
+    digest = hashlib.sha256(f"tool\0{record_identity}\0{summary}".encode("utf-8")).hexdigest()
+    if digest in session["semantic_message_digests"]:
+        return
+    session["semantic_message_digests"].add(digest)
+    session["semantic_messages"].append(
+        {
+            "id": f"tool-{digest[:16]}",
+            "role": "tool",
+            "text": summary,
+            "record_identity": record_identity,
+            "seq": seq,
+            "digest": digest,
+            "tool_facts": {
+                "tool": call.get("tool", "unknown"),
+                "outcome": "blocked",
+                "approval": approval,
+                "record_identity": record_identity,
+                "call_id": call.get("call_id"),
+                "turn": call.get("turn"),
+                "step": call.get("step"),
+                "exit_code": None,
+                "cause": None,
+                "verification": bool(call.get("verification")),
+                "state_change": bool(call.get("state_change")),
+                "git_commit": bool(call.get("git_commit")),
+            },
+        }
+    )
+
+
 def add_recovery_tool_evidence(
     session: dict[str, Any],
     config: AnalysisConfig,
@@ -2466,7 +2538,7 @@ def new_dsh_session(
     session["surface_seqs"] = []
     session["ptc"] = {}
     session["child_sessions"] = set()
-    session["tool_execution"] = dict(outer_calls=0, inner_calls=0, outer_failures=0, inner_failures=0, inner_incomplete=0, outer_cancelled=0, inner_cancelled=0)
+    session["tool_execution"] = dict(outer_calls=0, inner_calls=0, outer_failures=0, inner_failures=0, inner_incomplete=0, outer_cancelled=0, inner_cancelled=0, approval_cancelled=0, approval_unavailable=0)
     # Official host recovery results (DSH >= 0.2.0-rc.2) are uncertainty records,
     # never confirmed failures; they are counted separately per status.
     session["tool_recovery"] = {"outcome_unknown": 0, "not_started": 0}
@@ -2519,6 +2591,7 @@ def new_dsh_session(
         "tasks": {},
         "mailbox_legacy": 0,
         "task_transitions": 0,
+        "mode_changes": 0,
     }
     return session
 
@@ -2720,6 +2793,13 @@ def process_dsh_record(
                 session["team"]["task_transitions"] += 1
         else:
             session["team"]["mailbox_legacy"] += 1
+        return
+    if record_type == "team/mode":
+        # rc.2 team-mode lifecycle ({ enabled: boolean }): configuration and
+        # context only. It never counts as a new user task, an authorization
+        # or a completion; a log without it stays fully accepted.
+        if isinstance(data.get("enabled"), bool):
+            session["team"]["mode_changes"] += 1
         return
     if record_type in {"tool/ptc-dispatch-start", "tool/ptc-dispatch"}:
         key = data.get("subCallId")
@@ -2963,10 +3043,40 @@ def process_dsh_record(
                 cancelled=cancelled_code, record_identity=scope, seq=seq,
             )
             return
+        # rc.2 structured approval non-grants. APPROVAL_CANCELLED (approval
+        # window cancelled without a caller cancellation) and
+        # APPROVAL_UNAVAILABLE (no approval service, Agent or channel) are
+        # their own blocked outcomes: never caller cancellations, never human
+        # rejections, never execution failures. The call did not run, so no
+        # failure, retry or verification attribution applies.
+        approval_code = None
+        if error_present and isinstance(call_id, str) and call_id:
+            error_info = error_object.get("info")
+            candidate = error_object.get("code")
+            if candidate not in DSH_CANCELLED_ERROR_CODES and candidate in DSH_APPROVAL_NON_GRANT_CODES:
+                approval_code = candidate
+            elif isinstance(error_info, dict) and error_info.get("code") in DSH_APPROVAL_NON_GRANT_CODES:
+                approval_code = error_info.get("code")
+        if approval_code is not None:
+            session["tool_execution"]["approval_unavailable" if approval_code == "APPROVAL_UNAVAILABLE" else "approval_cancelled"] += 1
+            scoped_call = session["scoped_calls"].get(scope, {})
+            blocked_call = {**scoped_call, "call_id": call_id,
+                            "turn": data.get("turn") if data.get("turn") is not None else scoped_call.get("turn"),
+                            "step": data.get("step") if data.get("step") is not None else scoped_call.get("step")}
+            blocked_summary = analysis_text(
+                f"工具 {blocked_call.get('tool', 'unknown')}；审批未放行（{approval_code}）；调用未执行",
+                config,
+                700,
+            )
+            add_blocked_tool_evidence(
+                session, config, blocked_summary, blocked_call,
+                approval=approval_code, record_identity=scope, seq=seq,
+            )
+            return
         if error_present or message.get("isError") is True:
             session["tool_execution"]["inner_failures" if data.get("inner") else "outer_failures"] += 1
         text = output_text(output_value)
-        sandbox_denied = isinstance(error_object, dict) and error_object.get("code") in {"FS_SANDBOX_DENIED", "AUTO_REVIEW_DENIED"}
+        sandbox_denied = isinstance(error_object, dict) and error_object.get("code") in DSH_PERMISSION_ERROR_CODES
         user_rejected = call_id in session["rejected_approval_call_ids"]
         analysis_input: dict[str, Any] = {"content": message["content"]}
         if error_present:
@@ -3221,6 +3331,9 @@ def finalize_delegation(session: dict[str, Any], config: AnalysisConfig) -> None
         "tasks_by_status": dict(sorted(statuses.items())),
         "task_transitions": team["task_transitions"],
         "mailbox_legacy": team["mailbox_legacy"],
+        # rc.2 team/mode lifecycle records: configuration context, never task
+        # completion or user work. 0 on logs without the event (rc.1).
+        "mode_changes": team["mode_changes"],
     }
     # Team snapshots are durable identity/state, never Lead task completion.
 
@@ -4555,6 +4668,7 @@ def build_report(
         "tasks": sum(session.get("team_summary", {}).get("tasks", 0) for session in sessions),
         "task_transitions": sum(session.get("team_summary", {}).get("task_transitions", 0) for session in sessions),
         "mailbox_legacy": sum(session.get("team_summary", {}).get("mailbox_legacy", 0) for session in sessions),
+        "mode_changes": sum(session.get("team_summary", {}).get("mode_changes", 0) for session in sessions),
         "measurement": "last-wins roster/task snapshots; not Lead task completion",
     }
     for key in ("members_by_phase", "tasks_by_status"):

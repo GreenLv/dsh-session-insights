@@ -10,14 +10,14 @@
 
 ## Первый отчёт
 
-Для установки пакета плагина 0.8.0 нужны DSH `>=0.2.2-rc.1` и Node.js `>=24.9.0`. Python не требуется.
+Для установки пакета плагина 0.8.1 нужны DSH `>=0.2.2-rc.2` и Node.js `>=24.9.0`. Python не требуется. (В 0.8.0 требованием был `>=0.2.2-rc.1`; в этом выпуске минимальная версия хоста повышена до 0.2.2-rc.2.)
 
 Одна из зависимостей DSH rc.1 может исчерпать память при проверке некоторых входных данных. Пока неизвестно, можно ли вызвать этот сбой через DSH. См. [политику безопасности](SECURITY.md#known-upstream-dependency-gap) и [описание уязвимости Zod](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
 
 Для веб-версии DSH выполните в терминале:
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.8.0
+dsh plugin --profile web add dsh-session-insights@0.8.1
 dsh web
 ```
 
@@ -32,7 +32,7 @@ dsh web
 **Официальное настольное приложение.** Установите тот же пакет через меню плагинов. В macOS можно воспользоваться командой из комплекта приложения:
 
 ```bash
-"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" plugin --profile desktop add dsh-session-insights@0.8.0
+"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" plugin --profile desktop add dsh-session-insights@0.8.1
 ```
 
 Если при переустановке в Windows возникает ошибка `EPERM` из-за занятых файлов, закройте приложение и его дочерний процесс, затем повторите установку. После этого выполните ту же команду `/session-insights` и откройте отчёт.

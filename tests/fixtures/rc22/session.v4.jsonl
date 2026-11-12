@@ -1,0 +1,7 @@
+{"agentPreset":"standard","createdAt":1786423200000,"cwd":"/synthetic/workspace/project-a","delegationDepth":0,"id":"synthetic-fixture-rc22-team-mode","type":"session","version":4,"isSeeded":false}
+{"seq":0,"time":1786423200000,"type":"turn/start","data":{"turn":1}}
+{"seq":1,"time":1786423200000,"type":"step/start","data":{"turn":1,"step":1}}
+{"seq":2,"time":1786423201000,"type":"user/message","surfaceOp":"append","data":{"turn":1,"step":1,"id":"u1","role":"user","source":{"kind":"user"},"content":[{"type":"text","text":"Synthetic team-mode probe task."}]}}
+{"seq":3,"time":1786423202000,"type":"team/mode","data":{"enabled":true}}
+{"seq":4,"time":1786423203000,"type":"step/end","data":{"turn":1,"step":1}}
+{"seq":5,"time":1786423203000,"type":"turn/end","data":{"turn":1,"reason":{"kind":"completed"}}}

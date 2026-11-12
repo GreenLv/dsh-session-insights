@@ -1,35 +1,32 @@
-// Three-state dependency audit gate: a clean scan passes only with a valid
-// non-empty inventory; a finding passes only under the exact single-release,
-// cohort-bound exception recorded in POLICY_PATH; everything else fails.
+// Dependency audit gate, bound per dependency tree. A clean scan passes only
+// with a valid non-empty inventory; ANY finding reports `unauthorized_findings`
+// and fails. The 0.8.0 single-release exception is retired (config file kept
+// only as a historical record): no expired exception, no compatibility-tree
+// residual path and no automatic risk authorization exists in this candidate.
 // Raw npm scan output and its actual exit status are retained either way.
-// An absent, expired or mismatched exception is never silently extended:
-// findings without a currently valid policy report `unauthorized_findings`.
 import {createHash} from 'node:crypto'
 import {spawnSync} from 'node:child_process'
-import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync,existsSync} from 'node:fs'
-import {dirname,join,resolve} from 'node:path'
+import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync} from 'node:fs'
+import {join,resolve} from 'node:path'
 import {fileURLToPath,pathToFileURL} from 'node:url'
-import {satisfies} from 'semver'
-import {HOST_TARGETS,PRODUCT_VERSION} from './acceptance_identity.mjs'
+import {HOST_TREES} from './acceptance_identity.mjs'
 
 const ROOT=fileURLToPath(new URL('../',import.meta.url))
-export const POLICY_PATH='config/dependency-audit-exceptions.json'
-export const COHORT_PATHS=['package.json','package-lock.json','pyproject.toml','src/dsh_session_insights/__init__.py',
-  'tests/dsh-runtime/package.json','tests/dsh-runtime/package-lock.json',
-  'tests/dsh-host/package.json','tests/dsh-host/package-lock.json','scripts/acceptance_identity.mjs']
 const WORKFLOW='.github/workflows/ci.yml'
-const GHSA='GHSA-mrhx-c7xc-m3w5',CVE='CVE-2023-54404',ADVISORY_URL=`https://github.com/advisories/${GHSA}`
-const LEVELS=['info','low','moderate','high','critical']
-// The maintainer accepted exactly these two real report shapes for the 0.8.0
-// cohort: the local npm 11 enumeration and its alternate same-closure shape
-// (transitive-only zod path for dsh-session-projection; 18 affected packages,
-// one zod leaf each). Both audit scopes produce the primary graph because the
-// only dev dependency is clean. A future shape still requires a new decision
-// and code review.
-const REVIEWED_GRAPHS=new Set([
-  'b56c12167268a2dca8057b564069b6830db96a4aae82932ece985f354d0d53b5',
-  '4c0bfa1d184d962a431190369b1b1652966774b40ecb7eab77a795d169b19f1f',
-])
+// Cohort of one candidate: root manifests plus the exact rc.2 acceptance
+// trees' manifest/lock. The 0.8.0 cohort also carried the rc.1 trees and the
+// exception policy; that set is retired with the compatibility queue.
+export const COHORT_PATHS=['package.json','package-lock.json','pyproject.toml','src/dsh_session_insights/__init__.py',
+  'scripts/acceptance_identity.mjs',
+  ...Object.values(HOST_TREES).flatMap(t=>[t.runtime+'/package.json',t.runtime+'/package-lock.json',t.host+'/package.json',t.host+'/package-lock.json'])]
+// Per-tree audit identities. Both trees are primary acceptance trees: each
+// must scan clean. New advisories on a host closure are real failures that
+// the release gate has to resolve — never recorded as accepted.
+export const TREE_AUDITS=Object.freeze(Object.entries(HOST_TREES).flatMap(([version,tree])=>[
+  Object.freeze({label:'runtime',dir:tree.runtime,version}),
+  Object.freeze({label:'host',dir:tree.host,version}),
+]))
+const treeByLabel=Object.fromEntries(TREE_AUDITS.map(t=>[t.label,t]))
 export const digest=bytes=>createHash('sha256').update(bytes).digest('hex')
 export function canonical(value){
   if(Array.isArray(value))return '['+value.map(canonical).join(',')+']'
@@ -40,131 +37,9 @@ function requireThat(ok,message){if(!ok)throw new Error(message)}
 function object(value){return value!==null&&typeof value==='object'&&!Array.isArray(value)}
 function sameKeys(value,keys){return object(value)&&canonical(Object.keys(value).sort())===canonical([...keys].sort())}
 function strings(value){return Array.isArray(value)&&value.every(x=>typeof x==='string')&&new Set(value).size===value.length}
-function authorizedGraphs(policy){
-  const primary=policy.report_graph_sha256
-  const valid=hash=>typeof hash==='string'&&/^[0-9a-f]{64}$/.test(hash)&&REVIEWED_GRAPHS.has(hash)
-  requireThat(valid(primary),'invalid or unreviewed primary report graph')
-  if(!Object.hasOwn(policy,'report_graph_sha256_variants'))return [primary]
-  const variants=policy.report_graph_sha256_variants
-  requireThat(strings(variants)&&variants.length===1&&valid(variants[0])&&variants[0]!==primary,
-    'invalid, duplicate or unreviewed report graph variants')
-  return [primary,...variants]
-}
-export function hostQueueDigest(workflow){
-  const jobs=String(workflow).split('\n  dsh-contract:\n')
-  requireThat(jobs.length===2,'acceptance host job missing or ambiguous')
-  const job=jobs[1].split(/\n  [A-Za-z][\w-]*:\n/)[0]
-  const strategy=job.match(/    strategy:\n([\s\S]*?)    runs-on:/)
-  requireThat(strategy,'acceptance host queue missing')
-  return digest(strategy[1])
-}
-// Validate the single-release exception against the exact current cohort. Any
-// mismatch throws: a stale policy can never authorize fresh findings.
-export function verifyCohort(policy,files){
-  requireThat(object(policy),'exception policy missing')
-  requireThat(policy?.schema==='dsi-node-audit-exception/v1','unknown exception policy')
-  requireThat(policy.product_version===PRODUCT_VERSION,`exception expired: it applies to product ${policy?.product_version}, not ${PRODUCT_VERSION}`)
-  requireThat(policy.authorization?.decision==='accepted'&&typeof policy.authorization.recorded_on==='string'&&policy.authorization.recorded_on.length>0,'maintainer decision missing')
-  requireThat(policy.exception?.advisory===GHSA&&policy.exception.cve===CVE&&policy.exception.package==='zod'&&policy.exception.version==='4.4.3'&&policy.exception.range==='<4.6.6'&&policy.exception.severity==='high'&&policy.exception.patched_version==='4.6.6','exception identity differs from the sole accepted risk')
-  requireThat(policy.expiry?.kind==='event_bound'&&policy.expiry.calendar_expiry===null&&policy.expiry.automatic_monitoring===false,'exception must have the authorized event-bound expiry')
-  authorizedGraphs(policy)
-  requireThat(sameKeys(policy.cohort?.files,COHORT_PATHS),'exception cohort file set changed')
-  requireThat(sameKeys(files,[...COHORT_PATHS,WORKFLOW]),'source cohort incomplete')
-  for(const path of COHORT_PATHS)requireThat(digest(files[path])===policy.cohort.files[path],`exception expired: cohort changed (${path})`)
-  const queue=hostQueueDigest(files[WORKFLOW])
-  requireThat(queue===policy.cohort.host_queue_sha256,'exception expired: acceptance host queue changed')
-  const pkg=JSON.parse(files['package.json']),lock=JSON.parse(files['package-lock.json'])
-  requireThat(pkg.name==='dsh-session-insights'&&pkg.version===PRODUCT_VERSION&&lock.version===PRODUCT_VERSION&&lock.packages?.['']?.version===PRODUCT_VERSION,'exception expired: project version changed')
-  const project=String(files['pyproject.toml']).match(/\[project\]([\s\S]*?)(?=\n\[|$)/)?.[1]
-  const versionPattern=PRODUCT_VERSION.replaceAll('.','\\.')
-  requireThat(project&&new RegExp(`^version\\s*=\\s*"${versionPattern}"\\s*$`,'m').test(project)&&new RegExp(`__version__\\s*=\\s*["']${versionPattern}["']`).test(String(files['src/dsh_session_insights/__init__.py'])),'exception expired: Python product version changed')
-  // Every accepted host/runtime tree must pin exactly one DSH version, and the
-  // set of pinned trees is fixed by the exception cohort.
-  const primary=HOST_TARGETS.primary
-  const trees=[['tests/dsh-runtime',primary],['tests/dsh-host',primary]]
-  for(const [dir,version] of trees){
-    const manifest=JSON.parse(files[dir+'/package.json'])
-    requireThat(Object.keys(manifest.dependencies??{}).length>0&&Object.values(manifest.dependencies).every(v=>v===version),'exception expired: host pins changed')
-  }
-  requireThat(lock.packages?.['node_modules/zod']?.version===policy.exception.version,`only locked zod ${policy.exception.version} is accepted`)
-  return {lock,sha256:digest(canonical({files:policy.cohort.files,host_queue_sha256:queue}))}
-}
-// Every advisory chain must terminate at the sole known leaf when the
-// exception is used. The exact node/edge/path/range shape is pinned here;
-// cycles are not accepted even with another leaf exit.
-export function inspectReport(report,lock){
-  requireThat(sameKeys(report,['auditReportVersion','vulnerabilities','metadata'])&&report.auditReportVersion===2,'npm audit report is malformed or reports an error')
-  const rows=report.vulnerabilities,metadata=report.metadata
-  requireThat(object(rows)&&Object.keys(rows).length>0&&Object.keys(rows).length<=256,'empty or oversized vulnerability report')
-  requireThat(sameKeys(metadata,['vulnerabilities','dependencies'])&&sameKeys(metadata.vulnerabilities,[...LEVELS,'total'])&&object(metadata.dependencies),'npm audit metadata missing')
-  requireThat(Object.values(metadata.dependencies).every(n=>Number.isSafeInteger(n)&&n>=0)&&metadata.dependencies.total>0,'empty or invalid dependency inventory')
-  const counts=Object.fromEntries(LEVELS.map(k=>[k,0])),graph=[],resolved=new Set()
-  let directLeaves=0
-  for(const name of Object.keys(rows).sort()){
-    const row=rows[name]
-    requireThat(sameKeys(row,['name','severity','isDirect','via','effects','range','nodes','fixAvailable'])&&row.name===name&&row.severity==='high'&&typeof row.isDirect==='boolean'&&typeof row.range==='string','new or changed vulnerability severity/name/range')
-    requireThat(typeof row.fixAvailable==='boolean'||(object(row.fixAvailable)&&typeof row.fixAvailable.isSemVerMajor==='boolean'),'invalid fix metadata')
-    requireThat(strings(row.nodes)&&canonical(row.nodes)===canonical(['node_modules/'+name]),'vulnerability outside the reviewed root node paths')
-    const installed=lock.packages?.[row.nodes[0]]
-    requireThat(installed&&typeof installed.version==='string','vulnerability node not resolved by the root lock')
-    if(name==='zod')requireThat(installed.version==='4.4.3','only zod 4.4.3 is accepted')
-    else{
-      requireThat(name.startsWith('@deepseek-ai/dsh-')||name==='@deepseek-ai/cordis','package outside the accepted DSH/Cordis dependency chain')
-      const chain=lock.packages?.['node_modules/@deepseek-ai/dsh-commands']?.version
-      requireThat(installed.version===chain,'package version outside the accepted dependency chain')
-    }
-    requireThat(Array.isArray(row.via)&&row.via.length>0&&row.via.length<=256&&strings(row.effects),'empty or invalid advisory chain')
-    const via=[]
-    for(const edge of row.via){
-      if(typeof edge==='string'){
-        requireThat(Object.hasOwn(rows,edge),'unresolved advisory-chain reference')
-        const dependencies={...installed.dependencies,...installed.peerDependencies,...installed.optionalDependencies}
-        const target=rows[edge]
-        // The declaring manifest records a range (`^4.4.3`, an exact pin, ...);
-        // the edge is valid when the lock actually resolves that declaration.
-        const declaredRange=dependencies[edge]
-        const lockedVersion=lock.packages?.[target.nodes[0]]?.version
-        requireThat(Array.isArray(target?.nodes)&&target.nodes.length===1
-          &&typeof declaredRange==='string'&&typeof lockedVersion==='string'
-          &&satisfies(lockedVersion,declaredRange),
-          'advisory edge is not satisfied by the locked dependency')
-        via.push(edge)
-      }else{
-        requireThat(name==='zod'&&sameKeys(edge,['source','name','dependency','title','url','severity','cwe','cvss','range'])&&edge.name==='zod'&&edge.dependency==='zod'&&edge.url===ADVISORY_URL&&edge.severity==='high'&&edge.range==='<4.6.6'&&Number.isSafeInteger(edge.source)&&edge.source>0,'unaccepted direct advisory')
-        requireThat(typeof edge.title==='string'&&edge.title.length>0&&strings(edge.cwe)&&object(edge.cvss)&&Number.isFinite(edge.cvss.score)&&edge.cvss.score>=0&&edge.cvss.score<=10,'malformed direct advisory metadata')
-        directLeaves++;resolved.add(name)
-        via.push({source:edge.source,name:edge.name,dependency:edge.dependency,url:edge.url,severity:edge.severity,range:edge.range})
-      }
-    }
-    requireThat(new Set(via.map(canonical)).size===via.length,'duplicate advisory edges')
-    graph.push({name,severity:row.severity,isDirect:row.isDirect,range:row.range,nodes:[...row.nodes].sort(),effects:[],via:via.sort((a,b)=>canonical(a)<canonical(b)?-1:canonical(a)>canonical(b)?1:0)})
-    counts[row.severity]++
-  }
-  requireThat(directLeaves===1&&resolved.has('zod'),'expected exactly one known zod advisory leaf')
-  for(const row of graph){
-    // npm 10 can omit reverse edges in effects. The complete via map is
-    // validated against the lock above; derive its inverse without trusting
-    // omitted display metadata, and reject any contradictory reported edge.
-    const effects=graph.filter(other=>other.via.includes(row.name)).map(other=>other.name).sort()
-    requireThat(rows[row.name].effects.every(effect=>effects.includes(effect)),'inconsistent advisory effects')
-    row.effects=effects
-  }
-  const state=new Map(),byName=new Map(graph.map(row=>[row.name,row]))
-  function visit(name){
-    requireThat(state.get(name)!=='visiting','cyclic advisory chain')
-    if(state.get(name)==='done')return
-    state.set(name,'visiting')
-    for(const edge of byName.get(name).via)if(typeof edge==='string')visit(edge)
-    state.set(name,'done')
-  }
-  for(const name of byName.keys())visit(name)
-  for(const level of LEVELS)requireThat(metadata.vulnerabilities[level]===counts[level],`incorrect ${level} count`)
-  requireThat(metadata.vulnerabilities.total===graph.length,'incorrect vulnerability total')
-  return {sha256:digest(canonical(graph)),affected_packages:graph.length,advisories:1}
-}
-
-// Shape-check a report enough to summarize unauthorized findings. This is the
-// no-exception path: it never approves, only reports what npm found.
+const LEVELS=['info','low','moderate','high','critical']
+// Shape-check a report enough to summarize unauthorized findings. This path
+// never approves: it reports what npm found, with its raw exit intact.
 function summarizeFindings(report){
   requireThat(object(report)&&report.auditReportVersion===2,'npm audit report is malformed or reports an error')
   const rows=report.vulnerabilities,metadata=report.metadata
@@ -181,49 +56,49 @@ function summarizeFindings(report){
   }
   return {affected_packages:Object.keys(rows).length,direct_advisories:[...advisories].sort(),highest_severity:highest,counts:metadata.vulnerabilities}
 }
-
-function loadPolicy(root){
-  const policyPath=join(root,POLICY_PATH)
-  if(!existsSync(policyPath))return null
-  return JSON.parse(readFileSync(policyPath,'utf8'))
+function cleanAssessment(report){
+  requireThat(object(report)&&report.auditReportVersion===2,'clean scan report is malformed')
+  requireThat(object(report.vulnerabilities)&&Object.keys(report.vulnerabilities).length===0,'clean exit with vulnerability entries')
+  const metadata=report.metadata
+  requireThat(object(metadata)&&sameKeys(metadata,['vulnerabilities','dependencies'])&&sameKeys(metadata.vulnerabilities,[...LEVELS,'total'])&&object(metadata.dependencies),'clean scan metadata missing')
+  requireThat(Object.values(metadata.dependencies).every(n=>Number.isSafeInteger(n)&&n>=0)&&metadata.dependencies.total>0,'empty or invalid dependency inventory')
+  requireThat(LEVELS.every(l=>metadata.vulnerabilities[l]===0)&&metadata.vulnerabilities.total===0,'clean exit with nonzero vulnerability counts')
+  return {status:'clean',affected_packages:0,advisories:0,dependencies:metadata.dependencies.total}
 }
-export function assessAudit({raw,exit_code,signal=null,error=null},policy,files){
+export function assessAudit({raw,exit_code,signal=null,error=null}){
   requireThat(!error&&!signal,'npm scanner failed or was terminated')
   requireThat((exit_code===0||exit_code===1),'npm scanner unexpected exit status')
   requireThat(typeof raw==='string'&&raw.trim().length>0&&Buffer.byteLength(raw)<=4*1024*1024,'empty or oversized scan output')
   const report=JSON.parse(raw)
-  if(exit_code===0){
-    // Clean scan: still require a real, non-empty dependency inventory so a
-    // broken/empty lock can never masquerade as a pass.
-    requireThat(object(report)&&report.auditReportVersion===2,'clean scan report is malformed')
-    requireThat(object(report.vulnerabilities)&&Object.keys(report.vulnerabilities).length===0,'clean exit with vulnerability entries')
-    const metadata=report.metadata
-    requireThat(object(metadata)&&sameKeys(metadata,['vulnerabilities','dependencies'])&&sameKeys(metadata.vulnerabilities,[...LEVELS,'total'])&&object(metadata.dependencies),'clean scan metadata missing')
-    requireThat(Object.values(metadata.dependencies).every(n=>Number.isSafeInteger(n)&&n>=0)&&metadata.dependencies.total>0,'empty or invalid dependency inventory')
-    requireThat(LEVELS.every(l=>metadata.vulnerabilities[l]===0)&&metadata.vulnerabilities.total===0,'clean exit with nonzero vulnerability counts')
-    return {status:'clean',affected_packages:0,advisories:0,dependencies:metadata.dependencies.total}
-  }
-  const record={status:'unauthorized_findings',advisory:GHSA,cve:CVE,package:'zod'}
-  try{
-    const cohort=verifyCohort(policy,files),graph=inspectReport(report,cohort.lock)
-    requireThat(authorizedGraphs(policy).includes(graph.sha256),'vulnerability graph drifted from the exact reviewed cohort')
-    return {status:'accepted_known_risk',advisory:GHSA,cve:CVE,package:'zod',version:'4.4.3',affected_packages:graph.affected_packages,advisories:graph.advisories,cohort_sha256:cohort.sha256,graph_sha256:graph.sha256}
-  }catch(e){
-    return {...record,reason:e.message,...summarizeFindings(report)}
-  }
+  if(exit_code===0)return cleanAssessment(report)
+  return {status:'unauthorized_findings',...summarizeFindings(report)}
 }
-function context(root){return {policy:loadPolicy(root),files:Object.fromEntries([...COHORT_PATHS,WORKFLOW].map(p=>[p,readFileSync(join(root,p))]))}}
+// Tree-scope assessment: same contract as the root scopes. Findings are
+// unauthorized — there is no compatibility residual path and no exception.
+export function assessTreeAudit({raw,exit_code,signal=null,error=null}){
+  return assessAudit({raw,exit_code,signal,error})
+}
+function context(root){return {files:Object.fromEntries([...COHORT_PATHS,WORKFLOW].map(p=>[p,readFileSync(join(root,p))]))}}
 // Identity of the inputs a scan actually ran against. verifyResults refuses to
 // summarize captures whose inputs drifted afterwards, so a clean scan of one
-// tree can never endorse a different, still-vulnerable candidate.
+// tree can never endorse a different candidate.
 function inputBinding(files){
   return {schema:'dsi-audit-input-binding/v1',
     cohort_sha256:digest(canonical(Object.fromEntries([...COHORT_PATHS,WORKFLOW].map(p=>[p,digest(files[p])])))),
     manifest_sha256:digest(files['package.json']),
     lock_sha256:digest(files['package-lock.json'])}
 }
-export function captureAudit(scope,output,{root=ROOT,runner=spawnSync}={}){
-  requireThat(['prod','full'].includes(scope),'unknown audit scope')
+function treeInputBinding(tree,files){
+  return {schema:'dsi-audit-tree-binding/v1',tree:tree.label,
+    manifest_sha256:digest(files[tree.dir+'/package.json']),
+    lock_sha256:digest(files[tree.dir+'/package-lock.json'])}
+}
+export function captureAudit(scope,output,{root=ROOT,runner=spawnSync,tree=null}={}){
+  if(tree!==null&&!treeByLabel[tree])throw new Error('unknown audit tree: '+tree)
+  const treeAudit=tree===null?null:treeByLabel[tree]
+  requireThat(['prod','full','tree'].includes(scope),'unknown audit scope')
+  requireThat(scope!=='tree'||treeAudit,'tree scope requires a --tree label')
+  requireThat(scope==='tree'||treeAudit===null,'--tree only applies to the tree scope')
   mkdirSync(output,{recursive:true})
   const args=['audit',...(scope==='prod'?['--omit=dev']:[]),'--audit-level=high','--json']
   // Bind the audited inputs BEFORE the scan runs, then materialize exactly
@@ -232,14 +107,16 @@ export function captureAudit(scope,output,{root=ROOT,runner=spawnSync}={}){
   // swapped underneath us (A→B→A): concurrent writers can only reach the
   // source, and any mutation of the snapshot itself is detected below.
   const before=context(root)
-  const binding=inputBinding(before.files)
+  const binding=treeAudit?treeInputBinding(treeAudit,before.files):inputBinding(before.files)
+  const manifestKey=treeAudit?treeAudit.dir+'/package.json':'package.json'
+  const lockKey=treeAudit?treeAudit.dir+'/package-lock.json':'package-lock.json'
   const scanRoot=mkdtempSync(join(output,'scan-root-'))
   let captured
-  const result={schema:'dsi-node-audit-result/v1',scope,command:['npm',...args],status:'failed'}
+  const result={schema:'dsi-node-audit-result/v1',scope,tree:treeAudit?.label??null,command:['npm',...args],status:'failed'}
   try{
     result.input_binding=binding
-    writeFileSync(join(scanRoot,'package.json'),before.files['package.json'])
-    writeFileSync(join(scanRoot,'package-lock.json'),before.files['package-lock.json'])
+    writeFileSync(join(scanRoot,'package.json'),before.files[manifestKey])
+    writeFileSync(join(scanRoot,'package-lock.json'),before.files[lockKey])
     try{captured=process.platform==='win32'
       ?runner(process.env.ComSpec||'cmd.exe',['/d','/s','/c','npm '+args.join(' ')],{cwd:scanRoot,encoding:'utf8',timeout:120000,maxBuffer:4*1024*1024})
       :runner('npm',args,{cwd:scanRoot,encoding:'utf8',timeout:120000,maxBuffer:4*1024*1024})}
@@ -253,7 +130,9 @@ export function captureAudit(scope,output,{root=ROOT,runner=spawnSync}={}){
       &&digest(readFileSync(join(scanRoot,'package-lock.json')))===binding.lock_sha256
     requireThat(snapshotUnchanged,
       'audit input changed while the scanner ran; the retained output cannot be attributed to the bound input')
-    result.assessment=assessAudit({raw,...scan},before.policy,before.files)
+    result.assessment=treeAudit
+      ?assessTreeAudit({raw,...scan})
+      :assessAudit({raw,...scan})
     result.status=result.assessment.status
   }catch(e){result.reason=e.message}
   finally{
@@ -265,10 +144,11 @@ export function captureAudit(scope,output,{root=ROOT,runner=spawnSync}={}){
   writeFileSync(join(output,'result.json'),JSON.stringify(result,null,2)+'\n')
   return result
 }
-const PASSING=['clean','accepted_known_risk']
+const PASSING=['clean']
 export function verifyResults(output,outcomes,{root=ROOT}={}){
-  requireThat(sameKeys(outcomes,['prod','full','python'])&&Object.values(outcomes).every(v=>v==='success'),'required audit step missing, failed, skipped or cancelled')
-  const {policy,files}=context(root)
+  const requiredScopes=['prod','full','python',...TREE_AUDITS.map(t=>t.label)]
+  requireThat(sameKeys(outcomes,requiredScopes)&&Object.values(outcomes).every(v=>v==='success'),'required audit step missing, failed, skipped or cancelled')
+  const {files}=context(root)
   const current=inputBinding(files)
   const assessments=[],bindings=[]
   for(const scope of ['prod','full']){
@@ -282,27 +162,49 @@ export function verifyResults(output,outcomes,{root=ROOT}={}){
       &&sameKeys(result.input_binding,['schema','cohort_sha256','manifest_sha256','lock_sha256']),
       'capture predates input binding; recapture against the current inputs')
     bindings.push(result.input_binding)
-    assessments.push(assessAudit({raw,...result.scan},policy,files))
+    assessments.push(assessAudit({raw,...result.scan}))
     requireThat(PASSING.includes(assessments[assessments.length-1].status),'re-assessed scan no longer passes')
   }
   // The two scopes must describe one captured input before either is compared
   // with the tree being summarized.
   requireThat(canonical(bindings[0])===canonical(bindings[1]),'audit scopes captured different inputs')
   requireThat(canonical(bindings[0])===canonical(current),'audit input drifted after capture; the retained scan no longer describes the current candidate')
-  requireThat(assessments[0].status===assessments[1].status,'audit scopes disagree on the exception state')
-  const accepted=assessments[0].status==='accepted_known_risk'
-  return {schema:'dsi-required-dependency-audits/v1',status:accepted?'passed_with_known_upstream_risk':'passed',exception_fixed:!accepted,scopes:['prod','full','python'],input_cohort_sha256:current.cohort_sha256,assessments}
+  // Per-tree assessments: every acceptance tree must have a completed capture
+  // bound to its CURRENT bytes and must scan clean. Any finding is a real
+  // failure the release gate has to resolve.
+  const treeAssessments=[]
+  for(const tree of TREE_AUDITS){
+    const dir=join(output,'tree',tree.label)
+    const result=JSON.parse(readFileSync(join(dir,'result.json'),'utf8')),raw=readFileSync(join(dir,'audit.json'),'utf8'),stderr=readFileSync(join(dir,'stderr.log'))
+    requireThat(result.schema==='dsi-node-audit-result/v1'&&result.tree===tree.label,'tree audit capture missing or misattributed: '+tree.label)
+    requireThat(digest(raw)===result.scan.raw_sha256&&digest(stderr)===result.scan.stderr_sha256,'retained tree scan bytes changed: '+tree.label)
+    requireThat(object(result.input_binding)
+      &&result.input_binding.schema==='dsi-audit-tree-binding/v1'
+      &&sameKeys(result.input_binding,['schema','tree','manifest_sha256','lock_sha256']),
+      'tree capture predates binding; recapture: '+tree.label)
+    requireThat(canonical(result.input_binding)===canonical(treeInputBinding(tree,files)),'tree audit input drifted after capture: '+tree.label)
+    const assessment=assessTreeAudit({raw,...result.scan})
+    requireThat(assessment.status==='clean','tree audit must scan clean: '+tree.label+' ('+assessment.status+')')
+    treeAssessments.push({tree:tree.label,version:tree.version,status:assessment.status,dependencies:assessment.dependencies})
+  }
+  return {schema:'dsi-required-dependency-audits/v2',status:'passed',exception_fixed:true,
+    scopes:requiredScopes,input_cohort_sha256:current.cohort_sha256,assessments,trees:treeAssessments}
 }
 function main(){
   const args=process.argv.slice(2)
-  if(args.length===4&&args[0]==='--scope'&&args[2]==='--output'){
+  if(args.length===4&&args[0]==='--scope'&&args[2]==='--output'&&args[1]!=='tree'){
     const result=captureAudit(args[1],resolve(args[3]));console.log(JSON.stringify(result));return PASSING.includes(result.status)?0:1
+  }
+  if(args.length===6&&args[0]==='--scope'&&args[1]==='tree'&&args[2]==='--tree'&&args[4]==='--output'){
+    const result=captureAudit('tree',resolve(args[5]),{tree:args[3]});console.log(JSON.stringify(result));return PASSING.includes(result.status)?0:1
   }
   if(args.length===2&&args[0]==='--verify-results'){
     const out=resolve(args[1]);mkdirSync(out,{recursive:true})
-    try{const result=verifyResults(out,{prod:process.env.AUDIT_PROD_OUTCOME,full:process.env.AUDIT_FULL_OUTCOME,python:process.env.AUDIT_PYTHON_OUTCOME});writeFileSync(join(out,'summary.json'),JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));return 0}
+    const outcomes={prod:process.env.AUDIT_PROD_OUTCOME,full:process.env.AUDIT_FULL_OUTCOME,python:process.env.AUDIT_PYTHON_OUTCOME}
+    for(const tree of TREE_AUDITS)outcomes[tree.label]=process.env[`AUDIT_${tree.label.replaceAll(/[^A-Za-z0-9]/g,'_').toUpperCase()}_OUTCOME`]
+    try{const result=verifyResults(out,outcomes);writeFileSync(join(out,'summary.json'),JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));return 0}
     catch(e){writeFileSync(join(out,'summary.json'),JSON.stringify({status:'failed',reason:e.message})+'\n');console.error(e.message);return 1}
   }
-  throw new Error('use --scope prod|full --output DIR, or --verify-results DIR')
+  throw new Error('use --scope prod|full --output DIR, --scope tree --tree LABEL --output DIR, or --verify-results DIR')
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){try{process.exitCode=main()}catch(e){console.error(e.message);process.exitCode=1}}

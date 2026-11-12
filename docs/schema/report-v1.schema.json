@@ -381,7 +381,9 @@
               "inner_failures",
               "inner_incomplete",
               "outer_cancelled",
-              "inner_cancelled"
+              "inner_cancelled",
+              "approval_cancelled",
+              "approval_unavailable"
             ],
             "additionalProperties": false,
             "properties": {
@@ -412,6 +414,16 @@
               },
               "inner_cancelled": {
                 "type": "integer",
+                "minimum": 0
+              },
+              "approval_cancelled": {
+                "type": "integer",
+                "description": "Calls whose approval window was cancelled without a caller cancellation (rc.2 APPROVAL_CANCELLED). Neither a caller cancellation nor a human rejection; the call did not execute.",
+                "minimum": 0
+              },
+              "approval_unavailable": {
+                "type": "integer",
+                "description": "Calls that required approval but no approval service, Agent or channel could answer (rc.2 APPROVAL_UNAVAILABLE). Never a human rejection or an execution failure; the call did not execute.",
                 "minimum": 0
               }
             }

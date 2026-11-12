@@ -17,9 +17,9 @@ on:
           - pack
           - windows-accept
       dsh_version:
-        description: 'Official DSH host version to install for acceptance'
+        description: 'Official DSH host version to install for acceptance (exact rc.2 target)'
         required: false
-        default: '0.2.2-rc.1'
+        default: '0.2.2-rc.2'
         type: string
       commit:
         description: 'Exact candidate commit (full SHA) to check out in both modes'
@@ -118,14 +118,16 @@ jobs:
         shell: pwsh
         run: |
           # One target selection drives host, runtime, and verifier: the only
-          # supported target uses tests/dsh-runtime. Any other value is refused
-          # before the expensive host install.
-          $supported = @('0.2.2-rc.1')
+          # supported target is the exact rc.2 baseline using
+          # tests/dsh-runtime. Any other value is refused before the
+          # expensive host install.
+          $supported = @('0.2.2-rc.2')
           $target = '${{ inputs.dsh_version }}'
-          # -not (a -contains b) parses as (-not a) -contains b because -not
-          # binds tighter; use the explicit -notcontains operator.
+          # Use the explicit -notcontains operator: -not binds tighter than
+          # -contains, so "-not $a -contains $b" would parse incorrectly.
           if ($supported -notcontains $target) { throw "unsupported dsh_version: $target (supported: $($supported -join ', '))" }
           $runtime = 'tests/dsh-runtime'
+
           "runtime=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Append
           "dsh_target=$target" | Out-File -FilePath $env:GITHUB_ENV -Append
           npm ci --prefix $runtime --ignore-scripts
