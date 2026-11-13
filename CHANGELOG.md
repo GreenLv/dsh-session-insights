@@ -12,7 +12,7 @@ Public releases are listed newest first.
 - **0.5.x** adapts to V4 session logs and later host releases, with safer recovery and bounded analysis.
 - **0.4.x and earlier** introduce native reports and cleanup, the dashboard, and the original Python CLI.
 
-## 0.8.1 - Unreleased (candidate)
+## 0.8.1 - 2026-11-13
 
 Reports distinguish an approval that was cancelled or unavailable from a tool execution failure, and preserve separate evidence when the same tool is blocked in different turns. Upgrade DSH to `0.2.2-rc.2` or later before installing this version.
 

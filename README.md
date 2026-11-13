@@ -78,7 +78,7 @@ Run directories hold the report and its evidence until you remove them. Type `/s
 
 ## DSH compatibility
 
-Version 0.8.1 targets DSH `0.2.2-rc.2` as its exact acceptance host; rc.1 and older hosts are refused. The source and contract checks for this candidate run against that exact host, while native, GUI and model acceptance are completed per platform before release. Historical releases were tested against their own hosts: the [0.8.0 release notes](docs/releases/v0.8.0.md) record the rc.1 testing of that published version.
+Version 0.8.1 targets DSH `0.2.2-rc.2` as its exact acceptance host; rc.1 and older hosts are refused. The released package passed source and contract checks, plus native Web, Headless, official Desktop GUI and synthetic-session model acceptance on macOS and Windows. The [0.8.1 release notes](docs/releases/v0.8.1.md) record the package identity and known host risks. Historical releases were tested against their own hosts: the [0.8.0 release notes](docs/releases/v0.8.0.md) record the rc.1 testing of that published version.
 
 If you upgrade to 0.8.1 while model analysis is in progress, finish it with the version that created the run or start a new one after upgrading: the analysis identity changed with the rc.2 retarget, so 0.8.0 runs do not resume under 0.8.1. Existing reports can still be opened. The standalone CLI rebuilds old report caches automatically and needs its own update.
 

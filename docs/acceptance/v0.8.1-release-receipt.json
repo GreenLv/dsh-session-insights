@@ -1,0 +1,129 @@
+{
+  "schema": "release-receipt/v2",
+  "status": "passed",
+  "release_profile": "package",
+  "repository": {
+    "url": "https://github.com/GreenLv/dsh-session-insights",
+    "commit": "811d1456f9154a4a71e70f6ab9e98e5b3548e0ca"
+  },
+  "version": "0.8.1",
+  "tag": "v0.8.1",
+  "artifact": {
+    "filename": "dsh-session-insights-0.8.1.tgz",
+    "sha256": "5f974b37e28cef4a955e80729d9b94254273b2e66a19880c2f568ef6129e0db2",
+    "size_bytes": 211369
+  },
+  "channels": [
+    {
+      "id": "source_tag",
+      "kind": "source_tag",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/tree/v0.8.1",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.8.1",
+        "commit": "811d1456f9154a4a71e70f6ab9e98e5b3548e0ca",
+        "artifact_sha256": null
+      },
+      "observed": {
+        "version": "0.8.1",
+        "commit": "811d1456f9154a4a71e70f6ab9e98e5b3548e0ca",
+        "artifact_sha256": null
+      }
+    },
+    {
+      "id": "package_registry",
+      "kind": "package_registry",
+      "required": true,
+      "status": "verified",
+      "url": "https://www.npmjs.com/package/dsh-session-insights/v/0.8.1",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.8.1",
+        "commit": "811d1456f9154a4a71e70f6ab9e98e5b3548e0ca",
+        "artifact_sha256": "5f974b37e28cef4a955e80729d9b94254273b2e66a19880c2f568ef6129e0db2"
+      },
+      "observed": {
+        "version": "0.8.1",
+        "commit": "811d1456f9154a4a71e70f6ab9e98e5b3548e0ca",
+        "artifact_sha256": "5f974b37e28cef4a955e80729d9b94254273b2e66a19880c2f568ef6129e0db2"
+      }
+    },
+    {
+      "id": "repository_release",
+      "kind": "repository_release",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/releases/tag/v0.8.1",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.8.1",
+        "commit": "811d1456f9154a4a71e70f6ab9e98e5b3548e0ca",
+        "artifact_sha256": "5f974b37e28cef4a955e80729d9b94254273b2e66a19880c2f568ef6129e0db2"
+      },
+      "observed": {
+        "version": "0.8.1",
+        "commit": "811d1456f9154a4a71e70f6ab9e98e5b3548e0ca",
+        "artifact_sha256": "5f974b37e28cef4a955e80729d9b94254273b2e66a19880c2f568ef6129e0db2"
+      }
+    },
+    {
+      "id": "public_readback",
+      "kind": "public_readback",
+      "required": true,
+      "status": "verified",
+      "url": "https://github.com/GreenLv/dsh-session-insights/releases/download/v0.8.1/dsh-session-insights-0.8.1.tgz",
+      "readback": "anonymous",
+      "expected": {
+        "version": "0.8.1",
+        "commit": "811d1456f9154a4a71e70f6ab9e98e5b3548e0ca",
+        "artifact_sha256": "5f974b37e28cef4a955e80729d9b94254273b2e66a19880c2f568ef6129e0db2"
+      },
+      "observed": {
+        "version": "0.8.1",
+        "commit": "811d1456f9154a4a71e70f6ab9e98e5b3548e0ca",
+        "artifact_sha256": "5f974b37e28cef4a955e80729d9b94254273b2e66a19880c2f568ef6129e0db2"
+      }
+    }
+  ],
+  "assets": [
+    {
+      "filename": "acceptance-components.json",
+      "sha256": "2d97e74bb770b53090fcc1370217d96c410bc448a76c9088569eda9a6a66a564",
+      "size_bytes": 2935,
+      "role": "manifest"
+    },
+    {
+      "filename": "artifact.json",
+      "sha256": "bb4e6002ecc22d1159f8c0190938a33c75c7742b235c2e8406ae7cdf6bf88d87",
+      "size_bytes": 4520,
+      "role": "manifest"
+    },
+    {
+      "filename": "dsh-session-insights-0.8.1.tgz",
+      "sha256": "5f974b37e28cef4a955e80729d9b94254273b2e66a19880c2f568ef6129e0db2",
+      "size_bytes": 211369,
+      "role": "artifact"
+    },
+    {
+      "filename": "reader-review.json",
+      "sha256": "a6ea93a9dba2eabcbc6b7d61b9cc9e38473311c10a62fccc06c88caaea2e46fa",
+      "size_bytes": 2959,
+      "role": "other"
+    },
+    {
+      "filename": "tgz.sha256",
+      "sha256": "7b82f88ed9048473e0c549261068fc30f42bfa6ffeb1b5f3a675bfef667dfd90",
+      "size_bytes": 97,
+      "role": "checksum"
+    }
+  ],
+  "run": {
+    "started_at": "2026-11-13T01:40:00Z",
+    "finished_at": "2026-11-13T01:59:06.059872+00:00"
+  },
+  "unperformed_actions": [
+    "documentation_reconcile"
+  ]
+}
