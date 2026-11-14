@@ -213,7 +213,7 @@ test('tree audit input drift voids the summary',()=>outputs(dir=>{
 function cleanFixtureManifest(){
   const lock=JSON.parse(files['package-lock.json']),semver={...lock.packages['node_modules/semver']}
   delete semver.dev;delete semver.peer
-  return Buffer.from(JSON.stringify({name:'dsh-session-insights',version:'0.8.1',private:true,dependencies:{semver:semver.version}},null,2)+'\n')
+  return Buffer.from(JSON.stringify({name:'dsh-session-insights',version:'0.8.2',private:true,dependencies:{semver:semver.version}},null,2)+'\n')
 }
 function semverEntry(){
   const lock=JSON.parse(files['package-lock.json']),semver={...lock.packages['node_modules/semver']}

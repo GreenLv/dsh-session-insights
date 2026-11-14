@@ -2117,7 +2117,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.8.1-v4-dsh022rc2.1',
+    analyzer_version: '0.8.2-v4-dsh022rc3.1',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),

@@ -29,23 +29,23 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: npm ci --ignore-scripts
-      # Primary trees resolve the exact rc.2 host; every cell installs the
+      # Primary trees resolve the exact rc.3 host; every cell installs the
       # same exact runtime that the dsh-contract job accepts.
       - run: npm ci --prefix tests/dsh-runtime --ignore-scripts
       - run: python -m pip install --disable-pip-version-check -e ".[dev]"
       - run: python -m unittest discover -s tests -v
         env:
           DSH_RUNTIME: tests/dsh-runtime
-          DSH_EXPECTED_VERSION: '0.2.2-rc.2'
+          DSH_EXPECTED_VERSION: '0.2.2-rc.3'
       - run: python scripts/build_native_rules.py --check
       - run: python scripts/build_fixture.py --check
       - run: python scripts/audit_public_tree.py --root .
 
   dependency-security:
     # Runtime and development dependency auditing, bound per dependency tree:
-    # root production/full, the exact rc.2 runtime/host trees, and Python.
+    # root production/full, the exact rc.3 runtime/host trees, and Python.
     # Root/runtime must scan clean. Only the exact host lock, advisory set
-    # and reviewed report accepted for 0.8.1 may pass as accepted_known_risk.
+    # and reviewed report accepted for the current candidate may pass as accepted_known_risk.
     # Scanner, capture or input failures and new findings fail the job; raw
     # npm exits remain intact. No historical Zod decision carries forward.
     runs-on: ubuntu-latest
@@ -68,12 +68,12 @@ jobs:
         if: always()
         continue-on-error: true
         run: node scripts/audit_node_deps.mjs --scope full --output reports/dependency-audit/full
-      - name: Audit the rc.2 primary runtime tree and retain raw results
+      - name: Audit the rc.3 primary runtime tree and retain raw results
         id: audit_runtime
         if: always()
         continue-on-error: true
         run: node scripts/audit_node_deps.mjs --scope tree --tree runtime --output reports/dependency-audit/tree/runtime
-      - name: Audit the rc.2 primary host tree and retain raw results
+      - name: Audit the rc.3 primary host tree and retain raw results
         id: audit_host
         if: always()
         continue-on-error: true
@@ -105,7 +105,7 @@ jobs:
           if-no-files-found: error
 
   dsh-contract:
-    # 0.2.2-rc.2 is the only acceptance host: the Node 24.9.0 floor across all
+    # 0.2.2-rc.3 is the only acceptance host: the Node 24.9.0 floor across all
     # three OSes, plus one additional lane probing a newer Node on the same
     # host. Every matrix entry names its real runtime; each result records
     # which runtime ran.
@@ -113,10 +113,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-latest, node: '24.9.0', dsh: '0.2.2-rc.2', runtime: tests/dsh-runtime, host: tests/dsh-host, primary: true}
-          - {os: macos-latest, node: '24.9.0', dsh: '0.2.2-rc.2', runtime: tests/dsh-runtime, host: tests/dsh-host, primary: true}
-          - {os: windows-latest, node: '24.9.0', dsh: '0.2.2-rc.2', runtime: tests/dsh-runtime, host: tests/dsh-host, primary: true}
-          - {os: ubuntu-latest, node: '25', dsh: '0.2.2-rc.2', runtime: tests/dsh-runtime, host: tests/dsh-host, primary: false}
+          - {os: ubuntu-latest, node: '24.9.0', dsh: '0.2.2-rc.3', runtime: tests/dsh-runtime, host: tests/dsh-host, primary: true}
+          - {os: macos-latest, node: '24.9.0', dsh: '0.2.2-rc.3', runtime: tests/dsh-runtime, host: tests/dsh-host, primary: true}
+          - {os: windows-latest, node: '24.9.0', dsh: '0.2.2-rc.3', runtime: tests/dsh-runtime, host: tests/dsh-host, primary: true}
+          - {os: ubuntu-latest, node: '25', dsh: '0.2.2-rc.3', runtime: tests/dsh-runtime, host: tests/dsh-host, primary: false}
     runs-on: ${{ matrix.os }}
     env:
       DSH_EXPECTED_VERSION: ${{ matrix.dsh }}

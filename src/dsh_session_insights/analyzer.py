@@ -36,7 +36,7 @@ from .v4 import IDENTITY, validate_records
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.8.1-v4-dsh022rc2.1"
+ANALYZER_VERSION = "0.8.2-v4-dsh022rc3.1"
 FAILURE_RULE_VERSION = "5.1.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
@@ -45,7 +45,10 @@ FAILURE_RULE_VERSION = "5.1.0"
 # 11: 0.8.1 retargets the input contract to DSH 0.2.2-rc.2 (v4-dsh022rc2.1):
 # the team/mode vocabulary, rc.2 structured approval non-grant accounting and
 # team mode-change stats all change what a cached session records.
-DETERMINISTIC_CACHE_VERSION = 11
+# 12: 0.8.2 retargets the input contract to DSH 0.2.2-rc.3 (v4-dsh022rc3.1):
+# the acceptance host generation changes, so deterministic caches built under
+# the rc.2 identity must invalidate.
+DETERMINISTIC_CACHE_VERSION = 12
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
 
 # Session-log generations understood by this reader. Native V3 is the current

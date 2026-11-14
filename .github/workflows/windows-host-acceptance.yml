@@ -17,9 +17,9 @@ on:
           - pack
           - windows-accept
       dsh_version:
-        description: 'Official DSH host version to install for acceptance (exact rc.2 target)'
+        description: 'Official DSH host version to install for acceptance (exact rc.3 target)'
         required: false
-        default: '0.2.2-rc.2'
+        default: '0.2.2-rc.3'
         type: string
       commit:
         description: 'Exact candidate commit (full SHA) to check out in both modes'
@@ -118,10 +118,10 @@ jobs:
         shell: pwsh
         run: |
           # One target selection drives host, runtime, and verifier: the only
-          # supported target is the exact rc.2 baseline using
+          # supported target is the exact rc.3 baseline using
           # tests/dsh-runtime. Any other value is refused before the
           # expensive host install.
-          $supported = @('0.2.2-rc.2')
+          $supported = @('0.2.2-rc.3')
           $target = '${{ inputs.dsh_version }}'
           # Use the explicit -notcontains operator: -not binds tighter than
           # -contains, so "-not $a -contains $b" would parse incorrectly.

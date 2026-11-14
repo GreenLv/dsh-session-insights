@@ -56,14 +56,14 @@ class CliAndInstallerTests(unittest.TestCase):
 
     def test_packaged_skill_version_and_migration_match_the_release(self):
         # The Skill ships inside the npm artifact: its version and upgrade
-        # guidance must agree with the product version and the 0.8.1 resume
+        # guidance must agree with the product version and the 0.8.2 resume
         # contract (cross-identity semantic runs are refused with an explicit
         # action), and a managed install must copy those bytes verbatim.
         skill = (Path(__file__).resolve().parents[1] / "src/dsh_session_insights/skill/SKILL.md").read_text(encoding="utf-8")
         from dsh_session_insights import __version__
         self.assertIn(f'version: "{__version__}"', skill)
-        self.assertIn(f"Version {__version__} requires DSH >=0.2.2-rc.2", skill)
-        self.assertIn("no longer resume under the 0.8.1 input identity", skill)
+        self.assertIn(f"Version {__version__} requires DSH >=0.2.2-rc.3", skill)
+        self.assertIn("no longer resume under the 0.8.2 input identity", skill)
         self.assertIn("finish them with the version that created them, or start a new run", skill)
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)

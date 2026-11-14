@@ -3,8 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createRequire } from "node:module";
 
-const expectedRange = ">=0.2.2-rc.2";
-const minimumAdmitted = "0.2.2-rc.2";
+const expectedRange = ">=0.2.2-rc.3";
+const minimumAdmitted = "0.2.2-rc.3";
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
 // The official app-boot/market consumer evaluates DSH peer ranges with
@@ -34,13 +34,13 @@ test("market-facing DSH metadata matches the declared target range", () => {
   assert.ok(evaluatePluginCompatibility(packageJson).compatible);
 });
 
-test("version vector: rc.2 floor refuses older lines and below-floor prereleases, admits later releases", () => {
+test("version vector: rc.3 floor refuses older lines and below-floor prereleases, admits later releases", () => {
   // Refused floors: the whole 0.2.0/0.2.1 lines, rc.1 (retired with the
   // compatibility queue), and same-base prereleases below the exact floor.
   for (const version of [
     "0.2.0-rc.1", "0.2.0-rc.2", "0.2.0", "0.2.1-rc.1", "0.2.1-rc.2", "0.2.1-rc.5",
     "0.2.1", "0.2.2-0", "0.2.2-alpha", "0.2.2-alpha.2", "0.2.2-beta.1", "0.2.2-rc.0",
-    "0.2.2-rc.1",
+    "0.2.2-rc.1", "0.2.2-rc.2",
   ])
     assert.ok(!admitted(version), version);
   // Admitted: the floor itself, later RCs, stable releases and far-future
@@ -63,7 +63,7 @@ test("version vector: rc.2 floor refuses older lines and below-floor prereleases
 test("official app-boot precedence: engines.dsh alone decides, peers are ignored", () => {
   // dsh-app-boot's unmetRequirements checks engines.dsh first and returns its
   // issues alone; peerDependencies are not consulted when engines.dsh exists.
-  const runtime = "0.2.2-rc.2";
+  const runtime = "0.2.2-rc.3";
   const manifest = {
     ...packageJson,
     peerDependencies: {...packageJson.peerDependencies, "@deepseek-ai/dsh-agent": "<0.0.1"},

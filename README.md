@@ -10,14 +10,14 @@ Run `/session-insights` in DeepSeek Harness (DSH) to review your session history
 
 ## Quick start
 
-The 0.8.1 Bundle requires DSH `>=0.2.2-rc.2` and Node.js `>=24.9.0`. The plugin runs without Python. (0.8.0 required `>=0.2.2-rc.1`; this release raises the supported floor to 0.2.2-rc.2.)
+The 0.8.2 Bundle requires DSH `>=0.2.2-rc.3` and Node.js `>=24.9.0`. The plugin runs without Python. (0.8.1 required `>=0.2.2-rc.2`; this release raises the supported floor to 0.2.2-rc.3, and rc.2 or older hosts are refused.)
 
 DSH rc.2 fixes the previous Zod dependency issue, but its full host dependency tree still has known advisories. Review the [security policy](SECURITY.md#known-upstream-dependency-gap) before use.
 
 For DSH Web, run:
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.8.1
+dsh plugin --profile web add dsh-session-insights@0.8.2
 dsh web
 ```
 
@@ -32,7 +32,7 @@ Open the returned `report.html` path in your browser. The plugin writes it and `
 **Desktop.** Install the same package with the official app's plugin controls. On macOS you can also use the app's bundled CLI:
 
 ```bash
-"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" plugin --profile desktop add dsh-session-insights@0.8.1
+"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" plugin --profile desktop add dsh-session-insights@0.8.2
 ```
 
 If a Windows reinstall fails with `EPERM` because files are in use, close Desktop and its child host before retrying. Then run the same slash command and open the returned HTML file.
@@ -78,11 +78,11 @@ Run directories hold the report and its evidence until you remove them. Type `/s
 
 ## DSH compatibility
 
-Version 0.8.1 targets DSH `0.2.2-rc.2` as its exact acceptance host; rc.1 and older hosts are refused. The released package passed source and contract checks, plus native Web, Headless, official Desktop GUI and synthetic-session model acceptance on macOS and Windows. The [0.8.1 release notes](docs/releases/v0.8.1.md) record the package identity and known host risks. Historical releases were tested against their own hosts: the [0.8.0 release notes](docs/releases/v0.8.0.md) record the rc.1 testing of that published version.
+Version 0.8.2 targets DSH `0.2.2-rc.3` as its exact acceptance host; rc.2 and older hosts are refused. Later host releases stay admitted by the declared range, which does not claim they have been tested. The [0.8.1 release notes](docs/releases/v0.8.1.md) record that published version's package identity, native acceptance and known host risks. Historical releases were tested against their own hosts: the [0.8.0 release notes](docs/releases/v0.8.0.md) record the rc.1 testing of that published version.
 
-If you upgrade to 0.8.1 while model analysis is in progress, finish it with the version that created the run or start a new one after upgrading: the analysis identity changed with the rc.2 retarget, so 0.8.0 runs do not resume under 0.8.1. Existing reports can still be opened. The standalone CLI rebuilds old report caches automatically and needs its own update.
+If you upgrade to 0.8.2 while model analysis is in progress, finish it with the version that created the run or start a new one after upgrading: the analysis identity changed with the rc.3 retarget, so 0.8.1 runs do not resume under 0.8.2. Existing reports can still be opened. The standalone CLI rebuilds old report caches automatically and needs its own update.
 
-For a source installation, clone this repository and check out the release tag (for example `v0.8.1`) before running `dsh plugin --profile web add .` from that checkout. This selects the published version's source.
+For a source installation, clone this repository and check out the release tag (for example `v0.8.2`) before running `dsh plugin --profile web add .` from that checkout. This selects the published version's source.
 
 ## Standalone Python CLI and Skill
 

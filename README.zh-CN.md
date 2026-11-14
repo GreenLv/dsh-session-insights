@@ -10,14 +10,14 @@
 
 ## 安装并生成第一份报告
 
-0.8.1 插件包（Bundle）要求 DSH `>=0.2.2-rc.2` 和 Node.js `>=24.9.0`，安装插件无需 Python。（0.8.0 的要求是 `>=0.2.2-rc.1`；本版本把支持的宿主下限提高到 0.2.2-rc.2。）
+0.8.2 插件包（Bundle）要求 DSH `>=0.2.2-rc.3` 和 Node.js `>=24.9.0`，安装插件无需 Python。（0.8.1 的要求是 `>=0.2.2-rc.2`；本版本把支持的宿主下限提高到 0.2.2-rc.3，rc.2 及更早宿主会被拒绝。）
 
 DSH rc.2 已修复此前的 Zod 依赖问题，但完整宿主仍有已知依赖漏洞。使用前请阅读[安全说明](SECURITY.md#known-upstream-dependency-gap)。
 
 使用 DSH Web 时，在终端执行：
 
 ```bash
-dsh plugin --profile web add dsh-session-insights@0.8.1
+dsh plugin --profile web add dsh-session-insights@0.8.2
 dsh web
 ```
 
@@ -32,7 +32,7 @@ dsh web
 **官方桌面版。** 在应用的插件管理界面安装同一个包。macOS 也可以用应用自带的命令行工具：
 
 ```bash
-"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" plugin --profile desktop add dsh-session-insights@0.8.1
+"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" plugin --profile desktop add dsh-session-insights@0.8.2
 ```
 
 Windows 上如果重装时因文件占用报 `EPERM`，先退出桌面应用和它启动的宿主进程再试。安装后在消息框运行上面的命令，用浏览器打开报告。
@@ -78,11 +78,11 @@ Windows 上如果重装时因文件占用报 `EPERM`，先退出桌面应用和�
 
 ## DSH 兼容性
 
-0.8.1 以 DSH `0.2.2-rc.2` 为精确验收目标；rc.1 及更早宿主会被拒绝。已发布的软件包通过了源码与契约检查，以及 macOS、Windows 上的原生 Web、Headless、官方 Desktop GUI 和合成会话模型验收。[0.8.1 发行说明](docs/releases/v0.8.1.md)记录了软件包身份和已知宿主风险。历史发布按各自宿主验证：[0.8.0 发行说明](docs/releases/v0.8.0.md)记录了该已发布版本的 rc.1 验收。
+0.8.2 以 DSH `0.2.2-rc.3` 为精确验收目标；rc.2 及更早宿主会被拒绝。声明范围允许后续宿主版本准入，这不等于这些版本已实测。[0.8.1 发行说明](docs/releases/v0.8.1.md)记录了该已发布版本的软件包身份、原生验收和已知宿主风险。历史发布按各自宿主验证：[0.8.0 发行说明](docs/releases/v0.8.0.md)记录了该已发布版本的 rc.1 验收。
 
-升级到 0.8.1 前，未完成的模型分析请用创建它的版本跑完，也可以在升级后重新开始：随 rc.2 目标调整，分析身份已经变化，0.8.0 的运行在 0.8.1 下不能恢复。已生成的报告可以继续打开。单独安装的命令行工具需要单独升级，旧报告缓存会自动重建。
+升级到 0.8.2 前，未完成的模型分析请用创建它的版本跑完，也可以在升级后重新开始：随 rc.3 目标调整，分析身份已经变化，0.8.1 的运行在 0.8.2 下不能恢复。已生成的报告可以继续打开。单独安装的命令行工具需要单独升级，旧报告缓存会自动重建。
 
-若从源码安装，克隆本仓库后先检出发布标签（例如 `v0.8.1`），再在该目录运行 `dsh plugin --profile web add .`，以选中已发布版本的源码。
+若从源码安装，克隆本仓库后先检出发布标签（例如 `v0.8.2`），再在该目录运行 `dsh plugin --profile web add .`，以选中已发布版本的源码。
 
 ## 单独使用 Python 命令行工具和 Skill
 

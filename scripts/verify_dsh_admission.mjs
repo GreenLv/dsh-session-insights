@@ -27,13 +27,14 @@ if(runtimeFlagIndex>=0){
   await inspectRuntime(runtimeRoot,expectedVersion)
 }
 const manifest=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'))
-// Floor 0.2.2-rc.2, later RCs, stable, future minor/major and build metadata
+// Floor 0.2.2-rc.3, later RCs, stable, future minor/major and build metadata
 // are admitted by the declared range (forward compatibility, never a
-// whitelist). rc.1, the older 0.2.x lines and same-base prereleases below the
-// floor are refused.
-const admitted=['0.2.2-rc.2','0.2.2-rc.2+build.7','0.2.2','0.2.3-rc.1','0.3.0-rc.1','0.3.0','1.0.0']
+// whitelist). rc.2, the older 0.2.x lines and same-base prereleases below the
+// floor are refused. Range admission does not claim a future host has been
+// executed or that unknown required events are accepted.
+const admitted=['0.2.2-rc.3','0.2.2-rc.3+build.7','0.2.2','0.2.3-rc.1','0.3.0-rc.1','0.3.0','1.0.0']
 for(const version of admitted)assert.equal(evaluatePluginCompatibility(manifest,{},version),undefined,version)
-const belowFloor=['0.2.0','0.2.0-rc.1','0.2.0-rc.2','0.2.1-rc.1','0.2.1-rc.2','0.2.1-rc.5','0.2.1','0.2.2-alpha.2','0.2.2-beta.1','0.2.2-rc.0','0.2.2-rc.1','0.2.2-rc.1+build.7']
+const belowFloor=['0.2.0','0.2.0-rc.1','0.2.0-rc.2','0.2.1-rc.1','0.2.1-rc.2','0.2.1-rc.5','0.2.1','0.2.2-alpha.2','0.2.2-beta.1','0.2.2-rc.0','0.2.2-rc.1','0.2.2-rc.1+build.7','0.2.2-rc.2','0.2.2-rc.2+build.7']
 for(const version of belowFloor)assert.ok(evaluatePluginCompatibility(manifest,{},version),version)
 for(const version of ['not-a-version','0.2'])assert.throws(()=>evaluatePluginCompatibility(manifest,{},version))
 console.log(JSON.stringify({status:'pass',consumer:'official dsh-app-boot',consumer_version:runtimeVersion,expected_version:expectedVersion,admitted,rejected:[...belowFloor,'not-a-version','0.2'],scope:'version admission with constructed metadata; future host execution not claimed'}))

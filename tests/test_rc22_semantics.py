@@ -145,9 +145,9 @@ class ApprovalNonGrantTests(unittest.TestCase):
 class TeamModeTests(unittest.TestCase):
     """team/mode is team configuration/context, never user work."""
 
-    def test_identity_targets_rc2_semantics(self):
-        self.assertEqual(IDENTITY["target_dsh_version"], "0.2.2-rc.2")
-        self.assertEqual(IDENTITY["analyzer_semantics"], "v4-dsh022rc2.1")
+    def test_identity_targets_rc3_semantics(self):
+        self.assertEqual(IDENTITY["target_dsh_version"], "0.2.2-rc.3")
+        self.assertEqual(IDENTITY["analyzer_semantics"], "v4-dsh022rc3.1")
 
     def test_team_mode_is_counted_as_configuration(self):
         rows = base_rows()

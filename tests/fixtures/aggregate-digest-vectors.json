@@ -30,7 +30,7 @@
           "score": 12.0
         }
       ],
-      "expected_digest": "2fabc378d77385705f39990521810a4373b2cb50e79e190b23710866a8e68322"
+      "expected_digest": "41ac14811f40b0e1227943e871dffabb4dc474f5f24f4e02cddb29789f9b2fe0"
     },
     {
       "name": "two-facets-order-sensitive",
@@ -75,7 +75,7 @@
           "score": 3.5
         }
       ],
-      "expected_digest": "ebeb1ee78358308eab2f5c541f17a62de24c59ef58c9b1f73a0107f341fb0777"
+      "expected_digest": "e1fdff70cf976453c6d9a9dfb494a230d2e0df405606f1a95a46d68f7108dd5c"
     },
     {
       "name": "chinese-and-special-chars",
@@ -102,7 +102,7 @@
           ]
         }
       ],
-      "expected_digest": "2100c99dca959e0e893a15b7d24271377f8266da617c8de4355f68ca2a3e98db"
+      "expected_digest": "49683ae914b00345b94316b2800968f56fd18c81c5cba4e379a6f068d4d60db6"
     }
   ]
 }

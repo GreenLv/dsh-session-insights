@@ -218,7 +218,7 @@ class F2CacheBoundaryTests(unittest.TestCase):
                 self.assertNotIn(banned, session)
 
     def test_cache_version_is_bumped_and_old_entries_are_ignored(self):
-        self.assertEqual(analyzer.DETERMINISTIC_CACHE_VERSION, 11)
+        self.assertEqual(analyzer.DETERMINISTIC_CACHE_VERSION, 12)
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
             write_session(home)

@@ -35,9 +35,9 @@ const report = (s) => buildReport([s], options).report
 const blockedFacts = (built) =>
   built.sessions[0].messages.filter((m) => m.tool_facts?.outcome === 'blocked').map((m) => m.tool_facts)
 
-test('identity targets rc.2 semantics', () => {
-  assert.equal(INPUT_IDENTITY.target_dsh_version, '0.2.2-rc.2')
-  assert.equal(INPUT_IDENTITY.analyzer_semantics, 'v4-dsh022rc2.1')
+test('identity targets rc.3 semantics', () => {
+  assert.equal(INPUT_IDENTITY.target_dsh_version, '0.2.2-rc.3')
+  assert.equal(INPUT_IDENTITY.analyzer_semantics, 'v4-dsh022rc3.1')
 })
 
 test('APPROVAL_CANCELLED is neither caller cancellation nor human rejection', () => {
