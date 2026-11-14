@@ -12,7 +12,7 @@ Public releases are listed newest first.
 - **0.5.x** adapts to V4 session logs and later host releases, with safer recovery and bounded analysis.
 - **0.4.x and earlier** introduce native reports and cleanup, the dashboard, and the original Python CLI.
 
-## 0.8.2 - 2026-11-14
+## 0.8.2 - 2026-11-15
 
 Version 0.8.2 adapts to DSH `0.2.2-rc.3` and strengthens source-log and artifact verification. Upgrade DSH to `0.2.2-rc.3` or later before installing; rc.2 and older hosts are refused.
 
