@@ -13,6 +13,7 @@ import {captureSourceLogs,compareSourceLogs,sessionWitnessScope,witnessGate} fro
 const source=fileURLToPath(new URL('../',import.meta.url))
 const SHA=/^[0-9a-f]{64}$/, COMMIT=/^[0-9a-f]{40}$/
 const ids=['gui082-target','gui082-unrelated']
+export const DESKTOP_ISOLATION_OVERLAY='- id: hmr\n  disabled: true\n- id: session-title-llm\n  disabled: true\n- id: mcp-manager\n  disabled: true\n'
 const usage='prepare --output DIR --artifact-dir DIR --commit SHA --tgz-sha256 SHA --receipt-sha256 SHA --desktop-package PATH --desktop-cli PATH | finalize --output DIR'
 function parse(argv) {
   if(argv.length===1&&argv[0]==='--help')return {help:true}
@@ -63,7 +64,7 @@ const hostContext=async (desktopPackage,desktopCli)=>{
   const host=JSON.parse(await readFile(req.resolve('@deepseek-ai/dsh/package.json'),'utf8'))
   assert.equal(host.name,'@deepseek-ai/dsh');assert.equal(host.version,HOST_TARGETS.primary)
   const load=async name=>import(pathToFileURL(req.resolve(name)).href)
-  for(const [name,key] of [['@deepseek-ai/dsh/profile-boot','runProfile'],['@deepseek-ai/dsh-app-boot','initProfile'],['@deepseek-ai/dsh-official-bundles','PROFILE_TEMPLATES'],['@deepseek-ai/dsh-session-persistence-jsonl','apply'],['@deepseek-ai/dsh-session-format-catalog','sessionFormatCatalog'],['@deepseek-ai/dsh-launch-environment','createLaunchEnvironmentSnapshot'],['@deepseek-ai/cordis','Context']])
+  for(const [name,key] of [['@deepseek-ai/dsh/profile-boot','runProfile'],['@deepseek-ai/dsh-app-boot','initProfile'],['@deepseek-ai/dsh-official-bundles','PROFILE_TEMPLATES'],['@deepseek-ai/dsh-session-persistence-jsonl','apply'],['@deepseek-ai/dsh-session-format-catalog','sessionFormatCatalog'],['@deepseek-ai/dsh-launch-environment','createLaunchEnvironmentSnapshot'],['@deepseek-ai/dsh-home-paths','resolveDshHome'],['@deepseek-ai/dsh-home-paths','resolveAgentsHome'],['@deepseek-ai/cordis','Context']])
     assert.ok(key in await load(name),`official Desktop module missing required export: ${name}`)
   return {pkg,cli,load,meta}
 }
@@ -74,12 +75,15 @@ const artifactAt=async (artifactDir,expected)=>{
   const {receipt}=await verifyCanonicalArtifact({receiptPath,tarballPath,sourceRoot:source,expectedCommit:expected.commit,expectedSha256:expected.tgz,expectedReceiptSha256:expected.receipt})
   return {receipt,tarballPath}
 }
-const privateEnv=async out=>{
+export const privateEnv=async out=>{
   const userConfig=join(out,'empty-user-npmrc'),globalConfig=join(out,'empty-global-npmrc')
   await writeFile(userConfig,'',{flag:'wx',mode:0o600});await writeFile(globalConfig,'',{flag:'wx',mode:0o600})
-  const env={...process.env}
-  for(const key of Object.keys(env))if(/^npm_config_/i.test(key))delete env[key]
-  Object.assign(env,{DSH_HOME:join(out,'qa-home'),DSH_TELEMETRY_DISABLED:'1',ELECTRON_RUN_AS_NODE:'1',npm_config_cache:join(out,'npm-cache'),npm_config_store_dir:join(out,'pnpm-store'),npm_config_userconfig:userConfig,npm_config_globalconfig:globalConfig})
+  // The child gets only ordinary OS launch variables. Never copy inherited
+  // credentials or arbitrary npm/profile settings into an acceptance host.
+  const env={}
+  for(const key of ['PATH','HOME','TMPDIR','TMP','TEMP','SYSTEMROOT','SystemRoot','WINDIR','COMSPEC','PATHEXT','USERPROFILE','LANG','LC_ALL'])
+    if(process.env[key]!==undefined)env[key]=process.env[key]
+  Object.assign(env,{DSH_HOME:join(out,'qa-home'),DSH_AGENTS_HOME:join(out,'qa-agents'),DSH_TELEMETRY_DISABLED:'1',ELECTRON_RUN_AS_NODE:'1',npm_config_cache:join(out,'npm-cache'),npm_config_store_dir:join(out,'pnpm-store'),npm_config_userconfig:userConfig,npm_config_globalconfig:globalConfig})
   delete env.NODE_OPTIONS
   return env
 }
@@ -99,77 +103,174 @@ export async function cleanupFailedPreparation(home,app,{remove=rm,shutdownAlrea
   if(app)try{await app.shutdown.shutdown(0)}catch{return 'retained_shutdown_failed'}
   try{await remove(home,{recursive:true,force:true});return 'removed'}catch{return 'retained_cleanup_failed'}
 }
-async function prepare(o){
-  const out=resolve(o.output),home=join(out,'qa-home'),project=join(out,'project'),other=join(out,'unrelated')
-  await mkdir(out,{mode:0o700}) // Existing outputs and earlier receipts remain untouched.
-  let app,shutdownFailed=false,prepared=false
+
+// Official profile boot and plugins resolve these roots from the current
+// process, independently of the launch-environment snapshot and child env.
+// Enter the task roots before importing carrier modules, and restore the caller
+// even when boot, assertion, session writes, or shutdown fails.
+export async function withIsolatedDesktopEnv({home,agentsHome,project},action){
+  home=await realpath(home);agentsHome=await realpath(agentsHome);project=await realpath(project)
+  const keys=['DSH_HOME','DSH_AGENTS_HOME','DSH_TELEMETRY_DISABLED']
+  const previous=Object.fromEntries(keys.map(key=>[key,process.env[key]])),cwd=process.cwd()
   try{
+    process.chdir(project)
+    process.env.DSH_HOME=home;process.env.DSH_AGENTS_HOME=agentsHome;process.env.DSH_TELEMETRY_DISABLED='1'
+    return await action()
+  }finally{
+    for(const key of keys)if(previous[key]===undefined)delete process.env[key];else process.env[key]=previous[key]
+    process.chdir(cwd)
+  }
+}
+
+export function assertSanitizedProcessEnv(){
+  // Check names only; do not read or retain any credential values. A clean
+  // environment is supplied by the platform owner when launching this runner.
+  assert.equal(Object.keys(process.env).some(key=>/(^|_)(TOKEN|SECRET|PASSWORD|API_KEY|CREDENTIAL)(_|$)/i.test(key)),false,'credential-like environment present; launch in a sanitized environment')
+}
+export function assertDesktopEnvironment({home,agentsHome,project,resolveDshHome,resolveAgentsHome}){
+  assertSanitizedProcessEnv()
+  assert.equal(process.env.DSH_HOME,home);assert.equal(process.env.DSH_AGENTS_HOME,agentsHome)
+  assert.equal(process.env.DSH_TELEMETRY_DISABLED,'1');assert.equal(process.cwd(),project)
+  assert.equal(resolveDshHome(),home);assert.equal(resolveAgentsHome(),agentsHome)
+}
+
+// This guard is invoked immediately after boot and before create/append. A
+// missing or unsupported persistence root is failure, never assumed isolated.
+export function assertDesktopBeforeSessionWrite({home,project,context}){
+  const profile=context?.get('profileContext')
+  assert.ok(profile);assert.equal(profile.home,home)
+  assert.equal(profile.dir,join(home,'profiles','web'))
+  assert.equal(profile.cwd,project)
+  assert.ok(profile.startedBundles?.includes('dsh-session-insights'),'isolated candidate bundle not loaded')
+  assert.equal(context.get('mcpManager')==null,true,'external MCP manager must be disabled')
+  const persistence=context.get('sessionPersistence')
+  assert.equal(typeof persistence?.root,'string','actual persistence root unavailable')
+  assert.equal(resolve(persistence.root),join(home,'sessions'),'persistence root outside isolated home')
+  // Cordis supplies trace proxies, so two lookups need not have reference
+  // equality. Return the checked service and use exactly that writer below.
+  return persistence
+}
+
+export async function persistIsolatedFixtures({home,project,context,entries,buildSnapshot}){
+  const persistence=assertDesktopBeforeSessionWrite({home,project,context})
+  for(const entry of entries){
+    const snapshot=await buildSnapshot(entry)
+    const handle=await persistence.create(snapshot.header,{inheritedEventCount:snapshot.inheritedEventCount})
+    try{await handle.append(snapshot.events);await handle.flush()}finally{await handle.close()}
+  }
+}
+async function prepare(o){
+  assertSanitizedProcessEnv()
+  const output=resolve(o.output)
+  await mkdir(output,{mode:0o700}) // Existing outputs and earlier receipts remain untouched.
+  const out=await realpath(output),home=join(out,'qa-home'),agentsHome=join(out,'qa-agents'),project=join(out,'project'),other=join(out,'unrelated')
+  let app,shutdownFailed=false,prepared=false,cleanupResult=null,operationStage='artifact_identity'
+  try{
+    assertSanitizedProcessEnv()
     const expected={commit:o.commit,tgz:o['tgz-sha256'],receipt:o['receipt-sha256']}
     const artifactDir=resolve(o['artifact-dir']),{receipt,tarballPath}=await artifactAt(artifactDir,expected)
+    await mkdir(home,{mode:0o700});await mkdir(agentsHome,{mode:0o700});await mkdir(project);await mkdir(other)
+    const state=await withIsolatedDesktopEnv({home,agentsHome,project},async()=>{
+     try{
+    assertSanitizedProcessEnv()
+    operationStage='carrier_identity'
     const carrier=await hostContext(o['desktop-package'],o['desktop-cli'])
+    const paths=await carrier.load('@deepseek-ai/dsh-home-paths')
+    assertDesktopEnvironment({home,agentsHome,project,...paths})
     const env=await privateEnv(out)
-    await mkdir(home,{mode:0o700});await mkdir(project);await mkdir(other)
     const {initProfile}=await carrier.load('@deepseek-ai/dsh-app-boot')
     const {PROFILE_TEMPLATES}=await carrier.load('@deepseek-ai/dsh-official-bundles')
     initProfile(join(home,'profiles','desktop'),PROFILE_TEMPLATES.web.bundles)
+    initProfile(join(home,'profiles','web'),PROFILE_TEMPLATES.web.bundles)
     // Electron's node mode is the official desktop-host CLI used by the
     // application wrapper; the user data and DSH_HOME are task-owned.
-    await run(process.execPath,['--expose-internals',carrier.cli,'plugin','--profile','desktop','add',tarballPath],{env,cwd:project,timeout:180000,maxBuffer:8*1024*1024})
-    const ownReq=createRequire(join(home,'profiles','desktop','package.json'))
-    const installed=dirname(await realpath(ownReq.resolve('dsh-session-insights/package.json')))
-    assert.deepEqual(await fileManifest(installed),receipt.files)
-    assert.equal(JSON.parse(await readFile(join(installed,'package.json'),'utf8')).gitHead,expected.commit)
+    // The headless preparation boots an isolated Web profile with the
+    // Desktop patch. The package must resolve in both profile roots; the
+    // Desktop installation alone cannot satisfy Web's dependency resolution.
+    for(const profile of ['desktop','web']){
+      operationStage=`install_${profile}`
+      await run(process.execPath,['--expose-internals',carrier.cli,'plugin','--profile',profile,'add',tarballPath],{env,cwd:project,timeout:180000,maxBuffer:8*1024*1024})
+      const ownReq=createRequire(join(home,'profiles',profile,'package.json'))
+      const installed=dirname(await realpath(ownReq.resolve('dsh-session-insights/package.json')))
+      assert.deepEqual(await fileManifest(installed),receipt.files)
+      assert.equal(JSON.parse(await readFile(join(installed,'package.json'),'utf8')).gitHead,expected.commit)
+    }
     const {runProfile}=await carrier.load('@deepseek-ai/dsh/profile-boot')
     const {createLaunchEnvironmentSnapshot}=await carrier.load('@deepseek-ai/dsh-launch-environment')
     const overlay=join(out,'synthetic.patch.yml')
-    await writeFile(overlay,'- id: hmr\n  disabled: true\n- id: session-title-llm\n  disabled: true\n',{flag:'wx',mode:0o600})
-    app=await runProfile({environment:createLaunchEnvironmentSnapshot([{source:'process',values:{DSH_HOME:home,DSH_TELEMETRY_DISABLED:'1'}}]),profile:'web',patchFiles:[join(home,'profiles','desktop','cordis.patch.yml'),overlay],args:['--no-open','--host','127.0.0.1','--port','0']})
-    for(const [name,id,cwd] of [['recovery-mixed-group',ids[0],project],['optional-isError',ids[1],other]]){
-      const snapshot=await fixture(source,carrier.load,name,id,cwd),handle=await app.ctx.sessionPersistence.create(snapshot.header,{inheritedEventCount:snapshot.inheritedEventCount})
-      try{await handle.append(snapshot.events);await handle.flush()}finally{await handle.close()}
-    }
+    await writeFile(overlay,DESKTOP_ISOLATION_OVERLAY,{flag:'wx',mode:0o600})
+    operationStage='isolated_boot'
+    app=await runProfile({environment:createLaunchEnvironmentSnapshot([{source:'process',values:{DSH_HOME:home,DSH_AGENTS_HOME:agentsHome,DSH_TELEMETRY_DISABLED:'1'}}]),profile:'web',patchFiles:[join(home,'profiles','desktop','cordis.patch.yml'),overlay],args:['--no-open','--host','127.0.0.1','--port','0']})
+    operationStage='isolation_guard_and_fixtures'
+    assertDesktopEnvironment({home,agentsHome,project,...paths})
+    await persistIsolatedFixtures({home,project,context:app.ctx,entries:[['recovery-mixed-group',ids[0],project],['optional-isError',ids[1],other]],buildSnapshot:([name,id,cwd])=>fixture(source,carrier.load,name,id,cwd)})
+    operationStage='isolated_shutdown'
     try{await app.shutdown.shutdown(0)}catch(error){shutdownFailed=true;throw error}
     app=null
+    operationStage='source_capture'
     const before=await captureSourceLogs(join(home,'sessions'),{label:'desktop-source-logs:before'})
+    await safeWrite(join(out,'source-log-before-unscoped.json'),before)
+    operationStage='source_scope'
     const scope=sessionWitnessScope(before,ids)
     const baseline=Buffer.from(JSON.stringify({before,scope},null,2)+'\n')
     await writeFile(join(out,'source-log-before.json'),baseline,{flag:'wx',mode:0o600})
     const command=`/session-insights --days 30 --project ${JSON.stringify(project)} --locale en --deterministic --no-open`
-    const state={schema:'dsi-desktop-isolated/v1',status:'prepared_not_gui_accepted',output:out,artifact_dir:artifactDir,expected,desktop_package:carrier.pkg,desktop_cli:carrier.cli,desktop_binary_sha256:digest(await readFile(process.execPath)),host_version:carrier.meta.version,project,command,ids,before_sha256:digest(baseline),gui_observed:false,model_requests:0}
+    return {schema:'dsi-desktop-isolated/v1',status:'prepared_not_gui_accepted',output:out,artifact_dir:artifactDir,expected,desktop_package:carrier.pkg,desktop_cli:carrier.cli,desktop_binary_sha256:digest(await readFile(process.execPath)),runner_sha256:digest(await readFile(fileURLToPath(import.meta.url))),host_version:carrier.meta.version,project,command,ids,before_sha256:digest(baseline),gui_observed:false,model_requests:0}
+     }catch(error){
+       // Keep the isolated process environment until the task host is stopped.
+       cleanupResult=await cleanupFailedPreparation(home,app,{shutdownAlreadyFailed:shutdownFailed});app=null
+       throw error
+     }
+    })
     await safeWrite(join(out,'prepared.json'),state)
     prepared=true
-    console.log(JSON.stringify({status:state.status,prepared_sha256:digest(await readFile(join(out,'prepared.json'))),command,home,user_data_dir:join(out,'qa-userdata')}))
+    console.log(JSON.stringify({status:state.status,prepared_sha256:digest(await readFile(join(out,'prepared.json'))),command:state.command,home,agents_home:agentsHome,user_data_dir:join(out,'qa-userdata')}))
   }catch(error){
     // Preserve a potentially live tree. Otherwise remove only our own failed
     // isolated tree, retaining the failure receipt and any non-secret output.
-    const cleanup=await cleanupFailedPreparation(home,app,{shutdownAlreadyFailed:shutdownFailed})
+    const cleanup=cleanupResult??await cleanupFailedPreparation(home,app,{shutdownAlreadyFailed:shutdownFailed})
     app=null
-    await safeWrite(join(out,'prepare-failed.json'),{status:'failed',stage:'prepare',error_name:error.name??'Error',error_code:error.code??null,cleanup,gui_observed:false})
+    // This is a private developer trace for the credential-free synthetic
+    // runner, separate from bounded annex diagnostics and never a release asset.
+    await writeFile(join(out,'developer-trace.private.txt'),redactOutput(String(error.stack??error)),{flag:'wx',mode:0o600})
+    const origin=String(error.stack??'').match(/\b(desktop_acceptance|source_log_witness)\.mjs:(\d+):(\d+)/)
+    await safeWrite(join(out,'prepare-failed.json'),{status:'failed',stage:'prepare',operation_stage:operationStage,source_origin:origin?{module:origin[1],line:Number(origin[2]),column:Number(origin[3])}:null,error_name:error.name??'Error',error_code:error.code??null,cleanup,gui_observed:false})
     throw error
   }finally{if(app&&!prepared)try{await app.shutdown.shutdown(0)}catch{}}
 }
 function contained(path,root){const rel=relative(root,path);return rel!==''&&!isAbsolute(rel)&&!rel.startsWith('..'+sep)&&rel!=='..'}
 async function finalize(o){
-  const out=resolve(o.output)
+  assertSanitizedProcessEnv()
+  const out=await realpath(resolve(o.output))
   for(const name of ['finalized.json','source-log-result.json','gui-report.json','gui-report.html'])await assert.rejects(stat(join(out,name)),{code:'ENOENT'})
   const preparedBytes=await readFile(join(out,'prepared.json'))
   const prepared=JSON.parse(preparedBytes.toString('utf8'))
   assert.equal(prepared.schema,'dsi-desktop-isolated/v1');assert.equal(prepared.status,'prepared_not_gui_accepted');assert.equal(prepared.output,out)
+  const home=join(out,'qa-home'),agentsHome=join(out,'qa-agents'),project=join(out,'project')
+  assert.equal(prepared.project,project)
   const result={schema:'dsi-desktop-isolated-result/v1',status:'failed',prepared_sha256:digest(preparedBytes),artifact_commit:prepared.expected.commit,artifact_sha256:prepared.expected.tgz,host:prepared.host_version,gui_observation:'not_asserted_by_runner',operation:{status:'not_run'},source_logs:{status:'not_run'},cleanup:{status:'not_run',note:'owner controls GUI process and task tree'},errors:[]}
   let baseline,after,comparison,gate,ctx
   try{
+    assertSanitizedProcessEnv()
     const beforeBytes=await readFile(join(out,'source-log-before.json'));assert.equal(digest(beforeBytes),prepared.before_sha256)
     baseline=JSON.parse(beforeBytes.toString('utf8'))
     assert.equal(resolve(baseline.before.root),join(out,'qa-home','sessions'))
     assert.deepEqual(sessionWitnessScope(baseline.before,ids),baseline.scope)
+    assert.equal(digest(await readFile(fileURLToPath(import.meta.url))),prepared.runner_sha256,'acceptance runner changed after preparation')
     const {receipt}=await artifactAt(prepared.artifact_dir,prepared.expected)
+    await withIsolatedDesktopEnv({home,agentsHome,project},async()=>{
+     try{
+    assertSanitizedProcessEnv()
     const carrier=await hostContext(prepared.desktop_package,prepared.desktop_cli)
+    const paths=await carrier.load('@deepseek-ai/dsh-home-paths')
+    assertDesktopEnvironment({home,agentsHome,project,...paths})
     assert.equal(digest(await readFile(process.execPath)),prepared.desktop_binary_sha256)
     const installed=dirname(await realpath(createRequire(join(out,'qa-home','profiles','desktop','package.json')).resolve('dsh-session-insights/package.json')))
     assert.deepEqual(await fileManifest(installed),receipt.files)
     const {Context}=await carrier.load('@deepseek-ai/cordis')
     const jsonl=await carrier.load('@deepseek-ai/dsh-session-persistence-jsonl')
     ctx=new Context();await jsonl.apply(ctx,{root:join(out,'qa-home','sessions'),compression:'zstd'})
+    assert.equal(resolve(ctx.sessionPersistence.root),join(home,'sessions'))
     const matches=[]
     for(const item of await ctx.sessionPersistence.list()){
       if(ids.includes(item.header.id))continue
@@ -203,6 +304,11 @@ async function finalize(o){
     assert.equal(digest(await readFile(join(out,'gui-report.json'))),digest(reportBytes))
     assert.equal(digest(await readFile(join(out,'gui-report.html'))),digest(htmlBytes))
     result.operation={status:'passed',command_id:match.run.data.commandId,driver:match.driver,report_json_sha256:digest(reportBytes),report_html_sha256:digest(htmlBytes),sessions:report.totals.sessions,target_selected:true,unrelated_excluded:true}
+     }finally{
+      if(ctx)try{await ctx.fiber.dispose()}catch(error){result.errors.push({stage:'reader_dispose',name:error.name??'Error',code:error.code??null})}
+      ctx=null
+     }
+    })
   }catch(error){result.operation={status:'failed'};result.errors.push({stage:'operation',name:error.name??'Error',code:error.code??null})}
   finally{
     if(ctx)try{await ctx.fiber.dispose()}catch(error){result.errors.push({stage:'reader_dispose',name:error.name??'Error',code:error.code??null})}
