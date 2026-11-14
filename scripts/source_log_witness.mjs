@@ -93,19 +93,46 @@ export function compareSourceLogs(before, after) {
 }
 
 // Native-acceptance gate record for one witness comparison. Required: a
-// `changed` verdict (including any read error) fails the gate.
-export function witnessGate(id, before, after, comparison) {
-  const passed = comparison.verdict === 'unchanged'
+// `changed` verdict (including any read error) fails the gate. An optional
+// `scope` (relative paths of the witnessed target/non-target logs) binds the
+// verdict to those paths while the full-tree comparison stays recorded in the
+// evidence: scope-internal loss, replacement or read failure fails, and an
+// in-scope addition fails; out-of-scope additions (the host's own new sessions
+// inside the interval) stay visible but do not flip the scoped verdict.
+export function witnessGate(id, before, after, comparison, {scope} = {}) {
+  if (scope === undefined) {
+    const passed = comparison.verdict === 'unchanged'
+    return {
+      id,
+      required: true,
+      status: passed ? 'passed' : 'failed',
+      subject: {kind: 'source_log_witness', id: `${before.totals.files}->${after.totals.files}`},
+      exit_code: passed ? 0 : 1,
+      note: passed
+        ? `source logs unchanged across the observed operation interval: ${before.totals.files} files, ${before.totals.bytes} bytes captured before and after, zero read errors`
+        : `source logs did not stay unchanged: ${comparison.totals.differences} differences, ${comparison.read_errors.length} read errors (loss, addition, replacement and read failure are never recorded as unchanged)`,
+      evidence: {mode: 'executed', comparison: {verdict: comparison.verdict, added: comparison.added, removed: comparison.removed, changed: comparison.changed, read_errors: comparison.read_errors}, before_captured_at: before.captured_at, after_captured_at: after.captured_at},
+    }
+  }
+  const scoped = {
+    added: comparison.added.filter((path) => scope.includes(path)),
+    removed: comparison.removed.filter((path) => scope.includes(path)),
+    changed: comparison.changed.filter((c) => scope.includes(c.path)),
+    read_errors: comparison.read_errors.filter((e) => scope.includes(e.path)),
+  }
+  const missing = scope.filter((path) => before.files[path] === undefined || after.files[path] === undefined)
+  const passed = scoped.added.length === 0 && scoped.removed.length === 0 && scoped.changed.length === 0
+    && scoped.read_errors.length === 0 && missing.length === 0
   return {
     id,
     required: true,
     status: passed ? 'passed' : 'failed',
-    subject: {kind: 'source_log_witness', id: `${before.totals.files}->${after.totals.files}`},
+    subject: {kind: 'source_log_witness', id: `scope:${scope.length}`},
     exit_code: passed ? 0 : 1,
     note: passed
-      ? `source logs unchanged across the observed operation interval: ${before.totals.files} files, ${before.totals.bytes} bytes captured before and after, zero read errors`
-      : `source logs did not stay unchanged: ${comparison.totals.differences} differences, ${comparison.read_errors.length} read errors (loss, addition, replacement and read failure are never recorded as unchanged)`,
-    evidence: {mode: 'executed', comparison: {verdict: comparison.verdict, added: comparison.added, removed: comparison.removed, changed: comparison.changed, read_errors: comparison.read_errors}, before_captured_at: before.captured_at, after_captured_at: after.captured_at},
+      ? `witnessed target/non-target logs unchanged across the observed operation interval: ${scope.length} scoped paths digested before and after, zero read errors; full-tree collection recorded alongside`
+      : `witnessed target/non-target logs did not stay unchanged: ${scoped.changed.length} changed, ${scoped.removed.length} lost, ${scoped.added.length} added, ${scoped.read_errors.length} read errors, ${missing.length} missing from a capture (loss, replacement and read failure are never recorded as unchanged)`,
+    evidence: {mode: 'executed', scope: [...scope].sort(), scoped, full_tree: {verdict: comparison.verdict, added: comparison.added, removed: comparison.removed, changed: comparison.changed, read_errors: comparison.read_errors, before_files: before.totals.files, after_files: after.totals.files}, before_captured_at: before.captured_at, after_captured_at: after.captured_at},
   }
 }
 

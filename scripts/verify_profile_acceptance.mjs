@@ -31,7 +31,7 @@ const receiptPath=join(base,`${profile}-native-annex.json`)
 // receipt or output directory already exists. mkdir is also the run lock.
 try {await lstat(receiptPath);throw new Error('existing profile receipt')} catch(error) {if(error.code!=='ENOENT')throw error}
 const output=join(base,`${profile}-native-results`);await mkdir(output,{mode:0o700})
-let app,owner,currentGate='artifact_digest',failure,work,annex,observedHostVersion=null,witnessBefore=null
+let app,owner,currentGate='artifact_digest',failure,work,annex,observedHostVersion=null,witnessBefore=null,witnessScope=null
 const startedAt=new Date().toISOString()
 const writeAnnex=async value=>{await writeFile(receiptPath,JSON.stringify(value,null,2)+'\n',{flag:'wx'})}
 const recordGate=(id,note,subject={kind:'artifact',id:canonical.sha256})=>{if(!annex)return;annex.gates.push({id,required:true,status:'passed',subject,exit_code:0,note,evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}});console.log(JSON.stringify({gate:id,status:'passed'}))}
@@ -98,7 +98,10 @@ const checkedReport=async(locale,prefix)=>{
  // report operation, after the operations end or throw (in the finally below),
  // and compare before the isolated tree is removed. Loss, addition,
  // replacement or a read error is never recorded as unchanged.
- witnessBefore=await captureSourceLogs(join(home,'sessions'),{label:`${profile}-source-logs:before`});record('source_log_witness_capture',`source-log witness before-capture: ${witnessBefore.totals.files} files, ${witnessBefore.totals.bytes} bytes`)
+ witnessBefore=await captureSourceLogs(join(home,'sessions'),{label:`${profile}-source-logs:before`})
+ witnessScope=Object.keys(witnessBefore.files).filter(path=>path.includes('/native-target/')||path.includes('/native-unrelated/'))
+ if(!witnessScope.length)throw new Error('source-log witness found no target/non-target fixture logs to bind')
+ record('source_log_witness_capture',`source-log witness before-capture: ${witnessBefore.totals.files} files, ${witnessBefore.totals.bytes} bytes; scope binds ${witnessScope.length} target/non-target fixture paths`)
  await app.shutdown.shutdown(0);app=undefined
  begin('cold_read');app=await boot();assert.equal(app.ctx.sessions.get('native-target'),undefined);const cold=await app.ctx.sessionQuery.observeSession('native-target',{projectionMode:'none'});try{assert.equal(cold.events.length,18);assert.ok(cold.events.some(e=>e.data?.error?.code==='TOOL_OUTCOME_UNKNOWN'));assert.ok(cold.events.some(e=>e.data?.error?.code==='TOOL_NOT_STARTED'))}finally{cold[Symbol.dispose]()};record(currentGate,'after full profile disposal and restart, cold query restored 18 durable events including both recovery statuses')
  begin('agent_command');owner=await app.ctx.agents.create({sessionId:'native-command-agent',meta:{cwd:join(work,'driver')}});assert.equal(owner.agent.status,'idle');const zh=await checkedReport('zh-CN','report-zh');assert.ok(owner.agent.session.snapshotEvents().some(e=>e.type==='command/done'));record(currentGate,'actual factory-created Agent executed registered slash command with durable command completion')
@@ -127,8 +130,8 @@ const checkedReport=async(locale,prefix)=>{
    try{
     const witnessAfter=await captureSourceLogs(join(work,'dsh-home','sessions'),{label:`${profile}-source-logs:after`})
     const comparison=compareSourceLogs(witnessBefore,witnessAfter)
-    annex.gates.push(witnessGate('source_log_witness',witnessBefore,witnessAfter,comparison))
-    console.log(JSON.stringify({gate:'source_log_witness',verdict:comparison.verdict,files:witnessAfter.totals.files,differences:comparison.totals.differences}))
+    annex.gates.push(witnessGate('source_log_witness',witnessBefore,witnessAfter,comparison,{scope:witnessScope}))
+    console.log(JSON.stringify({gate:'source_log_witness',full_tree:comparison.verdict,files:witnessAfter.totals.files,differences:comparison.totals.differences,scope:witnessScope.length}))
    }catch(witnessError){
     annex.gates.push({id:'source_log_witness',required:true,status:'failed',subject:{kind:'source_log_witness',id:witnessBefore.totals.files},exit_code:1,note:`after-capture failed: ${witnessError.code ?? 'capture_error'}; the observed interval stays unwitnessed, not unchanged`,evidence:{mode:'executed',error:String(witnessError.message ?? witnessError)}})
    }
