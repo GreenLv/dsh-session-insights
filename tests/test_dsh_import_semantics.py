@@ -40,7 +40,7 @@ class DshImportSemanticsTests(unittest.TestCase):
             since=now - timedelta(days=30), until=now, generated_at=now,
             privacy_mode=privacy, metrics_only=privacy == "metrics",
             semantic_capture=True, deterministic_cache=False, locale=locale,
-            report_timezone=analyzer.resolve_report_timezone(None),
+            report_timezone=analyzer.resolve_report_timezone("UTC"),
         )
         return analyzer.build_report(config, session_snapshots=snapshots)
 
@@ -51,6 +51,7 @@ class DshImportSemanticsTests(unittest.TestCase):
             input=json.dumps({"snapshots": snapshots, "options": {
                 "now": now, "days": 30, "privacy": privacy, "locale": locale,
                 "analysis_depth": "evidence",
+                "report_timezone": "UTC",
             }}),
             text=True, encoding="utf-8", capture_output=True,
         )
