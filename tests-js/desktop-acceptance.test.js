@@ -8,6 +8,7 @@ import {createRequire} from 'node:module'
 import {fileURLToPath,pathToFileURL} from 'node:url'
 import {DESKTOP_ISOLATION_OVERLAY,cleanupFailedPreparation,redactOutput,withIsolatedDesktopEnv,persistIsolatedFixtures,privateEnv} from '../scripts/desktop_acceptance.mjs'
 
+// Match async fs.realpath in production, including Windows 8.3 aliases.
 const script=fileURLToPath(new URL('../scripts/desktop_acceptance.mjs',import.meta.url))
 const cleanEnv=Object.fromEntries(['PATH','HOME','TMPDIR','TMP','TEMP','SYSTEMROOT','SystemRoot','WINDIR','COMSPEC','PATHEXT','USERPROFILE','LANG','LC_ALL'].filter(k=>process.env[k]!==undefined).map(k=>[k,process.env[k]]))
 const run=(...args)=>spawnSync(process.execPath,[script,...args],{encoding:'utf8',env:cleanEnv})
@@ -55,7 +56,7 @@ test('a nonempty user output directory is never adopted or modified',()=>{
 test('missing original before witness yields failed final receipt and cannot overwrite it',()=>{
   const out=mkdtempSync(join(tmpdir(),'dsi-desktop-final-'))
   try{
-    const canonical=realpathSync(out)
+    const canonical=realpathSync.native(out)
     writeFileSync(join(out,'prepared.json'),JSON.stringify({schema:'dsi-desktop-isolated/v1',status:'prepared_not_gui_accepted',output:canonical,project:join(canonical,'project'),expected:{commit:'1'.repeat(40),tgz:'2'.repeat(64)},host_version:'0.2.2-rc.3',before_sha256:'3'.repeat(64)}))
     assert.equal(run('finalize','--output',out).status,1)
     const path=join(out,'finalized.json'),data=JSON.parse(readFileSync(path,'utf8'))
@@ -73,8 +74,8 @@ test('actual official root resolvers see task roots throughout isolated action a
     const paths=await import(pathToFileURL(req.resolve('@deepseek-ai/dsh-home-paths')).href)
     for(const fails of [false,true]){
       const work=()=>withIsolatedDesktopEnv({home,agentsHome,project},async()=>{
-        assert.equal(paths.resolveDshHome(),realpathSync(home));assert.equal(paths.resolveAgentsHome(),realpathSync(agentsHome))
-        assert.equal(process.cwd(),realpathSync(project));assert.equal(process.env.DSH_TELEMETRY_DISABLED,'1')
+        assert.equal(paths.resolveDshHome(),realpathSync.native(home));assert.equal(paths.resolveAgentsHome(),realpathSync.native(agentsHome))
+        assert.equal(process.cwd(),realpathSync.native(project));assert.equal(process.env.DSH_TELEMETRY_DISABLED,'1')
         if(fails)throw new Error('synthetic failure')
       })
       if(fails)await assert.rejects(work(),/synthetic failure/);else await work()
@@ -156,7 +157,7 @@ test('real Cordis trace services keep the validated JSONL writer for the actual 
   try{
     const home=join(root,'qa-home'),project=join(root,'project')
     mkdirSync(home);mkdirSync(project)
-    const canonicalHome=realpathSync(home),canonicalProject=realpathSync(project)
+    const canonicalHome=realpathSync.native(home),canonicalProject=realpathSync.native(project)
     const req=createRequire(fileURLToPath(new URL('../tests/dsh-host/package.json',import.meta.url)))
     const {Context}=await import(pathToFileURL(req.resolve('@deepseek-ai/cordis')).href)
     const jsonl=await import(pathToFileURL(req.resolve('@deepseek-ai/dsh-session-persistence-jsonl')).href)
