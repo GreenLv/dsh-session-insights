@@ -10,9 +10,9 @@ Do not open a public issue for a suspected secret leak, unsafe installer behavio
 
 Never attach real DSH sessions, reports, caches, credentials, or semantic work directories. State the affected version, platform, DSH version, privacy mode, and a minimal synthetic reproduction.
 
-## Native runtime permissions (0.8.1)
+## Native runtime permissions (0.8.2)
 
-Version 0.8.1 requires DSH `>=0.2.2-rc.2` and accepts only V4 input. rc.1 and older hosts are refused without a legacy-API fallback; later releases stay admitted by the declared range. Raw logs remain read-only; unsupported generations require upstream migration.
+Version 0.8.2 requires DSH `>=0.2.2-rc.3` and accepts only V4 input. rc.2 and older hosts are refused without a legacy-API fallback; later releases stay admitted by the declared range. Raw logs remain read-only; unsupported generations require upstream migration.
 
 Query leases are released before Worker analysis. Each plugin instance analyzes at most two runs concurrently and queues at most eight more. Plugin disposal cancels and awaits owned work, including queued analysis. The 64 MiB detached-snapshot bound does not limit peak memory used by the host query service while opening a large log. The per-Worker `maxOldGenerationSizeMb` limit caps one Worker's V8 old space, not host RSS.
 
@@ -22,7 +22,7 @@ rc.2 approval non-grants are structured codes under `ApprovalError`. `APPROVAL_R
 
 Scheduled prompts, asynchronous question replies, subagent settlement notices and Team relay messages are counted as injected context, not user work or authorization. Background-job settlements and delegation dispatches are registry or producer records, not proof of user-task completion or resource release. In redacted and metrics modes, working-directory changes appear as project labels without raw paths.
 
-Resume binds an explicit run to its recorded selection scope. It cannot select another project or a wider privacy range, and ambiguous multi-run requests are refused with the candidate paths. Semantic runs recorded under the previous analyzer identity cannot resume under 0.8.1. Finish them with the version that created them or start a new run.
+Resume binds an explicit run to its recorded selection scope. It cannot select another project or a wider privacy range, and ambiguous multi-run requests are refused with the candidate paths. Semantic runs recorded under the previous analyzer identity cannot resume under 0.8.2. Finish them with the version that created them or start a new run.
 
 The Bundle uses a Node.js worker for cancellable snapshot analysis. It does not launch Python, a shell or another executable. The worker receives an empty environment and an empty `execArgv`; interpreter discovery, inherited `PYTHONPATH`, Python startup hooks and forwarding of host credentials have been removed from the native path. The host still runs with DSH's OS permissions; a worker is not an OS security sandbox.
 
@@ -33,7 +33,9 @@ The Bundle uses a Node.js worker for cancellable snapshot analysis. It does not 
 
 ## Known upstream dependency gap
 
-**Current rc.2 candidate (2026-11-13; accepted known host risk).** The rc.2 `dsh-agent`, `dsh-commands` and `dsh-llm` packages replace their exact `zod@4.4.3` pins with patched `4.6.6`. The candidate's root production/full and slim runtime scans no longer report [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5). This does not certify the full DSH host tree as clean.
+**0.8.2 candidate (2026-11-14; host risk decision pending).** The rc.3 rescan keeps the plugin's root production/full dependency scans and the slim rc.3 runtime tree clean. The full rc.3 host lock still reports the same ten advisories reviewed for 0.8.1 (75 affected package entries, 1 high): eight undici findings, the MCP client redirect advisory, and the nested `libreoffice-kit` `fflate@0.8.2` ZIP64 loop (the separately resolved top-level fflate is already 0.8.3). The 0.8.1 decision was bound to the exact rc.2 host manifest/lock and does not carry forward: it is not renewed by a version bump, and no rc.3 acceptance exists yet. The scan is classified `unauthorized_findings` and the aggregate audit gate refuses until the maintainer records a new decision bound to the exact rc.3 inputs. Raw exit codes and inventories are retained; scanner failures and new findings still fail the gate.
+
+**Historical rc.2 decision (2026-11-13; accepted known host risk for 0.8.1 only).** The rc.2 `dsh-agent`, `dsh-commands` and `dsh-llm` packages replace their exact `zod@4.4.3` pins with patched `4.6.6`. The candidate's root production/full and slim runtime scans no longer report [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5). This does not certify the full DSH host tree as clean.
 
 The full rc.2 host lock retains these upstream dependencies:
 

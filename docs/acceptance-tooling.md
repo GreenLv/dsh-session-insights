@@ -1,15 +1,17 @@
 # Acceptance tooling and CI coverage
 
 The source CI runs the Python suite for each declared OS/Python combination.
-Every cell installs and names the single current rc.2 runtime
-(`tests/dsh-runtime`, exact `0.2.2-rc.2`); there is no separate compatibility
+Every cell installs and names the single current rc.3 runtime
+(`tests/dsh-runtime`, exact `0.2.2-rc.3`); there is no separate compatibility
 runtime and no compatibility lane. The Node suite runs in each DSH contract
 cell. The contract cells cover the Node 24.9.0 floor on Linux, macOS and
-Windows plus one Node 25 probe of the same rc.2 host.
+Windows plus one Node 25 probe of the same rc.3 host.
 Target-sensitive tests check the resolved package identity; a matrix label
 alone is not evidence of the runtime actually used.
 
-The dependency audit binds root production/full, the exact rc.2 runtime/host trees, and Python separately. Root and runtime findings always fail. The host tree may pass only as clean or under the maintainer's 2026-11-13 decision in `config/host-dependency-risk.json`: product/host version, manifest/lock hashes, advisory set and reviewed report must all match. The raw finding exit remains 1, while the accepted result is `accepted_known_risk` and the summary is `passed_with_known_host_risk`. It is not a clean scan.
+The dependency audit binds root production/full, the exact rc.3 runtime/host trees, and Python separately. Root and runtime findings always fail. The host tree may pass only as clean or under a maintainer decision in `config/host-dependency-risk.json` bound to the exact current product/host version, manifest/lock hashes, advisory set and reviewed report. The 2026-11-13 decision was bound to the rc.2 host for 0.8.1 and does not carry forward; until a new rc.3 decision is recorded, the raw finding exit remains 1 with status `unauthorized_findings` and the aggregate gate refuses. It is not a clean scan.
+
+Profile acceptance witnesses the persisted source logs of its target and non-target fixtures before and after the real operation interval: loss, replacement, addition or read failure is never recorded as unchanged, and the operation, witness and cleanup outcomes stay separate terminal states.
 
 The 0.8.0 Zod policy remains historical and cannot authorize anything current. Scanner errors, missing/skipped steps, cancellation, invalid JSON, input drift, capture/cleanup failures and unreviewed findings fail the job. Reassessment cannot erase a capture failure or change a receipt's tree/scope attribution. See the [security policy](../SECURITY.md#known-upstream-dependency-gap) for the exact current decision.
 

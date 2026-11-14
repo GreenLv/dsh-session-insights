@@ -6,11 +6,30 @@ Public releases are listed newest first.
 
 ## Release guide
 
-- **0.8.x** counts cancelled tool calls and structured approval non-grants separately. 0.8.1 requires DSH 0.2.2-rc.2 or later (0.8.0 required 0.2.2-rc.1). Existing semantic runs need to be finished with their original version or restarted.
+- **0.8.x** counts cancelled tool calls and structured approval non-grants separately. 0.8.2 requires DSH 0.2.2-rc.3 or later (0.8.1 required 0.2.2-rc.2). Existing semantic runs need to be finished with their original version or restarted.
 - **0.7.x** adds Russian reports and documentation while retaining 0.6.1 run compatibility.
 - **0.6.x** expands coverage of background jobs, delegation and working directories, then strengthens report, privacy and cleanup boundaries.
 - **0.5.x** adapts to V4 session logs and later host releases, with safer recovery and bounded analysis.
 - **0.4.x and earlier** introduce native reports and cleanup, the dashboard, and the original Python CLI.
+
+## 0.8.2 - unreleased candidate
+
+This candidate retargets the analysis contract to DSH `0.2.2-rc.3`. Upgrade DSH to `0.2.2-rc.3` or later before installing; rc.2 and older hosts are refused. Native, GUI, model and release acceptance are recorded separately and are not claimed by this entry.
+
+### Changed
+
+- The minimum DSH host rises from rc.2 to `0.2.2-rc.3`. The exact acceptance target is `0.2.2-rc.3` and `compatibility` stays empty; later host releases stay admitted by the declared range, which does not claim they have been tested. Node.js `>=24.9.0`, Cordis `~4.1.0` and Python `>=3.11` are unchanged.
+- The analyzer identity moves to `v4-dsh022rc3.1`. Semantic runs recorded by 0.8.1 do not resume under 0.8.2 — finish them with the version that created them or start a new run. Older deterministic caches are invalidated automatically and reparsed from source. Existing reports can still be opened.
+- The full upstream rc.2 to rc.3 diff was verified: only version bumps plus an upstream exporter robustness fix in `session-log-export`; no consumed Session, catalog, query, agent, tools, LLM or app-boot source changed.
+
+### Added
+
+- Regression coverage for the official `@deepseek-ai/dsh-deepseek-chat-import` importer on the rc.3 persistence path: normal, web-search/fetch, attachment-card, excluded-reply and content-filtered conversations, import-then-continue, and the invariant that the imported `deepseek-chat-export` source is an observation label, never a local model request, with usage staying unavailable instead of fabricated.
+- Source-log witnessing: the web/headless acceptance driver digests the target and non-target fixture logs before and after the real operation interval; loss, replacement, addition or read failure is never recorded as unchanged, and operation, witness and cleanup outcomes stay separate terminal states.
+
+### Security
+
+- The 0.8.1 host risk decision was bound to the exact rc.2 host lock and does not carry forward. The rc.3 rescan keeps the root production/full and slim runtime scopes clean; the full rc.3 host still reports the same ten known advisories (75 affected package entries, one high) as unauthorized findings pending a new maintainer decision. See the [security policy](SECURITY.md#known-upstream-dependency-gap).
 
 ## 0.8.1 - 2026-11-13
 
