@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import {run,digest,fileManifest} from './acceptance_identity.mjs'
 import {finalizeProfileAcceptance} from './acceptance_cleanup.mjs'
 import {classifyAcceptanceError as diagnostic} from './acceptance_diagnostics.mjs'
+import {captureSourceLogs, compareSourceLogs, witnessGate} from './source_log_witness.mjs'
 // The Web host prints a scratch access URL during boot. Keep its token out of
 // tool output and retained acceptance logs.
 const originalStdoutWrite=process.stdout.write.bind(process.stdout)
@@ -30,7 +31,7 @@ const receiptPath=join(base,`${profile}-native-annex.json`)
 // receipt or output directory already exists. mkdir is also the run lock.
 try {await lstat(receiptPath);throw new Error('existing profile receipt')} catch(error) {if(error.code!=='ENOENT')throw error}
 const output=join(base,`${profile}-native-results`);await mkdir(output,{mode:0o700})
-let app,owner,currentGate='artifact_digest',failure,work,annex,observedHostVersion=null
+let app,owner,currentGate='artifact_digest',failure,work,annex,observedHostVersion=null,witnessBefore=null
 const startedAt=new Date().toISOString()
 const writeAnnex=async value=>{await writeFile(receiptPath,JSON.stringify(value,null,2)+'\n',{flag:'wx'})}
 const recordGate=(id,note,subject={kind:'artifact',id:canonical.sha256})=>{if(!annex)return;annex.gates.push({id,required:true,status:'passed',subject,exit_code:0,note,evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}});console.log(JSON.stringify({gate:id,status:'passed'}))}
@@ -93,6 +94,11 @@ const checkedReport=async(locale,prefix)=>{
  begin('profile_service_boot');app=await boot();for(const name of ['sessionPersistence','sessionQuery','agents','commands','tools'])assert.ok(app.ctx.get(name));assert.ok(app.ctx.profileContext.startedBundles.includes('dsh-session-insights'));assert.ok(tools.every(n=>app.ctx.tools.get(n)));record(currentGate,profile==='web'?'official Web profile boot mounted installed Bundle; private overlay disables HMR watcher and title model':'official Headless profile services mounted installed Bundle; one-shot runner is paused for deterministic service checks; actual CLI model task is a separate gate')
  begin('real_persistence');for(const item of [['recovery-mixed-group','native-target',project],['optional-isError','native-unrelated',join(work,'unrelated')]]){const a=await fixture(...item);const h=await app.ctx.sessionPersistence.create(a.header,{inheritedEventCount:a.inheritedEventCount});try{await h.append(a.events);await h.flush()}finally{await h.close()}}
  assert.equal((await app.ctx.sessionPersistence.list()).length,2);record(currentGate,'two nonempty official strict fixtures appended, flushed and closed through actual JSONL persistence')
+ // D03 source-log witness: capture the persisted session-log tree before any
+ // report operation, after the operations end or throw (in the finally below),
+ // and compare before the isolated tree is removed. Loss, addition,
+ // replacement or a read error is never recorded as unchanged.
+ witnessBefore=await captureSourceLogs(join(home,'sessions'),{label:`${profile}-source-logs:before`});record('source_log_witness_capture',`source-log witness before-capture: ${witnessBefore.totals.files} files, ${witnessBefore.totals.bytes} bytes`)
  await app.shutdown.shutdown(0);app=undefined
  begin('cold_read');app=await boot();assert.equal(app.ctx.sessions.get('native-target'),undefined);const cold=await app.ctx.sessionQuery.observeSession('native-target',{projectionMode:'none'});try{assert.equal(cold.events.length,18);assert.ok(cold.events.some(e=>e.data?.error?.code==='TOOL_OUTCOME_UNKNOWN'));assert.ok(cold.events.some(e=>e.data?.error?.code==='TOOL_NOT_STARTED'))}finally{cold[Symbol.dispose]()};record(currentGate,'after full profile disposal and restart, cold query restored 18 durable events including both recovery statuses')
  begin('agent_command');owner=await app.ctx.agents.create({sessionId:'native-command-agent',meta:{cwd:join(work,'driver')}});assert.equal(owner.agent.status,'idle');const zh=await checkedReport('zh-CN','report-zh');assert.ok(owner.agent.session.snapshotEvents().some(e=>e.type==='command/done'));record(currentGate,'actual factory-created Agent executed registered slash command with durable command completion')
@@ -114,6 +120,19 @@ const checkedReport=async(locale,prefix)=>{
    annex.gates.push({id,required:true,status:'failed',subject:{kind:'artifact',id:canonical.sha256},exit_code:1,note:'native operation failed; local diagnostic contains stage and error classification',evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}})
   }
  }finally{
+  // Reliable terminal path for the witness: the after-capture and comparison
+  // run here whether the report operations passed, failed or were interrupted,
+  // and always before any work-tree removal in finalizeProfileAcceptance.
+  if(witnessBefore){
+   try{
+    const witnessAfter=await captureSourceLogs(join(work,'dsh-home','sessions'),{label:`${profile}-source-logs:after`})
+    const comparison=compareSourceLogs(witnessBefore,witnessAfter)
+    annex.gates.push(witnessGate('source_log_witness',witnessBefore,witnessAfter,comparison))
+    console.log(JSON.stringify({gate:'source_log_witness',verdict:comparison.verdict,files:witnessAfter.totals.files,differences:comparison.totals.differences}))
+   }catch(witnessError){
+    annex.gates.push({id:'source_log_witness',required:true,status:'failed',subject:{kind:'source_log_witness',id:witnessBefore.totals.files},exit_code:1,note:`after-capture failed: ${witnessError.code ?? 'capture_error'}; the observed interval stays unwitnessed, not unchanged`,evidence:{mode:'executed',error:String(witnessError.message ?? witnessError)}})
+   }
+  }
   if(!annex){
    annex={schema:'native-acceptance/v2',status:'failed',product:'dsh-session-insights',gate_profile:`actual-${profile}-host`,repository:{url:canonical.repository,commit:canonical.commit},runtime_tree_sha256:null,artifact:{filename:canonical.filename,sha256:canonical.sha256,size_bytes:canonical.size_bytes,file_count:canonical.file_count,git_head:canonical.commit},platform:{os:process.platform==='win32'?'windows':'macos',shell:process.platform==='win32'?'pwsh':'posix',toolchain:{node:process.version,architecture:process.arch,dsh:observedHostVersion??'unresolved'}},gates:[{id:currentGate,required:true,status:'failed',subject:{kind:'artifact',id:canonical.sha256},exit_code:1,note:'initialization failed before host identity resolution',evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}}],cleanup:{status:'not_run',remaining_ids:[]},run:{started_at:startedAt,finished_at:'',run_url:null},unperformed_actions:['commit','push','merge','tag','package_publish','release','public_promotion']}
   }
