@@ -92,13 +92,40 @@ export function compareSourceLogs(before, after) {
   }
 }
 
-// Native-acceptance gate record for one witness comparison. Required: a
-// `changed` verdict (including any read error) fails the gate. An optional
-// `scope` (relative paths of the witnessed target/non-target logs) binds the
-// verdict to those paths while the full-tree comparison stays recorded in the
-// evidence: scope-internal loss, replacement or read failure fails, and an
-// in-scope addition fails; out-of-scope additions (the host's own new sessions
-// inside the interval) stay visible but do not flip the scoped verdict.
+// Resolve each expected session to its directory using exact path components,
+// including errors, so an unreadable log cannot silently disappear from the
+// scope. Require one directory and a readable nonempty session-log collection
+// for each identity. Returned roots include trailing slash to prevent prefix
+// collisions with a different session name.
+export function sessionWitnessScope(before, ids) {
+  if (!Array.isArray(ids) || !ids.length || new Set(ids).size !== ids.length)
+    throw new Error('expected distinct session identities')
+  const roots = []
+  for (const id of ids) {
+    if (typeof id !== 'string' || !id || id.includes('/') || id.includes('\\'))
+      throw new Error('invalid session identity')
+    const paths = [...Object.keys(before.files), ...before.errors.map(e => e.path)]
+    const matches = paths.flatMap(path => {
+      const parts = path.split('/'), index = parts.indexOf(id)
+      return index < 0 || index === parts.length - 1 ? [] : [parts.slice(0, index + 1).join('/') + '/']
+    })
+    const unique = [...new Set(matches)]
+    if (unique.length !== 1) throw new Error('session log directory missing or ambiguous')
+    const root = unique[0]
+    const log = /^session(?:\.v[1-9][0-9]*)?\.jsonl(?:\.zstd)?$/
+    if (!Object.entries(before.files).some(([path, file]) => path.startsWith(root) && log.test(path.slice(root.length)) && file.bytes > 0))
+      throw new Error('session has no readable nonempty source log')
+    if (before.errors.some(error => error.path === root.slice(0, -1) || error.path.startsWith(root)))
+      throw new Error('session source-log capture contains a read error')
+    roots.push(root)
+  }
+  return roots
+}
+
+// The detailed gate is retained in a private witness file. `scope`, when
+// supplied, contains whole session-directory prefixes, not the before-file
+// list: additions within those directories must be detected, while new host
+// sessions outside them remain visible in the full-tree comparison.
 export function witnessGate(id, before, after, comparison, {scope} = {}) {
   if (scope === undefined) {
     const passed = comparison.verdict === 'unchanged'
@@ -114,13 +141,18 @@ export function witnessGate(id, before, after, comparison, {scope} = {}) {
       evidence: {mode: 'executed', comparison: {verdict: comparison.verdict, added: comparison.added, removed: comparison.removed, changed: comparison.changed, read_errors: comparison.read_errors}, before_captured_at: before.captured_at, after_captured_at: after.captured_at},
     }
   }
+  if (!Array.isArray(scope) || !scope.length || scope.some(root => typeof root !== 'string' || !root.endsWith('/')))
+    throw new Error('nonempty session directory scope required')
+  const within = path => scope.some(root => path === root.slice(0, -1) || path.startsWith(root))
   const scoped = {
-    added: comparison.added.filter((path) => scope.includes(path)),
-    removed: comparison.removed.filter((path) => scope.includes(path)),
-    changed: comparison.changed.filter((c) => scope.includes(c.path)),
-    read_errors: comparison.read_errors.filter((e) => scope.includes(e.path)),
+    added: comparison.added.filter(within),
+    removed: comparison.removed.filter(within),
+    changed: comparison.changed.filter(c => within(c.path)),
+    read_errors: comparison.read_errors.filter(e => within(e.path)),
   }
-  const missing = scope.filter((path) => before.files[path] === undefined || after.files[path] === undefined)
+  const log = /^session(?:\.v[1-9][0-9]*)?\.jsonl(?:\.zstd)?$/
+  const hasLog = (capture, root) => Object.entries(capture.files).some(([path, file]) => path.startsWith(root) && log.test(path.slice(root.length)) && file.bytes > 0)
+  const missing = scope.filter(root => !hasLog(before, root) || !hasLog(after, root))
   const passed = scoped.added.length === 0 && scoped.removed.length === 0 && scoped.changed.length === 0
     && scoped.read_errors.length === 0 && missing.length === 0
   return {
@@ -130,9 +162,23 @@ export function witnessGate(id, before, after, comparison, {scope} = {}) {
     subject: {kind: 'source_log_witness', id: `scope:${scope.length}`},
     exit_code: passed ? 0 : 1,
     note: passed
-      ? `witnessed target/non-target logs unchanged across the observed operation interval: ${scope.length} scoped paths digested before and after, zero read errors; full-tree collection recorded alongside`
+      ? `witnessed target/non-target logs unchanged across the observed operation interval: ${scope.length} session directories digested before and after, zero scoped read errors; full-tree collection recorded alongside`
       : `witnessed target/non-target logs did not stay unchanged: ${scoped.changed.length} changed, ${scoped.removed.length} lost, ${scoped.added.length} added, ${scoped.read_errors.length} read errors, ${missing.length} missing from a capture (loss, replacement and read failure are never recorded as unchanged)`,
     evidence: {mode: 'executed', scope: [...scope].sort(), scoped, full_tree: {verdict: comparison.verdict, added: comparison.added, removed: comparison.removed, changed: comparison.changed, read_errors: comparison.read_errors, before_files: before.totals.files, after_files: after.totals.files}, before_captured_at: before.captured_at, after_captured_at: after.captured_at},
+  }
+}
+
+// Project the detailed private witness into the existing native-acceptance/v2
+// contract. The artifact is the gate subject; the note binds the separately
+// retained private witness bytes, without exposing local paths in the annex.
+export function projectWitnessGate({passed, artifactSha256, witnessSha256 = null, reason = 'source-log witness'}) {
+  if (!/^[0-9a-f]{64}$/.test(artifactSha256) || (witnessSha256 !== null && !/^[0-9a-f]{64}$/.test(witnessSha256)))
+    throw new Error('invalid witness or artifact identity')
+  return {
+    id: 'source_log_witness', required: true, status: passed ? 'passed' : 'failed',
+    subject: {kind: 'artifact', id: artifactSha256}, exit_code: passed ? 0 : 1,
+    note: `${reason}; private witness sha256: ${witnessSha256 ?? 'unavailable'}`,
+    evidence: {mode: 'executed', source_result_sha256: null, source_gate_id: null, invalidation_reason: null},
   }
 }
 

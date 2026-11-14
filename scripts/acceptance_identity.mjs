@@ -119,9 +119,13 @@ export async function inspectRuntimeSelfConsistent(root) {
   return {...closure, expected}
 }
 
-export async function npm(args, options = {}) {
-  const cli = process.env.npm_execpath || (process.platform === 'win32'
+export async function npmCliPath() {
+  return await realpath(process.env.npm_execpath || (process.platform === 'win32'
     ? join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js')
-    : await realpath((await run('which', ['npm'])).stdout.trim()))
+    : (await run('which', ['npm'])).stdout.trim()))
+}
+
+export async function npm(args, options = {}) {
+  const cli = await npmCliPath()
   return run(process.execPath, [cli, ...args], options)
 }

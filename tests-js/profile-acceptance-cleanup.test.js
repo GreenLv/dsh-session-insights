@@ -79,8 +79,8 @@ test('real entrypoint setup failure writes a failed annex and removes its synthe
   const base=mkdtempSync(join(tmpdir(),'dsi-profile-lifecycle-'))
   try{
     const commit='1'.repeat(40), hash='2'.repeat(64)
-    writeFileSync(join(base,'artifact.json'),JSON.stringify({repository:'https://example.invalid/repo',commit,filename:'candidate.tgz',sha256:hash,size_bytes:1,file_count:1}))
-    const p=spawnSync(process.execPath,[resolve('scripts/verify_profile_acceptance.mjs'),base,join(base,'missing-host'),'web'],{encoding:'utf8'})
+    const args=[resolve('scripts/verify_profile_acceptance.mjs'),base,join(base,'missing-host'),'web',commit,hash,'3'.repeat(64)]
+    const p=spawnSync(process.execPath,args,{encoding:'utf8'})
     assert.equal(p.status,1,p.stderr)
     const annex=JSON.parse(readFileSync(join(base,'web-native-annex.json'),'utf8'))
     assert.equal(annex.status,'failed')
@@ -91,7 +91,7 @@ test('real entrypoint setup failure writes a failed annex and removes its synthe
     assert.ok(!JSON.stringify(diagnostic).includes(base))
     assert.ok(!p.stderr.includes(base))
     const receiptBefore=readFileSync(join(base,'web-native-annex.json'))
-    const repeat=spawnSync(process.execPath,[resolve('scripts/verify_profile_acceptance.mjs'),base,join(base,'missing-host'),'web'],{encoding:'utf8'})
+    const repeat=spawnSync(process.execPath,args,{encoding:'utf8'})
     assert.equal(repeat.status,1)
     assert.deepEqual(readFileSync(join(base,'web-native-annex.json')),receiptBefore)
     assert.deepEqual(JSON.parse(readFileSync(join(base,'web-native-results','private-error.json'),'utf8')),diagnostic)
@@ -103,10 +103,28 @@ test('an existing profile receipt blocks a fresh run before creating outputs',()
   try{
     writeFileSync(join(base,'artifact.json'),JSON.stringify({repository:'https://example.invalid/repo',commit:'1'.repeat(40),filename:'candidate.tgz',sha256:'2'.repeat(64),size_bytes:1,file_count:1}))
     const receipt=join(base,'web-native-annex.json');writeFileSync(receipt,'previous receipt')
-    const p=spawnSync(process.execPath,[resolve('scripts/verify_profile_acceptance.mjs'),base,join(base,'missing-host'),'web'],{encoding:'utf8'})
+    const p=spawnSync(process.execPath,[resolve('scripts/verify_profile_acceptance.mjs'),base,join(base,'missing-host'),'web','1'.repeat(40),'2'.repeat(64),'3'.repeat(64)],{encoding:'utf8'})
     assert.equal(p.status,1)
     assert.equal(readFileSync(receipt,'utf8'),'previous receipt')
     assert.throws(()=>readFileSync(join(base,'web-native-results','private-error.json')),{code:'ENOENT'})
+  } finally {rmSync(base,{recursive:true,force:true})}
+})
+
+test('profile identity requires independent anchors and retains a failed receipt on untrusted metadata',()=>{
+  const base=mkdtempSync(join(tmpdir(),'dsi-profile-identity-'))
+  try {
+    const script=resolve('scripts/verify_profile_acceptance.mjs'), host=join(base,'missing-host')
+    writeFileSync(join(base,'artifact.json'),JSON.stringify({filename:'candidate.tgz'}))
+    const noAnchors=spawnSync(process.execPath,[script,base,host,'web'],{encoding:'utf8'})
+    assert.equal(noAnchors.status,1)
+    assert.throws(()=>readFileSync(join(base,'web-native-annex.json')),{code:'ENOENT'})
+    const p=spawnSync(process.execPath,[script,base,host,'web','1'.repeat(40),'2'.repeat(64),'3'.repeat(64)],{encoding:'utf8'})
+    assert.equal(p.status,1)
+    const annex=JSON.parse(readFileSync(join(base,'web-native-annex.json'),'utf8'))
+    assert.equal(annex.status,'failed');assert.equal(annex.artifact,null)
+    assert.equal(annex.gates[0].id,'artifact_identity');assert.equal(annex.gates[0].status,'failed')
+    assert.deepEqual(annex.gates[0].subject,{kind:'commit',id:'1'.repeat(40)})
+    assert.deepEqual(annex.cleanup,{status:'passed',remaining_ids:[]})
   } finally {rmSync(base,{recursive:true,force:true})}
 })
 
@@ -117,7 +135,7 @@ test('portable gate failure produces bounded local diagnosis and a failed annex'
     writeFileSync(artifact,'synthetic package with incorrect digest')
     const p=spawnSync(process.execPath,[resolve('scripts/verify_host_acceptance.mjs'),
       '--package',artifact,'--expected-sha256','2'.repeat(64),'--commit','1'.repeat(40),
-      '--runtime',base,'--host',base,'--workdir',base,'--annex',annexPath],{encoding:'utf8'})
+      '--runtime',base,'--host',base,'--workdir',base,'--annex',annexPath,'--receipt',join(base,'receipt.json'),'--receipt-sha256','3'.repeat(64)],{encoding:'utf8'})
     assert.equal(p.status,1,p.stderr)
     const annex=JSON.parse(readFileSync(annexPath,'utf8'))
     assert.equal(annex.status,'failed')
@@ -128,7 +146,7 @@ test('portable gate failure produces bounded local diagnosis and a failed annex'
     const before=readFileSync(annexPath),diagnosticBefore=readFileSync(annexPath+'.diagnostic.json')
     const repeat=spawnSync(process.execPath,[resolve('scripts/verify_host_acceptance.mjs'),
       '--package',artifact,'--expected-sha256','2'.repeat(64),'--commit','1'.repeat(40),
-      '--runtime',base,'--host',base,'--workdir',base,'--annex',annexPath],{encoding:'utf8'})
+      '--runtime',base,'--host',base,'--workdir',base,'--annex',annexPath,'--receipt',join(base,'receipt.json'),'--receipt-sha256','3'.repeat(64)],{encoding:'utf8'})
     assert.equal(repeat.status,1)
     assert.deepEqual(readFileSync(annexPath),before)
     assert.deepEqual(readFileSync(annexPath+'.diagnostic.json'),diagnosticBefore)

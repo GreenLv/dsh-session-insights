@@ -12,15 +12,15 @@ Public releases are listed newest first.
 - **0.5.x** adapts to V4 session logs and later host releases, with safer recovery and bounded analysis.
 - **0.4.x and earlier** introduce native reports and cleanup, the dashboard, and the original Python CLI.
 
-## 0.8.2 - unreleased candidate
+## 0.8.2 - 2026-11-14
 
-This candidate retargets the analysis contract to DSH `0.2.2-rc.3`. Upgrade DSH to `0.2.2-rc.3` or later before installing; rc.2 and older hosts are refused. Native, GUI, model and release acceptance are recorded separately and are not claimed by this entry.
+Version 0.8.2 adapts to DSH `0.2.2-rc.3` and strengthens source-log and artifact verification. Upgrade DSH to `0.2.2-rc.3` or later before installing; rc.2 and older hosts are refused.
 
 ### Changed
 
 - The minimum DSH host rises from rc.2 to `0.2.2-rc.3`. The exact acceptance target is `0.2.2-rc.3` and `compatibility` stays empty; later host releases stay admitted by the declared range, which does not claim they have been tested. Node.js `>=24.9.0`, Cordis `~4.1.0` and Python `>=3.11` are unchanged.
 - The analyzer identity moves to `v4-dsh022rc3.1`. Semantic runs recorded by 0.8.1 do not resume under 0.8.2 — finish them with the version that created them or start a new run. Older deterministic caches are invalidated automatically and reparsed from source. Existing reports can still be opened.
-- The full upstream rc.2 to rc.3 diff was verified: only version bumps plus an upstream exporter robustness fix in `session-log-export`; no consumed Session, catalog, query, agent, tools, LLM or app-boot source changed.
+- The full upstream rc.2 to rc.3 diff was reviewed. Within the existing components consumed by DSI, changes are version bumps and a robustness fix in `session-log-export`; consumed Session, catalog, query, agent, tools, LLM and app-boot sources are unchanged.
 
 ### Added
 
@@ -29,7 +29,7 @@ This candidate retargets the analysis contract to DSH `0.2.2-rc.3`. Upgrade DSH 
 
 ### Security
 
-- The 0.8.1 host risk decision was bound to the exact rc.2 host lock and does not carry forward. The rc.3 rescan keeps the root production/full and slim runtime scopes clean; the full rc.3 host still reports the same ten known advisories (75 affected package entries, one high) as unauthorized findings pending a new maintainer decision. See the [security policy](SECURITY.md#known-upstream-dependency-gap).
+- Root production/full and the slim rc.3 runtime scans are clean. The maintainer accepted ten existing host advisories, including four high-severity advisories, for 0.8.2 and the exact reviewed rc.3 inputs on 2026-11-14. The host raw scan remains nonzero and is assessed as accepted known risk. New findings and scanner failures remain blocking. See the [security policy](SECURITY.md#known-upstream-dependency-gap).
 
 ## 0.8.1 - 2026-11-13
 

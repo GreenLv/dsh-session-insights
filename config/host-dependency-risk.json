@@ -1,14 +1,14 @@
 {
   "schema": "dsi-host-risk-acceptance/v1",
-  "product_version": "0.8.1",
-  "host_version": "0.2.2-rc.2",
+  "product_version": "0.8.2",
+  "host_version": "0.2.2-rc.3",
   "authorization": {
     "decision": "accepted",
-    "recorded_on": "2026-11-13",
-    "scope": "Maintainer acceptance for this release, the exact official rc.2 host manifest/lock and the ten listed advisories only."
+    "recorded_on": "2026-11-14",
+    "scope": "Maintainer explicitly accepted these same ten previously reviewed advisories for DSI 0.8.2, the exact official rc.3 host test manifest/lock and independently reviewed vulnerability facts only."
   },
-  "manifest_sha256": "e6da6f310c67747eeb895bf5728f782facdb19abbb34d7fc78accf679b3fce22",
-  "lock_sha256": "77f372a32d21c5c64c8a57979b274c4cf231fceb9b10d022aae8637b36710773",
+  "manifest_sha256": "7b360e8e1583546a17a4e7f434a94c7534eb6d0a292ac2a07515d9b78fecbf51",
+  "lock_sha256": "49a8c486bf401966f640670ef0bfd83d5082ea1ebd704d614bf43e9cfbc06fb1",
   "advisories": [
     "https://github.com/advisories/GHSA-2m5v-pch6-74hx",
     "https://github.com/advisories/GHSA-4qv8-2p9j-2685",
@@ -22,10 +22,9 @@
     "https://github.com/advisories/GHSA-xjj6-f33q-929c"
   ],
   "expiry": "A product/host identity or manifest/lock change, new advisory or unreviewed vulnerability facts invalidate this decision. Scanner and capture failures remain failures.",
-  "note": "Reviewed reports contain the same ten direct advisories with 75 or 78 affected package entries. All report fields are bound except per-entry effects (derived reverse propagation) and fixAvailable (solver advice), whose shapes are validated and raw values retained. Package sets, via edges, installed node paths, ranges, advisory payloads and metadata remain exact. Other trees remain excluded.",
+  "note": "Ten direct advisories, including four high and six moderate, across 75 affected package entries (one high package entry). Advisory payloads match the prior rc.2 review. All report fields are bound except per-entry effects (derived reverse propagation) and fixAvailable (solver advice), whose shapes are validated and raw values retained. Package sets, via edges, installed node paths, ranges, advisory payloads and metadata remain exact. Root/runtime/Python, new findings and scanner/capture failures remain excluded.",
   "report_projection": "npm-v2-findings-without-derived-advice/v1",
   "reviewed_findings_sha256": [
-    "38d6ff51cca79b7297c93a5b2353ec8878202d0c39f576fb46a5ef1f56348245",
-    "576a20bc7cd57e98a17a8e8a12d4065b87e16baaeb00ab600cbc6c6cddb19eb7"
+    "56c5b1f21375054958c08c4180ce9685d7db68df69d672ffbb9028d5967ca575"
   ]
 }

@@ -12,6 +12,22 @@ from validate_host_annex import validate  # noqa: E402
 
 
 class ProfileAcceptanceRoundTrip(unittest.TestCase):
+    def test_witness_projection_round_trips_success_and_failure_through_real_validator(self):
+        script = r'''
+import {projectWitnessGate} from './scripts/source_log_witness.mjs'
+const passed=process.argv[1]==='pass', sha='2'.repeat(64), commit='1'.repeat(40)
+const gate=projectWitnessGate({passed,artifactSha256:sha,witnessSha256:'3'.repeat(64)})
+const annex={schema:'native-acceptance/v2',status:passed?'passed':'failed',product:'dsh-session-insights',gate_profile:'actual-web-host',repository:{url:'https://example.invalid/repo',commit},runtime_tree_sha256:null,artifact:{filename:'candidate.tgz',sha256:sha,size_bytes:1,file_count:1,git_head:commit},platform:{os:'macos',shell:'posix',toolchain:{node:process.version,dsh:'test'}},gates:[gate],cleanup:{status:'passed',remaining_ids:[]},run:{started_at:'2026-01-01T00:00:00Z',finished_at:'2026-01-01T00:00:01Z',run_url:null},unperformed_actions:[]}
+console.log(JSON.stringify(annex))
+'''
+        for mode in ('pass', 'fail'):
+            with self.subTest(mode=mode):
+                proc = subprocess.run(['node', '--input-type=module', '-e', script, mode], cwd=ROOT, text=True, encoding='utf-8', capture_output=True, check=True)
+                annex = json.loads(proc.stdout)
+                expected = 'passed' if mode == 'pass' else 'failed'
+                self.assertEqual(validate(annex)['acceptance_status'], expected)
+                self.assertIn('3' * 64, annex['gates'][0]['note'])
+
     def test_real_portable_finally_faults_remain_valid_failed_receipts(self):
         source = (ROOT / 'scripts/verify_host_acceptance.mjs').read_bytes().replace(b'\r\n', b'\n')
         for line_ending in ('lf', 'crlf'):
@@ -31,10 +47,7 @@ class ProfileAcceptanceRoundTrip(unittest.TestCase):
     def test_real_entrypoint_setup_failure_has_valid_failed_receipt(self):
         with tempfile.TemporaryDirectory(prefix='dsi-profile-setup-') as raw:
             base = Path(raw)
-            artifact = {'repository': 'https://example.invalid/repo', 'commit': '1' * 40,
-                        'filename': 'candidate.tgz', 'sha256': '2' * 64, 'size_bytes': 1, 'file_count': 1}
-            (base / 'artifact.json').write_text(json.dumps(artifact), encoding='utf-8')
-            proc = subprocess.run(['node', str(ROOT / 'scripts/verify_profile_acceptance.mjs'), str(base), str(base / 'missing-host'), 'web'], cwd=ROOT, text=True, encoding='utf-8', capture_output=True)
+            proc = subprocess.run(['node', str(ROOT / 'scripts/verify_profile_acceptance.mjs'), str(base), str(base / 'missing-host'), 'web', '1' * 40, '2' * 64, '3' * 64], cwd=ROOT, text=True, encoding='utf-8', capture_output=True)
             self.assertEqual(proc.returncode, 1)
             annex = json.loads((base / 'web-native-annex.json').read_text(encoding='utf-8'))
             self.assertEqual(validate(annex)['acceptance_status'], 'failed')

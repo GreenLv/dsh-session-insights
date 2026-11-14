@@ -4,8 +4,8 @@ import { readFile, writeFile, mkdir, mkdtemp, rm, readdir, open } from 'node:fs/
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
-import { pathToFileURL } from 'node:url'
-import { captureSourceLogs, compareSourceLogs, witnessedOperation } from '../scripts/source_log_witness.mjs'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { captureSourceLogs, compareSourceLogs, sessionWitnessScope, witnessGate, projectWitnessGate, witnessedOperation } from '../scripts/source_log_witness.mjs'
 import { cleanupPreservingFailure } from '../scripts/acceptance_cleanup.mjs'
 
 // D03 regression: source-log witnessing around actual report operations on
@@ -16,7 +16,7 @@ import { cleanupPreservingFailure } from '../scripts/acceptance_cleanup.mjs'
 // separate terminal states: no later success overwrites an earlier failure,
 // and receipts only ever go to fresh locations.
 
-const REPO = resolve(new URL('..', import.meta.url).pathname)
+const REPO = fileURLToPath(new URL('..', import.meta.url))
 // The full official host tree carries the JSONL persistence backend; the repo
 // root only carries the plugin's own peer closure.
 const req = createRequire(join(REPO, 'tests/dsh-host/package.json'))
@@ -24,6 +24,7 @@ const load = async (name) => import(pathToFileURL(req.resolve(name)).href)
 
 async function bootScene() {
   const home = await mkdtemp(join(tmpdir(), 'dsh-witness-home-'))
+  const previousHome = process.env.DSH_HOME
   process.env.DSH_HOME = home
   const { Context } = await load('@deepseek-ai/cordis')
   const jsonl = await load('@deepseek-ai/dsh-session-persistence-jsonl')
@@ -65,7 +66,10 @@ async function bootScene() {
     home, ctx, sessionsRoot,
     persist,
     execute: async (name, args, signal) => JSON.parse((await ctx.tools.get(name).execute(args, { signal })).text),
-    dispose: async () => { if (typeof ctx.dispose === 'function') await ctx.dispose() },
+    dispose: async () => {
+      try { await ctx.fiber.dispose() }
+      finally { if (previousHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = previousHome }
+    },
   }
 }
 
@@ -104,6 +108,70 @@ test('witness comparison never calls loss, addition or replacement unchanged', a
   const after2 = await captureSourceLogs(dir, { label: 'cmp2:after' })
   assert.equal(compareSourceLogs(before2, after2).verdict, 'changed')
   await rm(dir, { recursive: true, force: true })
+})
+
+test('scoped witness covers both entire session directories and ignores a new host session', async () => {
+  const root=await mkdtemp(join(tmpdir(),'dsh-witness-scope-'))
+  try {
+    const target=join(root,'project-a','native-target'), other=join(root,'project-b','native-unrelated')
+    await mkdir(target,{recursive:true});await mkdir(other,{recursive:true})
+    await writeFile(join(target,'session.v4.jsonl'),'target')
+    await writeFile(join(other,'session.v4.jsonl'),'other')
+    const before=await captureSourceLogs(root), scope=sessionWitnessScope(before,['native-target','native-unrelated'])
+    assert.equal(scope.length,2)
+    const checked=async()=>{const after=await captureSourceLogs(root);return witnessGate('source_log_witness',before,after,compareSourceLogs(before,after),{scope})}
+    await mkdir(join(root,'project-c','host-session'),{recursive:true})
+    await writeFile(join(root,'project-c','host-session','session.v4.jsonl'),'new host')
+    let gate=await checked()
+    assert.equal(gate.status,'passed');assert.equal(gate.evidence.full_tree.verdict,'changed')
+    await writeFile(join(target,'new-file.jsonl'),'unexpected addition')
+    gate=await checked();assert.equal(gate.status,'failed');assert.equal(gate.evidence.scoped.added.length,1)
+    await rm(join(target,'new-file.jsonl'))
+    await rm(join(other,'session.v4.jsonl'))
+    gate=await checked();assert.equal(gate.status,'failed');assert.equal(gate.evidence.scoped.removed.length,1)
+    await writeFile(join(other,'session.v4.jsonl'),'replacement')
+    gate=await checked();assert.equal(gate.status,'failed');assert.equal(gate.evidence.scoped.changed.length,1)
+    const after=await captureSourceLogs(root)
+    const failedPath=Object.keys(after.files).find(path=>path.includes('/native-target/'))
+    delete after.files[failedPath];after.errors.push({path:failedPath,code:'EACCES'})
+    gate=witnessGate('source_log_witness',before,after,compareSourceLogs(before,after),{scope})
+    assert.equal(gate.status,'failed');assert.equal(gate.evidence.scoped.read_errors.length,1)
+  } finally {await rm(root,{recursive:true,force:true})}
+})
+
+test('scope refuses missing, empty, ambiguous and unreadable expected sessions', async () => {
+  const root=await mkdtemp(join(tmpdir(),'dsh-witness-scope-invalid-'))
+  try {
+    const target=join(root,'a','native-target'),other=join(root,'b','native-unrelated')
+    await mkdir(target,{recursive:true});await mkdir(other,{recursive:true})
+    await writeFile(join(target,'session.v4.jsonl'),'target')
+    let before=await captureSourceLogs(root)
+    assert.throws(()=>sessionWitnessScope(before,['native-target','native-unrelated']))
+    await writeFile(join(other,'session.v4.jsonl'),'')
+    before=await captureSourceLogs(root)
+    assert.throws(()=>sessionWitnessScope(before,['native-target','native-unrelated']))
+    await writeFile(join(other,'session.v4.jsonl'),'other')
+    before=await captureSourceLogs(root)
+    before.errors.push({path:'b/native-unrelated/unreadable.jsonl',code:'EACCES'})
+    assert.throws(()=>sessionWitnessScope(before,['native-target','native-unrelated']))
+    await mkdir(join(root,'c','native-target'),{recursive:true})
+    await writeFile(join(root,'c','native-target','session.v4.jsonl'),'duplicate')
+    before=await captureSourceLogs(root)
+    assert.throws(()=>sessionWitnessScope(before,['native-target','native-unrelated']))
+  } finally {await rm(root,{recursive:true,force:true})}
+})
+
+test('native witness projection binds private evidence digest to artifact without leaking paths', () => {
+  const sha='1'.repeat(64),witness='2'.repeat(64)
+  for(const passed of [true,false]) {
+    const gate=projectWitnessGate({passed,artifactSha256:sha,witnessSha256:witness})
+    assert.equal(gate.status,passed?'passed':'failed')
+    assert.equal(gate.exit_code,passed?0:1)
+    assert.deepEqual(gate.subject,{kind:'artifact',id:sha})
+    assert.deepEqual(gate.evidence,{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null})
+    assert.ok(gate.note.includes(witness))
+  }
+  assert.throws(()=>projectWitnessGate({passed:true,artifactSha256:'invalid'}))
 })
 
 test('success scene: unchanged witness, preserved operation and cleanup outcomes, fresh receipt', async () => {
@@ -193,7 +261,8 @@ test('mid-operation failure scene: after-capture still runs in the reliable term
 })
 
 test('witness initialization failure is recorded and the operation never starts', async () => {
-  const missing = join(await mkdtemp(join(tmpdir(), 'dsh-witness-init-')), 'sessions')
+  const root = await mkdtemp(join(tmpdir(), 'dsh-witness-init-'))
+  const missing = join(root, 'sessions')
   const record = await witnessedOperation({
     root: missing,
     label: 'init-failure',
@@ -202,7 +271,7 @@ test('witness initialization failure is recorded and the operation never starts'
   assert.equal(record.witness.status, 'failed')
   assert.equal(record.witness.phase, 'before')
   assert.equal(record.operation, null, 'no operation outcome exists without a before-capture')
-  await rm(missing, { recursive: true, force: true })
+  await rm(root, { recursive: true, force: true })
 })
 
 test('cleanup failure scene: cleanup failure is preserved beside a successful witnessed operation', async () => {

@@ -1,10 +1,19 @@
 // Run the installed tarball's Node implementation, with constructed semantic
 // outputs. Never calls a model; retained reports are labelled synthetic.
 import {resolve,join} from 'node:path'
-import {pathToFileURL} from 'node:url'
+import {pathToFileURL,fileURLToPath} from 'node:url'
 import {readFile,mkdir,writeFile} from 'node:fs/promises'
 import {createHash} from 'node:crypto'
-const [packagePath,outputPath,tarball]=process.argv.slice(2).map(p=>resolve(p))
+import assert from 'node:assert/strict'
+import {fileManifest} from './acceptance_identity.mjs'
+import {verifyCanonicalArtifact} from './canonical_artifact.mjs'
+const [packageArg,outputArg,tarballArg,receiptArg,commit,expectedSha256,expectedReceiptSha256]=process.argv.slice(2)
+if(!packageArg||!outputArg||!tarballArg||!receiptArg) throw new Error('package, output, tarball, receipt and independent identities required')
+const [packagePath,outputPath,tarball,receiptPath]=[packageArg,outputArg,tarballArg,receiptArg].map(p=>resolve(p))
+const sourceRoot=fileURLToPath(new URL('../',import.meta.url))
+const {receipt:canonical}=await verifyCanonicalArtifact({receiptPath,tarballPath:tarball,sourceRoot,expectedCommit:commit,expectedSha256,expectedReceiptSha256})
+assert.deepEqual(await fileManifest(packagePath), canonical.files, 'installed package differs from the accepted artifact')
+assert.equal(JSON.parse(await readFile(join(packagePath,'package.json'),'utf8')).gitHead,commit)
 const importFile=path=>import(pathToFileURL(join(packagePath,path)).href)
 const {buildReport}=await importFile('plugin/lib/analyzer.js')
 const semantic=await importFile('plugin/lib/semantic.js')

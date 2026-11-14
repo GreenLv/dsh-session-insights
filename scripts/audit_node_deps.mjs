@@ -1,6 +1,6 @@
 // Dependency audit gate, bound per dependency tree. A clean scan passes only
 // with a valid non-empty inventory. Findings fail unless the host tree matches
-// the maintainer's new 0.8.1 manifest/lock, advisory set and reviewed report.
+// the maintainer's current manifest/lock, advisory set and reviewed report.
 // The retired 0.8.0 Zod policy cannot authorize any current finding.
 // Raw npm scan output and its actual exit status are retained either way.
 import {createHash} from 'node:crypto'
@@ -13,7 +13,7 @@ import {HOST_TREES,PRODUCT_VERSION} from './acceptance_identity.mjs'
 const ROOT=fileURLToPath(new URL('../',import.meta.url))
 const WORKFLOW='.github/workflows/ci.yml'
 export const HOST_RISK_POLICY_PATH='config/host-dependency-risk.json'
-// Cohort of one candidate: root manifests plus the exact rc.2 acceptance
+// Cohort of one candidate: root manifests plus the exact rc.3 acceptance
 // trees' manifest/lock. The 0.8.0 cohort used rc.1 in these same paths; its
 // exception policy is historical and cannot authorize this candidate.
 export const COHORT_PATHS=['package.json','package-lock.json','pyproject.toml','src/dsh_session_insights/__init__.py',

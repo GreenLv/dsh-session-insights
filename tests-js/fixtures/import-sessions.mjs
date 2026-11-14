@@ -8,14 +8,14 @@
 // exporter's format_version 3 schema. No model, GUI or user data.
 import { createRequire } from 'node:module'
 import { stripTypeScriptTypes } from 'node:module'
-import { pathToFileURL } from 'node:url'
-import { mkdirSync, mkdtempSync, symlinkSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { mkdirSync, mkdtempSync, symlinkSync, readFileSync, writeFileSync, rmSync, readdirSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import assert from 'node:assert/strict'
 
-const HOST_ROOT = resolve(new URL('../../tests/dsh-host', import.meta.url).pathname)
+const HOST_ROOT = fileURLToPath(new URL('../../tests/dsh-host', import.meta.url))
 const req = createRequire(join(HOST_ROOT, 'package.json'))
 const load = async (name) => import(pathToFileURL(req.resolve(name)).href)
 
@@ -138,7 +138,9 @@ function exportArchive() {
 export async function importSyntheticExports() {
   const stage = mkdtempSync(join(tmpdir(), 'dsh-import-stage-'))
   const home = mkdtempSync(join(tmpdir(), 'dsh-import-home-'))
-  const workspacePath = join(mkdtempSync(join(tmpdir(), 'dsh-import-ws-')), 'project')
+  const workspaceRoot = mkdtempSync(join(tmpdir(), 'dsh-import-ws-'))
+  const workspacePath = join(workspaceRoot, 'project')
+  let ctx
   mkdirSync(workspacePath, { recursive: true })
   try {
     // Stage the published importer TypeScript sources verbatim (verified by
@@ -146,10 +148,10 @@ export async function importSyntheticExports() {
     // Node's own TypeScript transform (type stripping; no semantic rewrite),
     // and resolve official packages through the host tree. The stage sits
     // outside node_modules because Node refuses to strip types there.
-    const pkgDir = req.resolve('@deepseek-ai/dsh-deepseek-chat-import/package.json').replace('/package.json', '')
+    const pkgDir = dirname(req.resolve('@deepseek-ai/dsh-deepseek-chat-import/package.json'))
     const SOURCES = ['src/importer.ts', 'src/conversation.ts', 'src/format.ts', 'src/archive.ts', 'src/types.ts']
     mkdirSync(join(stage, 'src'), { recursive: true })
-    symlinkSync(join(HOST_ROOT, 'node_modules'), join(stage, 'node_modules'), 'dir')
+    symlinkSync(join(HOST_ROOT, 'node_modules'), join(stage, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir')
     const sourceDigests = {}
     for (const rel of SOURCES) {
       const published = readFileSync(join(pkgDir, rel), 'utf8')
@@ -165,7 +167,7 @@ export async function importSyntheticExports() {
     const importer = await import(pathToFileURL(join(stage, 'src/importer.js')).href)
     const { zipSync, strToU8 } = await load('fflate')
 
-    const ctx = new Context()
+    ctx = new Context()
     const sessionsRoot = join(home, 'sessions')
     await jsonl.apply(ctx, { root: sessionsRoot, compression: 'zstd' })
     const persistence = ctx.get('sessionPersistence')
@@ -198,6 +200,7 @@ export async function importSyntheticExports() {
         events,
         inheritedEventCount: handle.inheritedEventCount,
       })
+      await handle.close()
     }
 
     // Import-then-continue: the titled two-turn conversation joins a further
@@ -232,6 +235,7 @@ export async function importSyntheticExports() {
       events: continuedSlice.events ?? continuedSlice,
       inheritedEventCount: reread.inheritedEventCount,
     }
+    await reread.close()
     snapshots[snapshots.findIndex((s) => s.session.id === continued)] = continuedSnap
 
     return {
@@ -245,12 +249,21 @@ export async function importSyntheticExports() {
       snapshots,
       warnings,
       sessionsRoot,
+      persistedEntryCount: readdirSync(sessionsRoot).length,
       continuedSessionId: continued,
       importerIdentity: { ...importerIdentity(), sourceDigests },
       sessionFormatValidatedBy: 'Session.create via the official importer write path',
       Session,
     }
   } finally {
-    rmSync(stage, { recursive: true, force: true })
+    try { if (ctx) await ctx.fiber.dispose() }
+    finally {
+      const errors = []
+      for (const path of [stage, home, workspaceRoot]) {
+        try { rmSync(path, { recursive: true, force: true }) }
+        catch (error) { errors.push(error) }
+      }
+      if (errors.length) throw new AggregateError(errors, 'import harness cleanup failed')
+    }
   }
 }

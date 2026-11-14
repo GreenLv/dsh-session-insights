@@ -3,23 +3,24 @@
 // services with populated synthetic input. Full profile boot, JSONL persistence
 // and model roundtrips require separate native-host gates.
 import {createRequire} from 'node:module'
-import {pathToFileURL} from 'node:url'
+import {pathToFileURL,fileURLToPath} from 'node:url'
 import {resolve, join, dirname, basename} from 'node:path'
 import {readFile, writeFile, mkdir, mkdtemp, rm, rmdir, readdir, symlink, cp, realpath, stat, lstat} from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import {run, digest, fileManifest, inspectRuntime, HOST_TARGETS, MINIMUM_DSH_RANGE, PRODUCT_VERSION} from './acceptance_identity.mjs'
 import {classifyAcceptanceError} from './acceptance_diagnostics.mjs'
+import {verifyCanonicalArtifact} from './canonical_artifact.mjs'
 
 const TOOLS = ['session_insights_prepare', 'session_insights_get_batch', 'session_insights_submit_batch', 'session_insights_get_aggregate', 'session_insights_submit_aggregate', 'session_insights_finalize', 'session_insights_cleanup']
 const REQUIRED = ['artifact_digest', 'artifact_identity', 'runtime_closure', 'host_cli_identity', 'install_official_cli', 'installed_manifest', 'uninstall_official_cli', 'reload_official_cli', 'reloaded_manifest', 'loaded_manifest', 'load_and_register', 'project_isolation', 'deterministic_report', 'cancel_recovers', 'rerun_after_cancel', 'registration_reload', 'dispose_cleanup']
 
 function parseArgs(argv) {
-  const result = {}, paths = new Set(['package', 'runtime', 'host', 'workdir', 'annex'])
+  const result = {}, paths = new Set(['package', 'receipt', 'runtime', 'host', 'workdir', 'annex'])
   // host-version is optional: when omitted it defaults to the primary
   // acceptance target; when given it must be one of the mapped targets. The
-  // default is applied BEFORE the required check, so a seven-argument
-  // invocation (as the Windows workflow passes) is accepted.
-  const keys = ['package', 'expected-sha256', 'commit', 'runtime', 'host', 'workdir', 'annex']
+  // default is applied BEFORE checking the required identity inputs, so
+  // callers can omit host-version while providing all independent anchors.
+  const keys = ['package', 'receipt', 'receipt-sha256', 'expected-sha256', 'commit', 'runtime', 'host', 'workdir', 'annex']
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i].slice(2)
     if (argv[i] === '--host-version') {
@@ -32,7 +33,7 @@ function parseArgs(argv) {
   }
   result['host-version'] = result['host-version'] || HOST_TARGETS.primary
   if (keys.some(key => !result[key])) throw new Error('all acceptance options are required')
-  if (!/^[0-9a-f]{40}$/.test(result.commit) || !/^[0-9a-f]{64}$/.test(result['expected-sha256'])) throw new Error('full commit and lowercase SHA-256 are required')
+  if (!/^[0-9a-f]{40}$/.test(result.commit) || !/^[0-9a-f]{64}$/.test(result['expected-sha256']) || !/^[0-9a-f]{64}$/.test(result['receipt-sha256'])) throw new Error('full commit and independent lowercase SHA-256 identities are required')
   const allTargets = [HOST_TARGETS.primary, ...HOST_TARGETS.compatibility]
   if (!allTargets.includes(result['host-version']))
     throw new Error(`host-version ${result['host-version']} is not an acceptance target (${allTargets.join(', ')})`)
@@ -85,6 +86,12 @@ async function main() {
   try {
     const bytes = await readFile(options.package)
     record('artifact_digest', digest(bytes) === options['expected-sha256'], 'accepted SHA-256 compared before install')
+    stage = 'artifact_identity'
+    const {receipt: canonical} = await verifyCanonicalArtifact({
+      receiptPath:options.receipt, tarballPath:options.package,
+      sourceRoot:fileURLToPath(new URL('../',import.meta.url)), expectedCommit:options.commit,
+      expectedSha256:options['expected-sha256'], expectedReceiptSha256:options['receipt-sha256'],
+    })
     work = await realpath(await mkdtemp(join(options.workdir, 'host-acceptance-')))
     const home = join(work, 'dsh-home'), extraction = join(work, 'artifact')
     await mkdir(home); await mkdir(extraction)
@@ -97,7 +104,7 @@ async function main() {
       assert.equal(metadata.engines.dsh, MINIMUM_DSH_RANGE); assert.equal(metadata.dsh.engines.dsh, MINIMUM_DSH_RANGE)
       assert.equal(metadata.gitHead, options.commit)
       const files = await fileManifest(join(extraction, 'package'))
-      assert.ok(files.length > 0)
+      assert.deepEqual(files, canonical.files, 'extracted inventory differs from the accepted producer receipt')
       annex.artifact = {filename: basename(options.package), sha256: digest(bytes), size_bytes: bytes.length, file_count: files.length, git_head: metadata.gitHead}
       record('artifact_identity', true, `${PRODUCT_VERSION}, exact host, embedded commit, ${files.length} files`)
     })

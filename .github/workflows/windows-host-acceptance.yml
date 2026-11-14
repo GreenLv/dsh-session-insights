@@ -34,6 +34,9 @@ on:
       expected_sha256:
         description: 'windows-accept only: accepted artifact SHA-256 (lowercase hex)'
         required: false
+      expected_receipt_sha256:
+        description: 'windows-accept only: independently read producer artifact.json SHA-256'
+        required: false
 
 permissions:
   contents: read
@@ -45,6 +48,7 @@ concurrency:
 env:
   CANDIDATE_COMMIT: ${{ inputs.commit }}
   ACCEPTED_SHA256: ${{ inputs.expected_sha256 }}
+  ACCEPTED_RECEIPT_SHA256: ${{ inputs.expected_receipt_sha256 }}
   PRODUCER_RUN: ${{ inputs.artifact_run_id }}
   PRODUCER_ARTIFACT: ${{ inputs.artifact_name }}
 
@@ -79,7 +83,7 @@ jobs:
       - name: Validate immutable inputs
         shell: pwsh
         run: |
-          if ($env:CANDIDATE_COMMIT -cnotmatch '^[0-9a-f]{40}$' -or $env:ACCEPTED_SHA256 -cnotmatch '^[0-9a-f]{64}$' -or $env:PRODUCER_RUN -notmatch '^[0-9]+$' -or $env:PRODUCER_ARTIFACT -notmatch '^[A-Za-z0-9._-]+$') { throw 'Invalid immutable inputs' }
+          if ($env:CANDIDATE_COMMIT -cnotmatch '^[0-9a-f]{40}$' -or $env:ACCEPTED_SHA256 -cnotmatch '^[0-9a-f]{64}$' -or $env:ACCEPTED_RECEIPT_SHA256 -cnotmatch '^[0-9a-f]{64}$' -or $env:PRODUCER_RUN -notmatch '^[0-9]+$' -or $env:PRODUCER_ARTIFACT -notmatch '^[A-Za-z0-9._-]+$') { throw 'Invalid immutable inputs' }
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ inputs.commit }}
@@ -113,6 +117,8 @@ jobs:
             Write-Error "artifact digest mismatch: $hash"
             exit 1
           }
+          $receiptHash = (Get-FileHash candidate/artifact.json -Algorithm SHA256).Hash.ToLower()
+          if ($receiptHash -cne $env:ACCEPTED_RECEIPT_SHA256) { throw 'Producer receipt digest mismatch' }
           "digest $hash matches the accepted artifact"
       - name: Install the exact target runtime and host
         shell: pwsh
@@ -144,6 +150,8 @@ jobs:
           $tgz = (Get-ChildItem candidate/dsh-session-insights-*.tgz | Select-Object -First 1).Name
           node scripts/verify_host_acceptance.mjs `
             --package "candidate/$tgz" `
+            --receipt candidate/artifact.json `
+            --receipt-sha256 $env:ACCEPTED_RECEIPT_SHA256 `
             --expected-sha256 $env:ACCEPTED_SHA256 `
             --commit $env:CANDIDATE_COMMIT `
             --runtime $env:runtime `

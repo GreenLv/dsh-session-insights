@@ -5,20 +5,39 @@
 import {join, resolve, dirname} from 'node:path'
 import {readFile, writeFile, mkdir, mkdtemp, cp, rm, stat} from 'node:fs/promises'
 import assert from 'node:assert/strict'
-import {run, npm, digest, fileManifest, PRODUCT_VERSION} from './acceptance_identity.mjs'
+import {run, npmCliPath, digest, fileManifest, PRODUCT_VERSION} from './acceptance_identity.mjs'
+import {canonicalPackInputs, npmTreeIdentity} from './canonical_artifact.mjs'
 
 async function main() {
   const [commit, destination] = process.argv.slice(2)
   assert.match(commit || '', /^[0-9a-f]{40}$/)
   assert.ok(destination)
+  // A preloaded parent module or Node flag can change packing before child
+  // environment sanitization is applied; no such injected producer is valid.
+  assert.ok(!process.env.NODE_OPTIONS, 'producer NODE_OPTIONS must be empty')
+  assert.deepEqual(process.execArgv, [], 'producer Node execution flags must be empty')
   const output = resolve(destination), root = process.cwd()
   assert.equal((await run('git', ['rev-parse', 'HEAD'], {cwd: root})).stdout.trim(), commit)
   assert.equal((await run('git', ['status', '--porcelain=v1'], {cwd: root})).stdout.trim(), '')
   await mkdir(output, {recursive: true})
   const temporary = await mkdtemp(join(output, 'producer-'))
   try {
-    const env = {...process.env, npm_config_cache: join(temporary, 'npm-cache')}
-    const [projection] = JSON.parse((await npm(['pack', '--dry-run', '--json', '--ignore-scripts'], {cwd: root, env})).stdout)
+    // Ambient npm configuration can change the package projection. Use empty
+    // user/global files, clear npm config and Node injection variables, and
+    // bind the optional project config as part of the source inputs.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key])=>!/^npm_config_/i.test(key) && !['NODE_OPTIONS','NODE_PATH'].includes(key)))
+    env.npm_config_cache = join(temporary, 'npm-cache')
+    env.npm_config_userconfig = join(temporary, 'user.npmrc')
+    env.npm_config_globalconfig = join(temporary, 'global.npmrc')
+    await writeFile(env.npm_config_userconfig, '')
+    await writeFile(env.npm_config_globalconfig, '')
+    const inputIdentity = await canonicalPackInputs(root)
+    const npmCli = await npmCliPath()
+    const packNpm = (args, options={}) => run(process.execPath, [npmCli, ...args], {...options, env})
+    const nodeIdentity = {version: process.version, binary_sha256: digest(await readFile(process.execPath))}
+    const npmIdentity = await npmTreeIdentity(npmCli)
+    assert.equal((await packNpm(['--version'])).stdout.trim(), npmIdentity.version)
+    const [projection] = JSON.parse((await packNpm(['pack', '--dry-run', '--json', '--ignore-scripts'], {cwd: root})).stdout)
     assert.ok(projection.files.length > 0)
     const stage = join(temporary, 'package'), packDir = join(temporary, 'packed')
     await mkdir(stage); await mkdir(packDir)
@@ -31,7 +50,7 @@ async function main() {
     assert.equal(manifest.name, 'dsh-session-insights'); assert.equal(manifest.version, PRODUCT_VERSION)
     manifest.gitHead = commit
     await writeFile(join(stage, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
-    const [packed] = JSON.parse((await npm(['pack', '--json', '--ignore-scripts', '--pack-destination', packDir], {cwd: stage, env})).stdout)
+    const [packed] = JSON.parse((await packNpm(['pack', '--json', '--ignore-scripts', '--pack-destination', packDir], {cwd: stage})).stdout)
     const filename = packed.filename, path = join(output, filename)
     await assert.rejects(stat(path), {code: 'ENOENT'})
     await cp(join(packDir, filename), path, {errorOnExist: true, force: false})
@@ -43,36 +62,33 @@ async function main() {
     assert.equal((await run('git', ['rev-parse', 'HEAD'], {cwd: root})).stdout.trim(), commit)
     assert.equal((await run('git', ['status', '--porcelain=v1'], {cwd: root})).stdout.trim(), '')
     const bytes = await readFile(path)
-    // Production input identity (D04): the real tools that produced these
-    // bytes and the digests of the inputs that shape the package. This is the
-    // producer's identity recorded at pack time — never the receiving
-    // machine's Node/npm versions, which consumers must not write into
-    // acceptance records. Additive fields; consumers ignore what they do not
-    // read and keep rejecting the fields they verify.
-    const npmVersion = (await npm(['--version'], {env})).stdout.trim()
+    assert.deepEqual(await canonicalPackInputs(root), inputIdentity, 'pack inputs changed during production')
+    assert.equal(digest(await readFile(process.execPath)), nodeIdentity.binary_sha256, 'node binary changed during production')
+    assert.deepEqual(await npmTreeIdentity(npmCli), npmIdentity, 'npm distribution changed during production')
     const stagedManifest = JSON.parse(await readFile(join(stage, 'package.json'), 'utf8'))
     const receipt = {
-      schema: 'dsh-session-insights/canonical-artifact/1',
+      schema: 'dsh-session-insights/canonical-artifact/2',
       repository: 'https://github.com/GreenLv/dsh-session-insights',
       commit, filename, sha256: digest(bytes), size_bytes: bytes.length, file_count: files.length, git_head: commit, files,
       producer: {
-        node: process.version,
-        npm: npmVersion,
+        node: nodeIdentity,
+        npm: npmIdentity,
         packer: 'npm pack --ignore-scripts',
         platform: `${process.platform}-${process.arch}`,
-        pack_source: 'clean exact commit checkout (git status verified empty before and after)',
       },
       inputs: {
-        manifest_sha256: digest(await readFile(join(root, 'package.json'))),
-        lockfile_sha256: digest(await readFile(join(root, 'package-lock.json'))),
+        pack: inputIdentity,
         staged_manifest_sha256: digest(await readFile(join(stage, 'package.json'))),
         staged_manifest_git_head: stagedManifest.gitHead,
         packed_file_count: files.length,
       },
     }
-    await writeFile(join(output, 'artifact.json'), JSON.stringify(receipt, null, 2) + '\n')
+    const receiptBytes = JSON.stringify(receipt, null, 2) + '\n'
+    const receiptSha256 = digest(receiptBytes)
+    await writeFile(join(output, 'artifact.json'), receiptBytes, {flag:'wx'})
     await writeFile(join(output, 'tgz.sha256'), `${receipt.sha256}  ${filename}\n`)
-    console.log(JSON.stringify({status: 'passed', filename, sha256: receipt.sha256, size_bytes: bytes.length, file_count: files.length, commit}))
+    await writeFile(join(output, 'artifact.json.sha256'), `${receiptSha256}  artifact.json\n`, {flag:'wx'})
+    console.log(JSON.stringify({status: 'passed', filename, sha256: receipt.sha256, receipt_sha256: receiptSha256, size_bytes: bytes.length, file_count: files.length, commit, producer:receipt.producer}))
   } finally { await rm(temporary, {recursive: true, force: true}) }
 }
 main().catch(() => {console.error('candidate producer failed; require clean exact commit and vacant output'); process.exitCode = 1})

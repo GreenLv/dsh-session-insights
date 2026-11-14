@@ -1,11 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readdirSync } from 'node:fs'
 import { buildReport } from '../plugin/lib/analyzer.js'
 import { importSyntheticExports, importerIdentity } from './fixtures/import-sessions.mjs'
 
 // D02 regression: the official rc.3 DeepSeek chat-export importer (published
-// `@deepseek-ai/dsh-deepseek-chat-import` sources, hash-verified) converts a
+// `@deepseek-ai/dsh-deepseek-chat-import` sources, whose digests are recorded) converts a
 // synthetic export through the official session-persistence-jsonl backend, and
 // the existing DSI analysis semantics hold on the imported sessions. The
 // imported model source `deepseek-chat-export` is an observed source label, not
@@ -22,7 +21,10 @@ test('official importer identity is the exact rc.3 published package', () => {
   const identity = importerIdentity()
   assert.equal(identity.name, '@deepseek-ai/dsh-deepseek-chat-import')
   assert.equal(identity.version, '0.2.2-rc.3')
-  for (const rel of Object.keys(identity.sources)) assert.match(identity.sources[rel], /^[0-9a-f]{64}$/)
+  for (const rel of Object.keys(identity.sources)) {
+    assert.match(identity.sources[rel], /^[0-9a-f]{64}$/)
+    assert.equal(identity.sources[rel], harness.importerIdentity.sourceDigests[rel], 'transformed input is the exact installed package source')
+  }
 })
 
 test('all representative conversations import through the official persistence path', () => {
@@ -34,7 +36,7 @@ test('all representative conversations import through the official persistence p
     assert.equal(snap.events[0].type, 'turn/start')
     assert.equal(snap.session.version, 4)
   }
-  assert.ok(readdirSync(harness.sessionsRoot).length > 0, 'persistence root is populated')
+  assert.ok(harness.persistedEntryCount > 0, 'persistence root was populated before harness cleanup')
 })
 
 test('normal conversation: title, staged web tools, completed reasons, imported source label', () => {
@@ -92,7 +94,8 @@ test('report semantics: error turns stay failures, failed search stays a tool fa
   assert.equal(report.totals.tool_failures, 1, 'the recorded failed search is a tool failure')
   const failed = summaries.find((s) => s.tool_failures === 1)
   assert.ok(failed, 'the failed-search session carries the tool failure')
-  assert.equal(failed.status, 'completed' in failed ? failed.status : failed.status, 'no success-text inference replaces the structured failure')
+  assert.equal(failed.tool_failures, 1, 'structured failed-search evidence survives the completed reply')
+  assert.equal(failed.tool_calls, 1, 'unfinished searches are excluded by the official importer')
 
   // Missing usage is unavailable, not a fabricated measured zero.
   for (const s of summaries) {

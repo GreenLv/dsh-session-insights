@@ -1,12 +1,13 @@
 import {createRequire} from 'node:module'
 import {pathToFileURL,fileURLToPath} from 'node:url'
 import {readFile,writeFile,mkdir,mkdtemp,rm,readdir,realpath,stat,lstat,cp} from 'node:fs/promises'
-import {join,dirname,resolve} from 'node:path'
+import {join,dirname,resolve,basename} from 'node:path'
 import assert from 'node:assert/strict'
 import {run,digest,fileManifest} from './acceptance_identity.mjs'
 import {finalizeProfileAcceptance} from './acceptance_cleanup.mjs'
 import {classifyAcceptanceError as diagnostic} from './acceptance_diagnostics.mjs'
-import {captureSourceLogs, compareSourceLogs, witnessGate} from './source_log_witness.mjs'
+import {captureSourceLogs, compareSourceLogs, sessionWitnessScope, witnessGate, projectWitnessGate} from './source_log_witness.mjs'
+import {verifyCanonicalArtifact} from './canonical_artifact.mjs'
 // The Web host prints a scratch access URL during boot. Keep its token out of
 // tool output and retained acceptance logs.
 const originalStdoutWrite=process.stdout.write.bind(process.stdout)
@@ -17,25 +18,33 @@ process.stdout.write=(chunk,...args)=>originalStdoutWrite(
 async function main(){
 const base=resolve(process.argv[2] || ''), hostRoot=resolve(process.argv[3] || '')
 const profile=process.argv[4] || 'web'
-if(!process.argv[2] || !process.argv[3] || !['web','headless'].includes(profile))throw new Error('artifact directory, official CLI runtime root, web|headless required')
+const [expectedCommit,expectedSha256,expectedReceiptSha256]=process.argv.slice(5,8)
+if(!process.argv[2] || !process.argv[3] || !['web','headless'].includes(profile) || !/^[0-9a-f]{40}$/.test(expectedCommit??'') || !/^[0-9a-f]{64}$/.test(expectedSha256??'') || !/^[0-9a-f]{64}$/.test(expectedReceiptSha256??'') || process.argv.length!==8)
+ throw new Error('artifact directory, official CLI runtime root, web|headless, independent source commit, tarball sha256 and receipt sha256 required')
 const source=fileURLToPath(new URL('../',import.meta.url))
 const {inspectRuntime, HOST_TARGETS}=await import('./acceptance_identity.mjs')
 // Everything that can fail during initialization — annex construction needs
 // the ACTUAL host version, which is only known after resolving the host
 // packages — lives inside the guarded body so a failure writes the canonical
 // failed annex with cleanup evidence instead of crashing before the try.
-const canonical=JSON.parse(await readFile(join(base,'artifact.json'),'utf8'))
-const tgz=join(base,canonical.filename)
 const receiptPath=join(base,`${profile}-native-annex.json`)
 // An earlier batch is evidence: never start another installation if its
 // receipt or output directory already exists. mkdir is also the run lock.
 try {await lstat(receiptPath);throw new Error('existing profile receipt')} catch(error) {if(error.code!=='ENOENT')throw error}
 const output=join(base,`${profile}-native-results`);await mkdir(output,{mode:0o700})
-let app,owner,currentGate='artifact_digest',failure,work,annex,observedHostVersion=null,witnessBefore=null,witnessScope=null
+let canonical,tgz,app,owner,currentGate='artifact_identity',failure,work,annex,observedHostVersion=null,witnessAttempted=false,witnessBefore=null,witnessScope=null
 const startedAt=new Date().toISOString()
 const writeAnnex=async value=>{await writeFile(receiptPath,JSON.stringify(value,null,2)+'\n',{flag:'wx'})}
 const recordGate=(id,note,subject={kind:'artifact',id:canonical.sha256})=>{if(!annex)return;annex.gates.push({id,required:true,status:'passed',subject,exit_code:0,note,evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}});console.log(JSON.stringify({gate:id,status:'passed'}))}
 try{
+ // A receipt may suggest a filename, but never a trusted identity or path.
+ // Both expected digests and the commit come independently from the caller.
+ const receiptPathInput=join(base,'artifact.json')
+ const proposed=JSON.parse(await readFile(receiptPathInput,'utf8'))
+ assert.equal(typeof proposed.filename,'string')
+ assert.equal(basename(proposed.filename),proposed.filename)
+ tgz=join(base,proposed.filename)
+ ;({receipt:canonical}=await verifyCanonicalArtifact({receiptPath:receiptPathInput,tarballPath:tgz,sourceRoot:source,expectedCommit,expectedSha256,expectedReceiptSha256}))
  const work0=await mkdtemp(join(base,'macos-native-'));work=work0
  const home=join(work,'dsh-home'),project=join(work,'中文 项目 目录')
  await mkdir(home,{mode:0o700});await mkdir(project)
@@ -98,10 +107,10 @@ const checkedReport=async(locale,prefix)=>{
  // report operation, after the operations end or throw (in the finally below),
  // and compare before the isolated tree is removed. Loss, addition,
  // replacement or a read error is never recorded as unchanged.
+ begin('source_log_witness_capture');witnessAttempted=true
  witnessBefore=await captureSourceLogs(join(home,'sessions'),{label:`${profile}-source-logs:before`})
- witnessScope=Object.keys(witnessBefore.files).filter(path=>path.includes('/native-target/')||path.includes('/native-unrelated/'))
- if(!witnessScope.length)throw new Error('source-log witness found no target/non-target fixture logs to bind')
- record('source_log_witness_capture',`source-log witness before-capture: ${witnessBefore.totals.files} files, ${witnessBefore.totals.bytes} bytes; scope binds ${witnessScope.length} target/non-target fixture paths`)
+ witnessScope=sessionWitnessScope(witnessBefore,['native-target','native-unrelated'])
+ record(currentGate,`source-log witness before-capture: ${witnessBefore.totals.files} files, ${witnessBefore.totals.bytes} bytes; scope binds both target and non-target session directories`)
  await app.shutdown.shutdown(0);app=undefined
  begin('cold_read');app=await boot();assert.equal(app.ctx.sessions.get('native-target'),undefined);const cold=await app.ctx.sessionQuery.observeSession('native-target',{projectionMode:'none'});try{assert.equal(cold.events.length,18);assert.ok(cold.events.some(e=>e.data?.error?.code==='TOOL_OUTCOME_UNKNOWN'));assert.ok(cold.events.some(e=>e.data?.error?.code==='TOOL_NOT_STARTED'))}finally{cold[Symbol.dispose]()};record(currentGate,'after full profile disposal and restart, cold query restored 18 durable events including both recovery statuses')
  begin('agent_command');owner=await app.ctx.agents.create({sessionId:'native-command-agent',meta:{cwd:join(work,'driver')}});assert.equal(owner.agent.status,'idle');const zh=await checkedReport('zh-CN','report-zh');assert.ok(owner.agent.session.snapshotEvents().some(e=>e.type==='command/done'));record(currentGate,'actual factory-created Agent executed registered slash command with durable command completion')
@@ -126,18 +135,31 @@ const checkedReport=async(locale,prefix)=>{
   // Reliable terminal path for the witness: the after-capture and comparison
   // run here whether the report operations passed, failed or were interrupted,
   // and always before any work-tree removal in finalizeProfileAcceptance.
-  if(witnessBefore){
+  if(witnessAttempted){
+   // Keep the detailed capture private and immutable; only its digest and a
+   // schema-compatible artifact-bound gate enter the public-safe annex.
+   const detail={schema:'source-log-witness-result/v1',before:witnessBefore,after:null,scope:witnessScope,comparison:null,gate:null,error:null}
+   let passed=false,detailSha=null
    try{
-    const witnessAfter=await captureSourceLogs(join(work,'dsh-home','sessions'),{label:`${profile}-source-logs:after`})
-    const comparison=compareSourceLogs(witnessBefore,witnessAfter)
-    annex.gates.push(witnessGate('source_log_witness',witnessBefore,witnessAfter,comparison,{scope:witnessScope}))
-    console.log(JSON.stringify({gate:'source_log_witness',full_tree:comparison.verdict,files:witnessAfter.totals.files,differences:comparison.totals.differences,scope:witnessScope.length}))
+    if(!witnessBefore)throw new Error('before-capture unavailable')
+    detail.after=await captureSourceLogs(join(work,'dsh-home','sessions'),{label:`${profile}-source-logs:after`})
+    detail.comparison=compareSourceLogs(witnessBefore,detail.after)
+    if(!witnessScope)throw new Error('target/non-target scope could not be established')
+    detail.gate=witnessGate('source_log_witness',witnessBefore,detail.after,detail.comparison,{scope:witnessScope})
+    passed=detail.gate.status==='passed'
    }catch(witnessError){
-    annex.gates.push({id:'source_log_witness',required:true,status:'failed',subject:{kind:'source_log_witness',id:witnessBefore.totals.files},exit_code:1,note:`after-capture failed: ${witnessError.code ?? 'capture_error'}; the observed interval stays unwitnessed, not unchanged`,evidence:{mode:'executed',error:String(witnessError.message ?? witnessError)}})
+    detail.error={code:witnessError.code??'capture_error',message:String(witnessError.message??witnessError)}
    }
+   try{
+    const bytes=Buffer.from(JSON.stringify(detail,null,2)+'\n')
+    await writeFile(join(output,'source-log-witness.json'),bytes,{flag:'wx',mode:0o600})
+    detailSha=digest(bytes)
+   }catch{passed=false}
+   annex.gates.push(projectWitnessGate({passed,artifactSha256:canonical.sha256,witnessSha256:detailSha,reason:passed?'target and non-target source logs unchanged':'source-log witness failed or evidence unavailable'}))
+   console.log(JSON.stringify({gate:'source_log_witness',status:passed?'passed':'failed',full_tree:detail.comparison?.verdict??'not_observed',scope:witnessScope?.length??0}))
   }
   if(!annex){
-   annex={schema:'native-acceptance/v2',status:'failed',product:'dsh-session-insights',gate_profile:`actual-${profile}-host`,repository:{url:canonical.repository,commit:canonical.commit},runtime_tree_sha256:null,artifact:{filename:canonical.filename,sha256:canonical.sha256,size_bytes:canonical.size_bytes,file_count:canonical.file_count,git_head:canonical.commit},platform:{os:process.platform==='win32'?'windows':'macos',shell:process.platform==='win32'?'pwsh':'posix',toolchain:{node:process.version,architecture:process.arch,dsh:observedHostVersion??'unresolved'}},gates:[{id:currentGate,required:true,status:'failed',subject:{kind:'artifact',id:canonical.sha256},exit_code:1,note:'initialization failed before host identity resolution',evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}}],cleanup:{status:'not_run',remaining_ids:[]},run:{started_at:startedAt,finished_at:'',run_url:null},unperformed_actions:['commit','push','merge','tag','package_publish','release','public_promotion']}
+   annex={schema:'native-acceptance/v2',status:'failed',product:'dsh-session-insights',gate_profile:`actual-${profile}-host`,repository:{url:'https://github.com/GreenLv/dsh-session-insights',commit:expectedCommit},runtime_tree_sha256:null,artifact:null,platform:{os:process.platform==='win32'?'windows':'macos',shell:process.platform==='win32'?'pwsh':'posix',toolchain:{node:process.version,architecture:process.arch,dsh:observedHostVersion??'unresolved'}},gates:[{id:currentGate,required:true,status:'failed',subject:{kind:'commit',id:expectedCommit},exit_code:1,note:'initialization failed before verified artifact and host acceptance',evidence:{mode:'executed',source_result_sha256:null,source_gate_id:null,invalidation_reason:null}}],cleanup:{status:'not_run',remaining_ids:[]},run:{started_at:startedAt,finished_at:'',run_url:null},unperformed_actions:['commit','push','merge','tag','package_publish','release','public_promotion']}
   }
   const result=await finalizeProfileAcceptance({
    annex,failure,hadWork:Boolean(work),

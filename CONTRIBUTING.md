@@ -20,6 +20,7 @@ From the repository root, use Python 3.11 or later and Node.js 24.9.0 or later. 
 python3 -m pip install -e '.[dev]'
 npm ci --ignore-scripts
 npm ci --prefix tests/dsh-runtime --ignore-scripts
+npm ci --prefix tests/dsh-host --ignore-scripts
 DSH_RUNTIME="$PWD/tests/dsh-runtime" DSH_EXPECTED_VERSION=0.2.2-rc.3 \
   python3 -m unittest discover -s tests -v
 DSH_RUNTIME="$PWD/tests/dsh-runtime" DSH_EXPECTED_VERSION=0.2.2-rc.3 npm test
