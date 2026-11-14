@@ -43,7 +43,33 @@ async function main() {
     assert.equal((await run('git', ['rev-parse', 'HEAD'], {cwd: root})).stdout.trim(), commit)
     assert.equal((await run('git', ['status', '--porcelain=v1'], {cwd: root})).stdout.trim(), '')
     const bytes = await readFile(path)
-    const receipt = {schema: 'dsh-session-insights/canonical-artifact/1', repository: 'https://github.com/GreenLv/dsh-session-insights', commit, filename, sha256: digest(bytes), size_bytes: bytes.length, file_count: files.length, git_head: commit, files}
+    // Production input identity (D04): the real tools that produced these
+    // bytes and the digests of the inputs that shape the package. This is the
+    // producer's identity recorded at pack time — never the receiving
+    // machine's Node/npm versions, which consumers must not write into
+    // acceptance records. Additive fields; consumers ignore what they do not
+    // read and keep rejecting the fields they verify.
+    const npmVersion = (await npm(['--version'], {env})).stdout.trim()
+    const stagedManifest = JSON.parse(await readFile(join(stage, 'package.json'), 'utf8'))
+    const receipt = {
+      schema: 'dsh-session-insights/canonical-artifact/1',
+      repository: 'https://github.com/GreenLv/dsh-session-insights',
+      commit, filename, sha256: digest(bytes), size_bytes: bytes.length, file_count: files.length, git_head: commit, files,
+      producer: {
+        node: process.version,
+        npm: npmVersion,
+        packer: 'npm pack --ignore-scripts',
+        platform: `${process.platform}-${process.arch}`,
+        pack_source: 'clean exact commit checkout (git status verified empty before and after)',
+      },
+      inputs: {
+        manifest_sha256: digest(await readFile(join(root, 'package.json'))),
+        lockfile_sha256: digest(await readFile(join(root, 'package-lock.json'))),
+        staged_manifest_sha256: digest(await readFile(join(stage, 'package.json'))),
+        staged_manifest_git_head: stagedManifest.gitHead,
+        packed_file_count: files.length,
+      },
+    }
     await writeFile(join(output, 'artifact.json'), JSON.stringify(receipt, null, 2) + '\n')
     await writeFile(join(output, 'tgz.sha256'), `${receipt.sha256}  ${filename}\n`)
     console.log(JSON.stringify({status: 'passed', filename, sha256: receipt.sha256, size_bytes: bytes.length, file_count: files.length, commit}))
