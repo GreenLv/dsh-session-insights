@@ -37,12 +37,13 @@ console.log(JSON.stringify(annex))
                 script.parent.mkdir()
                 script.write_bytes(source if line_ending == 'lf' else source.replace(b'\n', b'\r\n'))
                 for mode in ('dispose-failure', 'timeout'):
-                    with self.subTest(line_ending=line_ending, mode=mode):
-                        proc = subprocess.run(['node', str(ROOT / 'tests-js/fixtures/portable-finally-probe.mjs'), mode], cwd=root, text=True, encoding='utf-8', capture_output=True, check=True)
-                        result = json.loads(proc.stdout)
-                        self.assertEqual(result['calls'], [])
-                        self.assertEqual(validate(result['annex'])['acceptance_status'], 'failed')
-                        self.assertIn('scratch-work', result['annex']['cleanup']['remaining_ids'])
+                    for inherited in ('absent', 'present'):
+                        with self.subTest(line_ending=line_ending, mode=mode, inherited=inherited):
+                            proc = subprocess.run(['node', str(ROOT / 'tests-js/fixtures/portable-finally-probe.mjs'), mode, inherited], cwd=root, text=True, encoding='utf-8', capture_output=True, check=True)
+                            result = json.loads(proc.stdout)
+                            self.assertEqual(result['calls'], [])
+                            self.assertEqual(validate(result['annex'])['acceptance_status'], 'failed')
+                            self.assertIn('scratch-work', result['annex']['cleanup']['remaining_ids'])
 
     def test_real_entrypoint_setup_failure_has_valid_failed_receipt(self):
         with tempfile.TemporaryDirectory(prefix='dsi-profile-setup-') as raw:

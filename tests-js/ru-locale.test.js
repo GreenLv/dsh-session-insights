@@ -75,7 +75,7 @@ test('message catalog has every locale', () => {
 test('native warning grammar keeps singular English forms', () => {
   assert.match(
     t('en', 'native.warning.partial', {count: 1}),
-    /^1 rollout has unfinished turns/,
+    /^1 rollout has turns without a normal completion/,
   )
   assert.match(
     t('en', 'native.warning.attempts', {count: 1}),

@@ -360,15 +360,15 @@ MESSAGES: dict[str, dict[str, Message]] = {
     },
     "warning.partial_sessions": {
         "zh-CN": lambda p: (
-            f"有 {p['count']} 个 rollout 含未结束任务标记；这不自动等于整个任务族失败。"
+            f"有 {p['count']} 个 rollout 含未正常完成的任务；这不自动等于整个任务族失败。"
         ),
         "en": lambda p: (
             f"{english_count(p['count'], 'rollout')} "
-            f"{'contains' if p['count'] == 1 else 'contain'} unfinished-task markers; "
+            f"{'contains' if p['count'] == 1 else 'contain'} tasks without normal completion; "
             "this does not automatically mean their task families failed."
         ),
         "ru": lambda p: (
-            f"Незавершённые маркеры задач: rollout-сессий — {russian_number(p['count'])}; "
+            f"Задачи без нормального завершения: rollout-сессий — {russian_number(p['count'])}; "
             "это не означает автоматического провала всего семейства задач."
         ),
     },
@@ -391,19 +391,19 @@ MESSAGES: dict[str, dict[str, Message]] = {
     },
     "warning.attempts": {
         "zh-CN": lambda p: (
-            f"有 {p['attempts']} 次未生成可见回复的模型尝试被计数，其中 {p['covered']} 次带有可证明的用量；"
-            "其余尝试的 Token 用量不可得，未做估算。"
+            f"有 {p['attempts']} 次未生成可见回复的模型尝试被计数，其中 {p['covered']} 次带有用量样本；"
+            "这些样本不计入 Token 总量，缺失用量未做估算。"
         ),
         "en": lambda p: (
             f"{english_count(p['attempts'], 'model attempt')} committed no visible reply; "
             f"{p['covered']} "
-            f"{'carries' if p['covered'] == 1 else 'carry'} provable usage. Token usage for the remaining "
-            "attempts is unavailable and was not estimated."
+            f"{'carries' if p['covered'] == 1 else 'carry'} a usage sample. These samples are excluded "
+            "from token totals; missing usage is not estimated."
         ),
         "ru": lambda p: (
             f"Попыток модели без видимого ответа: {russian_number(p['attempts'])}, "
-            f"из них {russian_number(p['covered'])} с доказуемым расходом; расход токенов остальных "
-            "попыток недоступен и не оценивался."
+            f"из них {russian_number(p['covered'])} с образцом расхода; эти образцы не входят в "
+            "сумму токенов, отсутствующие данные не оцениваются."
         ),
     },
     "warning.heuristic_roles": {

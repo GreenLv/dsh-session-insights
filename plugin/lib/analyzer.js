@@ -850,11 +850,9 @@ export function parseSnapshot(snapshot, opts, coverage) {
       if (start !== undefined && at !== null)
         s.duration_ms += Math.max(0, at - start)
       s.turn_starts.delete(key)
-      s[
-        ['aborted', 'interrupted', 'error'].includes(d.reason?.kind)
-          ? 'aborted_turns'
-          : 'task_complete'
-      ]++
+      if (d.reason?.kind === 'completed') s.task_complete++
+      else if (['aborted', 'interrupted', 'error'].includes(d.reason?.kind))
+        s.aborted_turns++
     } else if (type === 'user/message') {
       if (object(d.source) && d.source.kind !== 'user') {
         s.injected_user_messages++
@@ -1362,7 +1360,7 @@ export function parseSnapshot(snapshot, opts, coverage) {
         : 'completed'
   if (s.status === 'partial') coverage.partial_sessions++
   s.completion = {
-    log_completed: s.status === 'completed' ? 'yes' : 'no',
+    log_completed: s.status === 'completed' ? (s.task_complete > 0 ? 'yes' : 'unknown') : 'no',
     verified_completed: s.verification_successes
       ? 'yes'
       : s.verification_failures
@@ -2117,7 +2115,7 @@ export function buildReport(snapshots, input = {}) {
   const report = {
     schema: 'dsh-session-insights/1',
     schema_version: 1,
-    analyzer_version: '0.8.2-v4-dsh022rc3.1',
+    analyzer_version: '0.8.3-v4-dsh022rc5.1',
     product: 'dsh-session-insights',
     runtime: 'dsh',
     generated_at: new Date(opts.now).toISOString(),
@@ -2145,7 +2143,7 @@ export function buildReport(snapshots, input = {}) {
       tokens:
         'Usage deduplicated per (turn,step); uncached+cacheRead+cacheWrite+output; reasoning is an output subdivision, not added twice. Not billing or quota.',
       attempts:
-        'Attempts are not visible replies; usage is unavailable, not estimated.',
+        'Attempts commit no visible reply. Attempts with usage samples are counted. Sample usage is excluded from token totals; missing usage is not estimated.',
       injected_context:
         'Only human user messages count as work. System and synthetic context are not evidence.',
       timing: 'Wall time measured; active/tool/wait time are proxies.',

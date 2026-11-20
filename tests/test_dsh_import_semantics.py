@@ -1,4 +1,4 @@
-"""D02 differential regression on sessions imported by the official rc.3 importer.
+"""D02 differential regression on sessions imported by the official rc.5 importer.
 
 The JS harness (tests-js/fixtures/import-sessions.mjs) runs the published
 `@deepseek-ai/dsh-deepseek-chat-import` importer sources over the official
@@ -60,7 +60,7 @@ class DshImportSemanticsTests(unittest.TestCase):
 
     def test_importer_identity_is_exact_rc3_package(self):
         self.assertEqual(self.importer["name"], "@deepseek-ai/dsh-deepseek-chat-import")
-        self.assertEqual(self.importer["version"], "0.2.2-rc.3")
+        self.assertEqual(self.importer["version"], "0.2.2-rc.5")
 
     def test_imported_sessions_carry_workspace_cwd_and_full_turns(self):
         workspace_path = json.loads(self.harness_output.stdout)["workspace_path"]

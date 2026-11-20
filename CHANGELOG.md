@@ -6,11 +6,20 @@ Public releases are listed newest first.
 
 ## Release guide
 
-- **0.8.x** counts cancelled tool calls and structured approval non-grants separately. 0.8.2 requires DSH 0.2.2-rc.3 or later (0.8.1 required 0.2.2-rc.2). Existing semantic runs need to be finished with their original version or restarted.
+- **0.8.x** counts cancelled tool calls and structured approval non-grants separately. 0.8.3 requires DSH 0.2.2-rc.5 or later (0.8.2 required 0.2.2-rc.3). Existing semantic runs need to be finished with their original version or restarted.
 - **0.7.x** adds Russian reports and documentation while retaining 0.6.1 run compatibility.
 - **0.6.x** expands coverage of background jobs, delegation and working directories, then strengthens report, privacy and cleanup boundaries.
 - **0.5.x** adapts to V4 session logs and later host releases, with safer recovery and bounded analysis.
 - **0.4.x and earlier** introduce native reports and cleanup, the dashboard, and the original Python CLI.
+
+## 0.8.3 - 2026-11-20
+
+- Raise the minimum DSH host to `0.2.2-rc.5`. The DSH compatibility check admits later hosts under the declared range. Each later host requires verification of its interfaces and package resolution.
+- Count only explicit `completed` turn endings as completed. Blocked, output-token-limited and unknown endings remain incomplete. An inherited fork closer does not establish a completed user task.
+- Keep auxiliary search requests out of search-call counts and token totals. Attempts with recorded usage samples are counted separately. The samples are excluded from token totals.
+- Update the analysis identity to `v4-dsh022rc5.1`. Complete an existing semantic run with its original version or start a new one after upgrading. Existing reports remain readable and old deterministic caches are rebuilt.
+- Isolate the agent home in profile and portable acceptance.
+- The maintainer accepted ten known advisories for the exact 0.8.3 / rc.5 host inputs on 2026-11-20. Four are high and six moderate, across 75 or 78 affected package entries in the two reviewed reports. The three-entry difference is indirect propagation of the same advisory. The host audit keeps its raw exit 1 and is classified as `accepted_known_risk`. See [security](SECURITY.md#known-upstream-dependency-gap).
 
 ## 0.8.2 - 2026-11-15
 

@@ -1,14 +1,14 @@
 {
   "schema": "dsi-host-risk-acceptance/v1",
-  "product_version": "0.8.2",
-  "host_version": "0.2.2-rc.3",
+  "product_version": "0.8.3",
+  "host_version": "0.2.2-rc.5",
   "authorization": {
     "decision": "accepted",
-    "recorded_on": "2026-11-14",
-    "scope": "Maintainer explicitly accepted these same ten previously reviewed advisories for DSI 0.8.2, the exact official rc.3 host test manifest/lock and independently reviewed vulnerability facts only."
+    "recorded_on": "2026-11-20",
+    "scope": "Maintainer explicitly accepted the ten reviewed direct advisories only for DSI 0.8.3, the exact official rc.5 host test manifest/lock and reviewed vulnerability facts."
   },
-  "manifest_sha256": "7b360e8e1583546a17a4e7f434a94c7534eb6d0a292ac2a07515d9b78fecbf51",
-  "lock_sha256": "49a8c486bf401966f640670ef0bfd83d5082ea1ebd704d614bf43e9cfbc06fb1",
+  "manifest_sha256": "99af1876d0aa0a484e7f69787e03632fddbe38e48de2217452f0d3bc13b4db3c",
+  "lock_sha256": "3188d4c784b42e5f1958168eab5c6cf5a54b99bf9f942f00552887b383ed1ef4",
   "advisories": [
     "https://github.com/advisories/GHSA-2m5v-pch6-74hx",
     "https://github.com/advisories/GHSA-4qv8-2p9j-2685",
@@ -22,9 +22,10 @@
     "https://github.com/advisories/GHSA-xjj6-f33q-929c"
   ],
   "expiry": "A product/host identity or manifest/lock change, new advisory or unreviewed vulnerability facts invalidate this decision. Scanner and capture failures remain failures.",
-  "note": "Ten direct advisories, including four high and six moderate, across 75 affected package entries (one high package entry). Advisory payloads match the prior rc.2 review. All report fields are bound except per-entry effects (derived reverse propagation) and fixAvailable (solver advice), whose shapes are validated and raw values retained. Package sets, via edges, installed node paths, ranges, advisory payloads and metadata remain exact. Root/runtime/Python, new findings and scanner/capture failures remain excluded.",
+  "note": "Ten direct advisories, including four high and six moderate, across 75 or 78 affected package entries in the independently reviewed graph projections. The three-entry difference is indirect reverse propagation of the same advisory. All report fields are bound except per-entry effects (derived reverse propagation) and fixAvailable (solver advice), whose shapes are validated and raw values retained. Package sets, via edges, installed paths, ranges, advisory payloads and metadata remain bound. Root/runtime/Python, new findings and scanner/capture failures remain excluded.",
   "report_projection": "npm-v2-findings-without-derived-advice/v1",
   "reviewed_findings_sha256": [
+    "bb43c8b2ec7dd3ef5b57fed546852e880fe7410cd0ca15c7763bbaa3d30f0672",
     "56c5b1f21375054958c08c4180ce9685d7db68df69d672ffbb9028d5967ca575"
   ]
 }

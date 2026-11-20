@@ -75,7 +75,7 @@ async function main() {
     run: {started_at: new Date().toISOString(), finished_at: '', run_url: process.env.GITHUB_RUN_ID ? `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null},
     unperformed_actions: ['commit', 'push', 'merge', 'tag', 'package_publish', 'release', 'public_promotion'],
   }
-  let stage = 'artifact_digest', work, ctx, handle, savedHome = process.env.DSH_HOME, quiescenceUnknown = false
+  let stage = 'artifact_digest', work, ctx, handle, savedHome = process.env.DSH_HOME, savedAgentsHome = process.env.DSH_AGENTS_HOME, quiescenceUnknown = false
   const record = (id, ok, note, subject = annex.artifact ? {kind: 'artifact', id: annex.artifact.sha256} : {kind: 'commit', id: options.commit}) => {
     annex.gates.push({id, required: true, status: ok ? 'passed' : 'failed', subject, exit_code: ok ? 0 : 1, note,
       evidence: {mode: 'executed', source_result_sha256: null, source_gate_id: null, invalidation_reason: null}})
@@ -93,10 +93,11 @@ async function main() {
       expectedSha256:options['expected-sha256'], expectedReceiptSha256:options['receipt-sha256'],
     })
     work = await realpath(await mkdtemp(join(options.workdir, 'host-acceptance-')))
-    const home = join(work, 'dsh-home'), extraction = join(work, 'artifact')
-    await mkdir(home); await mkdir(extraction)
-    // Store resolves DSH_HOME in this process, not just CLI children.
+    const home = join(work, 'dsh-home'), agentsHome = join(work, 'agents-home'), extraction = join(work, 'artifact')
+    await mkdir(home); await mkdir(agentsHome); await mkdir(extraction)
+    // Host services resolve these homes in this process and in CLI children.
     process.env.DSH_HOME = home
+    process.env.DSH_AGENTS_HOME = agentsHome
     await gate('artifact_identity', async () => {
       await run('tar', ['-xzf', options.package, '-C', extraction])
       const metadata = JSON.parse(await readFile(join(extraction, 'package/package.json'), 'utf8'))
@@ -258,6 +259,8 @@ async function main() {
     }
     if (savedHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = savedHome
+    if (savedAgentsHome === undefined) delete process.env.DSH_AGENTS_HOME
+    else process.env.DSH_AGENTS_HOME = savedAgentsHome
     for (const id of REQUIRED) if (!annex.gates.some(g => g.id === id)) annex.gates.push({id, required: true, status: 'not_run', subject: {kind: 'commit', id: options.commit}, exit_code: null, note: 'prerequisite failed', evidence: {mode: 'executed', source_result_sha256: null, source_gate_id: null, invalidation_reason: null}})
     for (const id of ['full_profile_boot', 'real_jsonl_persistence', 'real_agent_command', 'real_model_workflow']) annex.gates.push({id, required: false, status: 'not_run', subject: {kind: 'commit', id: options.commit}, exit_code: null, note: 'separate actual-host acceptance; outside this portable service gate', evidence: {mode: 'executed', source_result_sha256: null, source_gate_id: null, invalidation_reason: null}})
     annex.status = annex.gates.every(g => !g.required || g.status === 'passed') && annex.cleanup.status === 'passed' ? 'passed' : 'failed'

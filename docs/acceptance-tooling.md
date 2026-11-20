@@ -1,15 +1,15 @@
 # Acceptance tooling and CI coverage
 
 The source CI runs the Python suite for each declared OS/Python combination.
-Every cell installs and names the single current rc.3 runtime
-(`tests/dsh-runtime`, exact `0.2.2-rc.3`); there is no separate compatibility
+Every cell installs and names the single current rc.5 runtime
+(`tests/dsh-runtime`, exact `0.2.2-rc.5`); there is no separate compatibility
 runtime and no compatibility lane. The Node suite runs in each DSH contract
 cell. The contract cells cover the Node 24.9.0 floor on Linux, macOS and
-Windows plus one Node 25 probe of the same rc.3 host.
+Windows plus one Node 25 probe of the same rc.5 host.
 Target-sensitive tests check the resolved package identity; a matrix label
 alone is not evidence of the runtime actually used.
 
-The dependency audit binds root production/full, the exact rc.3 runtime/host trees, and Python separately. Root and runtime findings always fail. The host tree may pass only as clean or under a maintainer decision in `config/host-dependency-risk.json` bound to the exact current product/host version, manifest/lock hashes, advisory set and reviewed report. The 2026-11-14 decision accepts only the independently reviewed ten known findings and exact rc.3 inputs for 0.8.2. The raw npm finding exit remains 1, assessed separately as `accepted_known_risk`; input drift, new findings or scanner failures still refuse. It is not a clean scan. The previous rc.2 decision remains historical.
+The dependency audit binds root production/full, the exact rc.5 runtime/host trees, and Python separately. Root and runtime findings fail. A host finding requires an explicit maintainer decision bound to the current product/host version, manifest/lock hashes and reviewed report. The 0.8.2 rc.3 decision is historical. The maintainer accepted ten advisories for the independently reviewed 0.8.3 rc.5 host inputs on 2026-11-20. The raw host scan retains exit 1 and the result is `accepted_known_risk`. Scanner errors, missing captures, changed inputs and unreviewed findings fail.
 
 The sole producer writes a `dsh-session-insights/canonical-artifact/2` receipt and prints both the tarball and receipt SHA-256. Receivers obtain the exact full source commit and both digests independently from the trusted producer readback, never from the receipt they are checking. The shared verifier rejects missing producer/input identity, changed pack inputs, wrong commit, digests or package inventory. It records producer tools rather than substituting the receiving machine's tools.
 
@@ -17,7 +17,7 @@ Run profile acceptance as `node scripts/verify_profile_acceptance.mjs <artifact-
 
 Profile acceptance witnesses the persisted source logs of its target and non-target fixtures before and after the real operation interval: loss, replacement, addition or read failure is never recorded as unchanged, and the operation, witness and cleanup outcomes stay separate terminal states.
 
-The 0.8.0 Zod policy remains historical and cannot authorize anything current. Scanner errors, missing/skipped steps, cancellation, invalid JSON, input drift, capture/cleanup failures and unreviewed findings fail the job. Reassessment cannot erase a capture failure or change a receipt's tree/scope attribution. See the [security policy](../SECURITY.md#known-upstream-dependency-gap) for the exact current decision.
+The 0.8.0 Zod policy remains historical and cannot authorize anything current. Scanner errors, missing/skipped steps, cancellation, invalid JSON, input drift, capture/cleanup failures and unreviewed findings fail the job. Reassessment cannot erase a capture failure or change a receipt's tree/scope attribution. See the [security policy](../SECURITY.md#known-upstream-dependency-gap) for the applicable decisions.
 
 The profile and portable scripts use isolated test homes. A failed operation
 or failed cleanup produces a failed outcome. Profile cleanup attempts each

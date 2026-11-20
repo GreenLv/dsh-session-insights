@@ -10,9 +10,9 @@ Do not open a public issue for a suspected secret leak, unsafe installer behavio
 
 Never attach real DSH sessions, reports, caches, credentials, or semantic work directories. State the affected version, platform, DSH version, privacy mode, and a minimal synthetic reproduction.
 
-## Native runtime permissions (0.8.2)
+## Native runtime permissions (0.8.3)
 
-Version 0.8.2 requires DSH `>=0.2.2-rc.3` and accepts only V4 input. rc.2 and older hosts are refused without a legacy-API fallback; later releases stay admitted by the declared range. Raw logs remain read-only; unsupported generations require upstream migration.
+Version 0.8.3 requires DSH `>=0.2.2-rc.5` and accepts only V4 input. rc.4 and older hosts are refused without a legacy-API fallback; the DSH compatibility check admits later releases under the declared range. Later hosts require verification of their interfaces and package resolution. Raw logs remain read-only; unsupported generations require upstream migration.
 
 Query leases are released before Worker analysis. Each plugin instance analyzes at most two runs concurrently and queues at most eight more. Plugin disposal cancels and awaits owned work, including queued analysis. The 64 MiB detached-snapshot bound does not limit peak memory used by the host query service while opening a large log. The per-Worker `maxOldGenerationSizeMb` limit caps one Worker's V8 old space, not host RSS.
 
@@ -22,7 +22,7 @@ rc.2 approval non-grants are structured codes under `ApprovalError`. `APPROVAL_R
 
 Scheduled prompts, asynchronous question replies, subagent settlement notices and Team relay messages are counted as injected context, not user work or authorization. Background-job settlements and delegation dispatches are registry or producer records, not proof of user-task completion or resource release. In redacted and metrics modes, working-directory changes appear as project labels without raw paths.
 
-Resume binds an explicit run to its recorded selection scope. It cannot select another project or a wider privacy range, and ambiguous multi-run requests are refused with the candidate paths. Semantic runs recorded under the previous analyzer identity cannot resume under 0.8.2. Finish them with the version that created them or start a new run.
+Resume binds an explicit run to its recorded selection scope. It cannot select another project or a wider privacy range, and ambiguous multi-run requests are refused with the candidate paths. Semantic runs recorded under the previous analyzer identity cannot resume under 0.8.3. Finish them with the version that created them or start a new run.
 
 The Bundle uses a Node.js worker for cancellable snapshot analysis. It does not launch Python, a shell or another executable. The worker receives an empty environment and an empty `execArgv`; interpreter discovery, inherited `PYTHONPATH`, Python startup hooks and forwarding of host credentials have been removed from the native path. The host still runs with DSH's OS permissions; a worker is not an OS security sandbox.
 
@@ -33,9 +33,11 @@ The Bundle uses a Node.js worker for cancellable snapshot analysis. It does not 
 
 ## Known upstream dependency gap
 
-**0.8.2 decision (2026-11-14; accepted known host risk).** The plugin root production/full, slim rc.3 runtime and Python dependency scans are clean for the reviewed inputs. The full rc.3 host test lock retains ten direct advisories: eight for undici, including four high-severity advisories, and one moderate advisory each for the MCP client and nested `libreoffice-kit` `fflate@0.8.2`. npm reports 75 affected package entries, including one high-severity package entry; package entries and direct advisories are different counts. The separately resolved top-level fflate is already 0.8.3.
+**0.8.3 / rc.5 decision (2026-11-20).** The maintainer accepted ten direct host advisories for the exact DSI 0.8.3 / DSH 0.2.2-rc.5 manifest, lock and reviewed report. Four are high and six moderate, with 75 or 78 affected package entries in the two reviewed reports. The three-entry difference is indirect propagation of the same advisory. The raw host scan exits 1 and is classified as `accepted_known_risk`. Changed product or host inputs, new advisories, unreviewed facts and scanner failures invalidate the decision. Root, runtime and Python findings are outside this host-only decision.
 
-The maintainer explicitly accepted these ten existing findings for DSI 0.8.2 and the independently reviewed exact rc.3 host manifest, lock and vulnerability facts on 2026-11-14. This is a new scoped decision, recorded in `config/host-dependency-risk.json`; the 0.8.1 decision does not carry forward. The raw host npm scan retains exit code 1 and is assessed as `accepted_known_risk`, never clean. New advisories, unreviewed facts, product/host or manifest/lock changes, scanner/capture failures and missing steps invalidate it. Root, runtime and Python findings are excluded. Presence in this test dependency graph does not establish exploit reachability in every installed host; reachability has not been established.
+**Historical 0.8.2 decision (2026-11-14; accepted known host risk).** The plugin root production/full, slim rc.3 runtime and Python dependency scans are clean for the reviewed inputs. The full rc.3 host test lock retains ten direct advisories: eight for undici, including four high-severity advisories, and one moderate advisory each for the MCP client and nested `libreoffice-kit` `fflate@0.8.2`. npm reports 75 affected package entries, including one high-severity package entry; package entries and direct advisories are different counts. The separately resolved top-level fflate is already 0.8.3.
+
+The maintainer explicitly accepted these ten existing findings for DSI 0.8.2 and the independently reviewed exact rc.3 host manifest, lock and vulnerability facts on 2026-11-14. The historical decision applies only to those reviewed inputs; it does not carry forward to 0.8.3 or rc.5. The raw host npm scan retains exit code 1 and is assessed as `accepted_known_risk`, never clean. New advisories, unreviewed facts, product/host or manifest/lock changes, scanner/capture failures and missing steps invalidate it. Root, runtime and Python findings are excluded. Presence in this test dependency graph does not establish exploit reachability in every installed host; reachability has not been established.
 
 **Historical rc.2 decision (2026-11-13; accepted known host risk for 0.8.1 only).** The rc.2 `dsh-agent`, `dsh-commands` and `dsh-llm` packages replace their exact `zod@4.4.3` pins with patched `4.6.6`. The candidate's root production/full and slim runtime scans no longer report [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5). This does not certify the full DSH host tree as clean.
 
@@ -65,7 +67,7 @@ Those event-bound decisions expired when their product/dependency inputs changed
 
 ## Dependencies and failures
 
-The Bundle requires Node.js `>=24.9.0` and DSH's `commands`, `tools` and `sessionQuery` services. Exact DSH peers remain in `package.json`. There are no additional npm runtime dependencies or install/build lifecycle scripts. The optional Python CLI is maintained separately from the native Bundle.
+The Bundle requires Node.js `>=24.9.0` and DSH's `commands`, `tools` and `sessionQuery` services. DSH peer ranges are declared in `package.json`. There are no additional npm runtime dependencies or install/build lifecycle scripts. The optional Python CLI is maintained separately from the native Bundle.
 
 Missing services, worker failure, unsafe filesystem targets and oversized input stop the affected operation. The native selection limit is 2,000 snapshots / 64 MiB serialized input, with at most two analyses running concurrently per instance; reduce the time window or filter by project rather than silently dropping sessions. JSON artifact reads and submitted model payloads are capped at 16 MiB. Model outputs are validated in memory before writing, including evidence ownership, enum values, privacy and prohibited completion fields. A rejected replacement preserves the prior validated output. Structured tool failures cannot be overridden by success-looking output text. Explicit fallback keeps a deterministic report marked as degraded. Failures may leave a marked partial run that can be previewed and cleaned up.
 

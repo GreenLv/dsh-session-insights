@@ -194,18 +194,18 @@ export const MESSAGES = {
     ru: 'Обнаружены повреждённые или неизвестные события; перед выводами проверьте покрытие.',
   },
   'native.warning.partial': {
-    'zh-CN': (p) => `${p.count} 个会话有未结束轮次，不代表整个任务族失败。`,
+    'zh-CN': (p) => `${p.count} 个会话有尚未正常完成的轮次，不代表整个任务族失败。`,
     en: (p) =>
-      `${p.count} ${p.count === 1 ? 'rollout has' : 'rollouts have'} unfinished turns; this is not proof of family failure.`,
+      `${p.count} ${p.count === 1 ? 'rollout has' : 'rollouts have'} turns without a normal completion; this is not proof of family failure.`,
     ru: (p) =>
       `Сессий с незавершёнными ходами: ${p.count}; это не доказывает провал всего семейства задач.`,
   },
   'native.warning.attempts': {
-    'zh-CN': (p) => `${p.count} 次模型尝试未产出回复，用量不可得，未做估算。`,
+    'zh-CN': (p) => `${p.count} 次模型尝试未产出回复，其用量样本不计入 Token 总量，缺失用量未做估算。`,
     en: (p) =>
-      `${p.count} ${p.count === 1 ? 'attempt committed' : 'attempts committed'} no reply; their token usage is unavailable and is not estimated.`,
+      `${p.count} ${p.count === 1 ? 'attempt committed' : 'attempts committed'} no reply; their usage samples are excluded from token totals and missing usage is not estimated.`,
     ru: (p) =>
-      `Попыток модели без видимого ответа: ${p.count}; расход их токенов недоступен и не оценивался.`,
+      `Попыток модели без видимого ответа: ${p.count}; их образцы расхода не входят в сумму токенов, отсутствующие данные не оцениваются.`,
   },
   'native.warning.shadowed': {
     'zh-CN': '压缩遮蔽的对话已从语义证据移除；事件统计仍按历史保留。',

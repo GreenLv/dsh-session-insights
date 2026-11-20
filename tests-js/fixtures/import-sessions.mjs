@@ -1,4 +1,4 @@
-// Official rc.3 DeepSeek chat-export import harness for D02 regression tests.
+// Official rc.5 DeepSeek chat-export import harness for D02 regression tests.
 // The conversion runs the PUBLISHED official importer sources
 // (`@deepseek-ai/dsh-deepseek-chat-import/src/importer.ts`, copied verbatim out
 // of node_modules so Node can strip types) against the official

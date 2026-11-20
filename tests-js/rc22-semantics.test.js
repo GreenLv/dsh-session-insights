@@ -14,7 +14,7 @@ import { prepareSemantic, getBatch } from '../plugin/lib/semantic.js'
 // and the team/mode lifecycle. Structured codes are matched by their persisted
 // identity, never by success text; team configuration never upgrades into user
 // work, authorization or completion. The rc.2-only team/mode fixture is also
-// checked through the sole supported rc.2 catalog and V4 admission. Historical
+// checked through the sole supported rc.5 catalog and V4 admission. Historical
 // fixture names describe data provenance, not an older supported host.
 const rows = JSON.parse('[' + readFileSync(new URL('../tests/fixtures/synthetic-session.jsonl', import.meta.url), 'utf8').trim().split('\n').join(',') + ']')
 const options = { now: rows[0].createdAt + 86400000, days: 30, privacy: 'redacted', locale: 'en', analysis_depth: 'evidence' }
@@ -35,9 +35,9 @@ const report = (s) => buildReport([s], options).report
 const blockedFacts = (built) =>
   built.sessions[0].messages.filter((m) => m.tool_facts?.outcome === 'blocked').map((m) => m.tool_facts)
 
-test('identity targets rc.3 semantics', () => {
-  assert.equal(INPUT_IDENTITY.target_dsh_version, '0.2.2-rc.3')
-  assert.equal(INPUT_IDENTITY.analyzer_semantics, 'v4-dsh022rc3.1')
+test('identity targets rc.5 semantics', () => {
+  assert.equal(INPUT_IDENTITY.target_dsh_version, '0.2.2-rc.5')
+  assert.equal(INPUT_IDENTITY.analyzer_semantics, 'v4-dsh022rc5.1')
 })
 
 test('APPROVAL_CANCELLED is neither caller cancellation nor human rejection', () => {
@@ -141,4 +141,75 @@ test('V4 admission accepts the rc.2-only team/mode corpus', () => {
   assert.equal(validateV4(s), 0)
   const built = buildReport([s], options)
   assert.equal(built.report.session_summaries[0].team.mode_changes, 1)
+})
+
+test('only completed turn endings establish completion', () => {
+  for (const [kind, expectedStatus, expectedComplete, expectedAborted] of [
+    ['completed', 'completed', 1, 0],
+    ['error', 'aborted', 0, 1],
+    ['aborted', 'aborted', 0, 1],
+    ['interrupted', 'aborted', 0, 1],
+    ['blocked', 'partial', 0, 0],
+    ['max-tokens', 'partial', 0, 0],
+    ['plugin-extension', 'partial', 0, 0],
+  ]) {
+    const s = snapshot()
+    s.events.find(e => e.type === 'turn/end').data.reason = {kind}
+    const result = buildReport([s], options), built = result.report
+    assert.equal(result.sessions[0].task_complete, expectedComplete, kind)
+    assert.equal(built.totals.aborted_turns, expectedAborted, kind)
+    assert.equal(built.session_summaries[0].status, expectedStatus, kind)
+    assert.equal(built.session_summaries[0].completion.log_completed, kind === 'completed' ? 'yes' : 'no', kind)
+  }
+})
+
+test('fork closure after inherited cut does not establish completion', () => {
+  const s = snapshot()
+  s.session.isSeeded = true
+  const start = s.events[0]
+  s.events = [start,
+    {seq: 1, type: 'session/end-seed', time: start.time, data: {inherited: true}},
+    {seq: 2, type: 'turn/end', time: start.time, data: {turn: 1, reason: {kind: 'forked'}}}]
+  s.inheritedEventCount = 1
+  const result = buildReport([s], options), built = result.report
+  assert.equal(result.sessions[0].task_complete, 0)
+  assert.equal(built.session_summaries[0].completion.log_completed, 'unknown')
+})
+
+test('multiple auxiliary search requests do not double count one tool call', () => {
+  const s = snapshot()
+  s.events.find(e => e.type === 'tool/call').data.name = 'web_search'
+  const usageBefore = report(s).totals.tokens.total_tokens
+  const searchRequest = query => ({endpoint:'https://example.com/messages', apiVersion:'2023-06-01',
+    body:{model:'synthetic', max_tokens:1024, messages:[{role:'user',content:[{type:'text',text:query}]}],
+      tools:[{type:'web_search_20250305',name:'web_search',max_uses:1}]}})
+  for (const query of ['first', 'second']) {
+    const at = s.events.length
+    s.events.push({seq:at, type:'web/deepseek-search-llm-request', time:s.session.createdAt+4000,
+      data:searchRequest(query)})
+  }
+  const built = report(s)
+  assert.equal(built.session_summaries[0].web_searches, 1)
+  assert.equal(built.totals.tokens.total_tokens, usageBefore)
+})
+
+test('official rc.5 catalog decodes completed, blocked, token-limited and forked endings', async () => {
+  assertTargetPackage('@deepseek-ai/dsh-session-format-catalog')
+  const {sessionFormatCatalog} = await import(pathToFileURL(targetRequire.resolve('@deepseek-ai/dsh-session-format-catalog')).href)
+  for (const kind of ['completed', 'blocked', 'max-tokens']) {
+    const s = snapshot()
+    s.events.find(e => e.type === 'turn/end').data.reason = {kind}
+    const restore = sessionFormatCatalog.createRestore({...s.session, type:'session'}, {recovery:'strict', validation:'current'})
+    for (const event of s.events) restore.decodeRow(event)
+    restore.finish()
+  }
+  const s = snapshot()
+  s.session.isSeeded = true
+  const start = s.events[0]
+  s.events = [start,
+    {seq:1,type:'session/end-seed',time:start.time,data:{inherited:true}},
+    {seq:2,type:'turn/end',time:start.time,data:{turn:1,reason:{kind:'forked'}}}]
+  const restore = sessionFormatCatalog.createRestore({...s.session, type:'session'}, {recovery:'strict', validation:'current'})
+  for (const event of s.events) restore.decodeRow(event)
+  restore.finish()
 })

@@ -159,8 +159,8 @@ test('diagnostics never serialize exception messages, paths or unbounded fields'
   assert.ok(!JSON.stringify(diag).includes('secret'))
 })
 
-for(const mode of ['dispose-failure','timeout'])test(`portable producer retains work when ${mode} leaves users unknown`,()=>{
-  const p=spawnSync(process.execPath,[resolve('tests-js/fixtures/portable-finally-probe.mjs'),mode],{encoding:'utf8'})
+for(const mode of ['dispose-failure','timeout'])for(const inherited of ['absent','present'])test(`portable producer retains work on ${mode} and restores ${inherited} agents home`,()=>{
+  const p=spawnSync(process.execPath,[resolve('tests-js/fixtures/portable-finally-probe.mjs'),mode,inherited],{encoding:'utf8'})
   assert.equal(p.status,0,p.stderr)
   const result=JSON.parse(p.stdout)
   assert.deepEqual(result.calls,[])

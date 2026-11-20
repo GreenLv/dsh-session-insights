@@ -13,7 +13,7 @@ import {HOST_TREES,PRODUCT_VERSION} from './acceptance_identity.mjs'
 const ROOT=fileURLToPath(new URL('../',import.meta.url))
 const WORKFLOW='.github/workflows/ci.yml'
 export const HOST_RISK_POLICY_PATH='config/host-dependency-risk.json'
-// Cohort of one candidate: root manifests plus the exact rc.3 acceptance
+// Cohort of one candidate: root manifests plus the exact rc.5 acceptance
 // trees' manifest/lock. The 0.8.0 cohort used rc.1 in these same paths; its
 // exception policy is historical and cannot authorize this candidate.
 export const COHORT_PATHS=['package.json','package-lock.json','pyproject.toml','src/dsh_session_insights/__init__.py',

@@ -17,8 +17,8 @@ const git = (...args) => execFileSync('git', args, {cwd:repo, stdio:'pipe', enco
 for (const path of ['scripts/acceptance_identity.mjs','scripts/canonical_artifact.mjs','scripts/pack_candidate.mjs','scripts/verify_candidate.mjs','scripts/verify_host_acceptance.mjs','scripts/acceptance_diagnostics.mjs','.github/workflows/ci.yml']) {
   const target = join(repo,path); mkdirSync(dirname(target),{recursive:true}); copyFileSync(join(source,path),target)
 }
-write(join(repo,'package.json'), JSON.stringify({name:'dsh-session-insights',version:'0.8.2',type:'module',files:['plugin/lib/*.js']},null,2)+'\n')
-write(join(repo,'package-lock.json'), JSON.stringify({name:'dsh-session-insights',version:'0.8.2',lockfileVersion:3,packages:{}},null,2)+'\n')
+write(join(repo,'package.json'), JSON.stringify({name:'dsh-session-insights',version:'0.8.3',type:'module',files:['plugin/lib/*.js']},null,2)+'\n')
+write(join(repo,'package-lock.json'), JSON.stringify({name:'dsh-session-insights',version:'0.8.3',lockfileVersion:3,packages:{}},null,2)+'\n')
 write(join(repo,'plugin/lib/index.js'),'export const synthetic = true\n')
 git('init','-q'); git('add','.'); git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','synthetic artifact test')
 const commit = git('rev-parse','HEAD')

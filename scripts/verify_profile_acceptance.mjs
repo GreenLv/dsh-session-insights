@@ -46,9 +46,9 @@ try{
  tgz=join(base,proposed.filename)
  ;({receipt:canonical}=await verifyCanonicalArtifact({receiptPath:receiptPathInput,tarballPath:tgz,sourceRoot:source,expectedCommit,expectedSha256,expectedReceiptSha256}))
  const work0=await mkdtemp(join(base,'macos-native-'));work=work0
- const home=join(work,'dsh-home'),project=join(work,'中文 项目 目录')
- await mkdir(home,{mode:0o700});await mkdir(project)
- process.env.DSH_HOME=home;process.env.DSH_TELEMETRY_DISABLED='1';process.chdir(project)
+ const home=join(work,'dsh-home'),agentsHome=join(work,'agents-home'),project=join(work,'中文 项目 目录')
+ await mkdir(home,{mode:0o700});await mkdir(agentsHome,{mode:0o700});await mkdir(project)
+ process.env.DSH_HOME=home;process.env.DSH_AGENTS_HOME=agentsHome;process.env.DSH_TELEMETRY_DISABLED='1';process.chdir(project)
  const hostManifest=await realpath(join(hostRoot,'node_modules/@deepseek-ai/dsh/package.json'))
  const hostVersion=JSON.parse(await readFile(hostManifest,'utf8')).version
  observedHostVersion=hostVersion
@@ -69,7 +69,7 @@ const env={...process.env,npm_config_cache:join(work,'npm-cache'),npm_config_sto
 const cli=async args=>run(process.execPath,[join(dirname(hostManifest),'lib/bin.js'),'plugin','--profile',profile,...args],{env,cwd:project,timeout:180000,maxBuffer:8*1024*1024})
 const overlay=join(work,'native.patch.yml')
 await writeFile(overlay,'- id: hmr\n  disabled: true\n- id: session-title-llm\n  disabled: true\n'+(profile==='headless'?'- id: headless-runner\n  disabled: true\n':''))
-const boot=()=>runProfile({environment:createLaunchEnvironmentSnapshot([{source:'process',values:{DSH_HOME:home,DSH_TELEMETRY_DISABLED:'1'}}]),profile,patchFiles:[overlay],args:profile==='web'?['--no-open','--host','127.0.0.1','--port','0']:[]})
+const boot=()=>runProfile({environment:createLaunchEnvironmentSnapshot([{source:'process',values:{DSH_HOME:home,DSH_AGENTS_HOME:agentsHome,DSH_TELEMETRY_DISABLED:'1'}}]),profile,patchFiles:[overlay],args:profile==='web'?['--no-open','--host','127.0.0.1','--port','0']:[]})
 const fixture=async(name,id,cwd)=>{
  const rows=(await readFile(join(source,'tests/fixtures/rc2-repairs',name,'session.v4.jsonl'),'utf8')).trim().split('\n').map(JSON.parse)
  const delta=Date.now()-60000-rows[0].createdAt;rows[0].id=id;rows[0].cwd=cwd;rows[0].createdAt+=delta;for(const row of rows.slice(1))row.time+=delta

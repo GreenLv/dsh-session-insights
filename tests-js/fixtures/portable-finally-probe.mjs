@@ -5,6 +5,7 @@ import {dirname,resolve} from 'node:path'
 import vm from 'node:vm'
 
 const mode=process.argv[2]
+const savedAgentsHome=process.argv[3]==='present'?'synthetic-original':undefined
 if(!['dispose-failure','timeout'].includes(mode))throw Error('unsupported synthetic fault')
 // Git on Windows may check out source with CRLF. JavaScript parses these line
 // endings equivalently; normalize only the probe's in-memory source string.
@@ -21,7 +22,7 @@ const annex={schema:'native-acceptance/v2',status:'failed',product:'dsh-session-
  platform:{os:'macos',shell:'posix',toolchain:{node:process.version}},gates:[],cleanup:{status:'not_run',remaining_ids:[]},
  run:{started_at:new Date().toISOString(),finished_at:'',run_url:null},unperformed_actions:[]}
 const scope={annex,ctx:mode==='dispose-failure'?{fiber:{dispose:async()=>{throw Error('synthetic disposal')}}}:undefined,
- work:'synthetic-work',quiescenceUnknown:false,savedHome:undefined,process:{env:{}},stage:'host_cli_identity',
+ work:'synthetic-work',quiescenceUnknown:false,savedHome:undefined,savedAgentsHome,process:{env:{DSH_AGENTS_HOME:'synthetic-isolated'}},stage:'host_cli_identity',
  REQUIRED:required,TOOLS:[],options:{commit,annex:'synthetic-annex'},dirname,assert,
  rm:async()=>calls.push('remove'),stat:async()=>{},mkdir:async()=>{},writeFile:async()=>{},record:()=>{throw Error('unexpected record')},
  classifyAcceptanceError:()=>({stage:'host_cli_identity',name:'Error',code:null}),console:{error:()=>{}},
@@ -35,4 +36,6 @@ if(mode==='timeout') {
   assert.equal(scope.quiescenceUnknown,true)
 }
 await vm.runInNewContext('(async()=>{'+source.slice(start,end)+'})()',scope)
+assert.equal(scope.process.env.DSH_AGENTS_HOME,savedAgentsHome)
+assert.equal(Object.hasOwn(scope.process.env,'DSH_AGENTS_HOME'),savedAgentsHome!==undefined)
 console.log(JSON.stringify({annex,calls}))

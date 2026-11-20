@@ -145,9 +145,9 @@ class ApprovalNonGrantTests(unittest.TestCase):
 class TeamModeTests(unittest.TestCase):
     """team/mode is team configuration/context, never user work."""
 
-    def test_identity_targets_rc3_semantics(self):
-        self.assertEqual(IDENTITY["target_dsh_version"], "0.2.2-rc.3")
-        self.assertEqual(IDENTITY["analyzer_semantics"], "v4-dsh022rc3.1")
+    def test_identity_targets_rc5_semantics(self):
+        self.assertEqual(IDENTITY["target_dsh_version"], "0.2.2-rc.5")
+        self.assertEqual(IDENTITY["analyzer_semantics"], "v4-dsh022rc5.1")
 
     def test_team_mode_is_counted_as_configuration(self):
         rows = base_rows()
@@ -184,6 +184,63 @@ class TeamModeTests(unittest.TestCase):
 
     def test_rc2_event_is_in_the_single_product_vocabulary(self):
         self.assertIn("team/mode", analyzer.DSH_KNOWN_RECORD_TYPES)
+
+
+class TurnEndReasonTests(unittest.TestCase):
+    def test_only_completed_turn_endings_establish_completion(self):
+        for kind, status, complete, aborted in (
+            ("completed", "completed", 1, 0),
+            ("error", "aborted", 0, 1),
+            ("aborted", "aborted", 0, 1),
+            ("interrupted", "aborted", 0, 1),
+            ("blocked", "partial", 0, 0),
+            ("max-tokens", "partial", 0, 0),
+            ("plugin-extension", "partial", 0, 0),
+        ):
+            with self.subTest(kind=kind):
+                rows = base_rows()
+                header = dict(rows.pop(0))
+                header.pop("type")
+                next(row for row in rows if row["type"] == "turn/end")["data"]["reason"] = {"kind": kind}
+                report, summary, internal = build({"session": header, "events": rows})
+                self.assertEqual(internal["task_complete"], complete)
+                self.assertEqual(report["totals"]["aborted_turns"], aborted)
+                self.assertEqual(summary["status"], status)
+                self.assertEqual(summary["completion"]["log_completed"], "yes" if kind == "completed" else "no")
+
+    def test_fork_closer_after_inherited_cut_does_not_establish_completion(self):
+        rows = base_rows()
+        header = dict(rows[0])
+        header.pop("type")
+        header["isSeeded"] = True
+        start = rows[1]
+        stamp = start["time"]
+        events = [
+            start,
+            {"seq": 1, "type": "session/end-seed", "time": stamp, "data": {"inherited": True}},
+            {"seq": 2, "type": "turn/end", "time": stamp, "data": {"turn": 1, "reason": {"kind": "forked"}}},
+        ]
+        report, summary, internal = build({"session": header, "events": events, "inheritedEventCount": 1})
+        self.assertEqual(internal["task_complete"], 0)
+        self.assertEqual(summary["completion"]["log_completed"], "unknown")
+
+    def test_auxiliary_search_requests_do_not_double_count_tool_call(self):
+        rows = base_rows()
+        header = dict(rows.pop(0))
+        header.pop("type")
+        next(row for row in rows if row["type"] == "tool/call")["data"]["name"] = "web_search"
+        original, _, _ = build({"session": header, "events": rows})
+        for query in ("first", "second"):
+            rows.append({
+                "seq": len(rows), "type": "web/deepseek-search-llm-request", "time": header["createdAt"] + 4000,
+                "data": {"endpoint": "https://example.com/messages", "apiVersion": "2023-06-01",
+                    "body": {"model": "synthetic", "max_tokens": 1024,
+                        "messages": [{"role": "user", "content": [{"type": "text", "text": query}]}],
+                        "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1}]}}
+            })
+        report, summary, _ = build({"session": header, "events": rows})
+        self.assertEqual(summary["web_searches"], 1)
+        self.assertEqual(report["totals"]["tokens"]["total_tokens"], original["totals"]["tokens"]["total_tokens"])
 
 
 if __name__ == "__main__":

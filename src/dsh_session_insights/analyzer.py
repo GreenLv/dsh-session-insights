@@ -36,7 +36,7 @@ from .v4 import IDENTITY, validate_records
 
 SCHEMA_VERSION = 1
 SCHEMA_ID = "dsh-session-insights/1"
-ANALYZER_VERSION = "0.8.2-v4-dsh022rc3.1"
+ANALYZER_VERSION = "0.8.3-v4-dsh022rc5.1"
 FAILURE_RULE_VERSION = "5.1.0"
 # Bumped whenever the selected log generation or the parse rules that feed a
 # cached session change, so a stale cache cannot mask a generation upgrade.
@@ -45,10 +45,9 @@ FAILURE_RULE_VERSION = "5.1.0"
 # 11: 0.8.1 retargets the input contract to DSH 0.2.2-rc.2 (v4-dsh022rc2.1):
 # the team/mode vocabulary, rc.2 structured approval non-grant accounting and
 # team mode-change stats all change what a cached session records.
-# 12: 0.8.2 retargets the input contract to DSH 0.2.2-rc.3 (v4-dsh022rc3.1):
-# the acceptance host generation changes, so deterministic caches built under
-# the rc.2 identity must invalidate.
-DETERMINISTIC_CACHE_VERSION = 12
+# 12: 0.8.2 retargeted the input contract to DSH 0.2.2-rc.3 (v4-dsh022rc3.1).
+# 13: 0.8.3 targets rc.5 and only explicitly completed turns count as complete.
+DETERMINISTIC_CACHE_VERSION = 13
 ROLE_NAMES = ("root_task", "task_subagent", "action_reviewer", "unknown_system_rollout")
 
 # Session-log generations understood by this reader. Native V3 is the current
@@ -2847,8 +2846,6 @@ def process_dsh_record(
                 session["task_complete"] += 1
             elif kind in {"aborted", "interrupted", "error"}:
                 session["aborted_turns"] += 1
-            else:
-                session["task_complete"] += 1
         return
     if record_type == "session/end-seed":
         # Only a tagged `inherited: true` marker establishes the fork cut; its
@@ -3580,7 +3577,10 @@ def token_view(tokens: dict[str, int]) -> dict[str, int]:
 def completion_view(session: dict[str, Any]) -> dict[str, str]:
     status = session_status(session)
     return {
-        "log_completed": "yes" if status == "completed" else "no",
+        "log_completed": (
+            "yes" if status == "completed" and session["task_complete"] > 0
+            else "unknown" if status == "completed" else "no"
+        ),
         "verified_completed": (
             "yes"
             if session["verification_successes"] > 0
@@ -4964,8 +4964,8 @@ def build_report(
             "cached_input_tokens": "measured but not equivalent to free or ordinary input",
             "attempts": (
                 "assistant/attempt events record settlements that committed no visible reply; "
-                "they are counted as attempts and never materialized as assistant messages, "
-                "and their token usage is reported as unavailable rather than estimated"
+                "they are counted as attempts and never materialized as assistant messages. "
+                "Attempts with usage samples are counted. Sample usage is excluded from token totals; missing usage is not estimated"
             ),
             "injected_context": (
                 "user/message carries both direct human prompts and synthetic injected context; "

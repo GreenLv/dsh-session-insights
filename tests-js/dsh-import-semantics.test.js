@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { buildReport } from '../plugin/lib/analyzer.js'
 import { importSyntheticExports, importerIdentity } from './fixtures/import-sessions.mjs'
 
-// D02 regression: the official rc.3 DeepSeek chat-export importer (published
+// D02 regression: the official rc.5 DeepSeek chat-export importer (published
 // `@deepseek-ai/dsh-deepseek-chat-import` sources, whose digests are recorded) converts a
 // synthetic export through the official session-persistence-jsonl backend, and
 // the existing DSI analysis semantics hold on the imported sessions. The
@@ -17,10 +17,10 @@ const { report } = buildReport(harness.snapshots, options)
 const summaries = report.session_summaries
 const title = (s) => s.title ?? ''
 
-test('official importer identity is the exact rc.3 published package', () => {
+test('official importer identity is the exact rc.5 published package', () => {
   const identity = importerIdentity()
   assert.equal(identity.name, '@deepseek-ai/dsh-deepseek-chat-import')
-  assert.equal(identity.version, '0.2.2-rc.3')
+  assert.equal(identity.version, '0.2.2-rc.5')
   for (const rel of Object.keys(identity.sources)) {
     assert.match(identity.sources[rel], /^[0-9a-f]{64}$/)
     assert.equal(identity.sources[rel], harness.importerIdentity.sourceDigests[rel], 'transformed input is the exact installed package source')
@@ -102,7 +102,7 @@ test('report semantics: error turns stay failures, failed search stays a tool fa
     assert.equal(s.tokens.total_tokens, 0)
     assert.equal(s.tokens.token_measurement?.usage_samples ?? s.tokens.usage_samples ?? 0, 0, JSON.stringify(s.tokens))
   }
-  assert.match(report.measurement_contract.attempts, /usage is unavailable, not estimated/)
+  assert.match(report.measurement_contract.attempts, /missing usage is not estimated/)
 })
 
 test('imported sessions continue under the same identity and stay analyzable', () => {
